@@ -37,11 +37,11 @@ class AssocHash
     return lambda { |hash, key| raise("Found no key #{key} in #{whence.class} #{whence.object_id}") }
   end
 
-  def initialize(&keytest)
+  def initialize(keytest: OptionsConstants::THIS, default: self.class.table_default(self))
     ## FIXME cannot provide both the keytest and the hash default proc
     ## as both representing proc-format args?
-    @table = Hash.new(&self.class.table_default(self))
-    @keytest = ( keytest || OptionsConstants::THIS )
+    @table = Hash.new(&default)
+    @keytest = keytest
   end
 
 
@@ -84,7 +84,9 @@ class AssocHash
 end
 
 
-require('set')
+## FIXME untested below
+
+#require('set')
 
 class Option
   def initialize(name)
@@ -100,87 +102,6 @@ class Option
   end
 end
 
-## alternately ...
-require('forwardable')
-class AssocHash
-
-  extend(Forwardable)
-  include(Enumerable)
-  ## NB not forwarding :[]=
-  ##
-  ## The method AssocHash.add(..) would be used to add elements to the
-  ## delegated hash @table, with conditional checking to prevent storage
-  ## of objects having a duplicate key under the @keytest proc.
-  ##
-  ## While the :[]= method may represent a familiar method name for
-  ## collections in Ruby, it would need at least an additional arg
-  ## (i.e overwrite flag) and a check for parity between the key value
-  ## provided to the method and that under which the object will be
-  ## actually stored. Alternately, :add may be called directly
-  def_delegators(:@table,
-                 :[], :delete, :each, :keys, :values,
-                 :length, :empty?,
-                 :include?, :has_key?, :key?, :member?
-                )
-
-  def self.table_default(whence)
-    ## NB convenience method for a more informative exception message
-    ## under #initialize, such that the exception message may reference
-    ## the AssocHash encapsulating the referring hash table
-    ##
-    ## FIXME need to define a new exception class, to include the
-    ## AssocHash in the exception object, for purpose of debugging ...
-    ##
-    return lambda { |hash, key| raise("Found no key #{key} in #{whence.class} #{whence.object_id}") }
-  end
-
-  def initialize(&keytest)
-    ## FIXME cannot provide both the keytest and the hash default proc
-    ## as both representing proc-format args?
-    @table = Hash.new(&self.class.table_default(self))
-    @keytest = ( keytest || OptionsConstants::THIS )
-  end
-
-
-  def add(obj, overwrite = false)
-    ## NB if the object is modified later, such that it would no longer
-    ## return the same value under the @keytest proc, then this may
-    ## result in unexpected behaviors due to the subsequent mismatch of
-    ## the object's key value and its storage under the AssocHash
-    ##
-    ## It may be recommended to use only a read-only value as the key
-    ## for any object referenced in an AssocHash
-    usekey=key(obj)
-    if @table.member?(usekey)
-      if (obj == @table[usekey])
-        return obj
-      elsif ! overwrite
-        ## FIXME should  using not all of the print form of #{self} but truncated, in the condition message
-        raise("An object is already registered for key #{usekey} in #{self.class} #{self}")
-      end
-    end
-    @table[usekey]=obj
-    return obj
-  end
-
-  def get(key)
-    ## NB convenience method
-    ##
-    ## NB this and the :[] delegate method may both result in a raised
-    ## exception, per how @table has been initialized
-    ##
-    ## see also: #member?
-    return @table[key]
-  end
-
-  def key(obj)
-    ## NB utility method, does not imply membership for the object in this AssocHash
-    @keytest.call(obj)
-  end
-
-end
-
-## FIXME untested below
 
 class ValueOption < Option
   def initialize(name, value = nil)
