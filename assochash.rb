@@ -70,10 +70,11 @@ in #{whence.class} #{whence.object_id}") }
       if (obj == @table[usekey])
         return obj
       elsif ! overwrite
-        ## NB if the @overwrite_proc does not exit non-locally, e.g by
-        ## 'raise', then the value may be overwritten after the
-        ## @overwrite_proc is called
-        @overwrite_proc.call(usekey,obj)
+        ## if the overwrite proc returns a local non-true value,
+        ## then return before overwrite
+        if ! @overwrite_proc.call(usekey,obj)
+          return false
+        end
       end
     end
     @table[usekey]=obj

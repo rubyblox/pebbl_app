@@ -27,10 +27,6 @@ class SimpleOption < Option
   ## named option would indicate a value of "false' for that option
   ##
   def value()
-    ## NB OptionMap.get(name) => false
-    ##    should indicate that no option of name 'name' is present
-    ## whereas OptionMap.get(name) => nil
-    ##    should indicate an option of 'name' is present, with a nil value
     return true
   end
 end
@@ -123,7 +119,7 @@ class OptionMap < AssocHash
       ## NB this API will not store any option value of false
       ##
       ## If, in some mapping to an output syntax, any option value
-      ## repreentative of a user-provided value of 'false' must be
+      ## representative of a user-provided value of 'false' must be
       ## provided in the output, that may be handled at the time of the
       ## output transformation, or this API may be updated to support
       ## the particular usage case.
