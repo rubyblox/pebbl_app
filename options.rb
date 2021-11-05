@@ -35,7 +35,7 @@ class ValueOption < Option
   ## Option class that accepts an arbitrary value
   ##
   ## NB Here and elsewhere, this API uses a syntax assumed local
-  ## to a single OptionMap. 
+  ## to a single OptionMap.
   ##
   ## Some Option expressions may require transformation before
   ## representation under an external syntax, e.g for representation
@@ -53,15 +53,18 @@ class OptionMap < AssocHash
 
   NAMEPROC= lambda { |obj| obj.name }
 
-  def initialize()
+
+  def initialize(options = nil)
     super(keytest: NAMEPROC)
-    # if ! options.nil?
-    #   ## FIXME ... initialize from some provided values
-    #   options.each do |opt, optv|
-    #     oopt = Option.new(opt, optv)
-    #     self.add(oopt)
-    #   end
-    # end
+    if options.instance_of?(Hash)
+      options.each do |opt, optv|
+        self.setopt(opt,optv)
+      end
+    elsif options.instance_of?(Array)
+      options.each do |opt|
+        self.setopt(opt,true)
+      end
+    end
   end
 
 
@@ -135,7 +138,7 @@ class OptionMap < AssocHash
     end
   end
 
-  protected 
+  protected
 
   def opt_getobj(name)
     ## trivial encapsulation onto the present implementation as
@@ -151,7 +154,7 @@ class OptionMap < AssocHash
     ## - No calling method should provide a name that is
     ##   already used for an Option in the OptionMap
     if (value == true)
-      oopt = Option.new(name)
+      oopt = SimpleOption.new(name)
     else
       oopt = ValueOption.new(name, value)
     end
