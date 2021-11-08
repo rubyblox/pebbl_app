@@ -1,35 +1,44 @@
 ## ioproc.rb
 
+module IOProc
+end
 
-class OutProc
+class IOProc::OutProc
 
   def self.run(cmd, read_out: nil , read_err: nil, **procopts)
 
+    ## TBD args
+    ## read_out_prepare : proc/lambda to call on the read_out stream
+    ##                    before spawn
+    ## read_err_prepare : similar, called on the read_err stream
+
     if read_out
-      out_rd, out_wr = IO.pipe
+      out_read, out_write = IO.pipe
     else
-      out_wr = :close
+      out_write = :close
     end
 
     if read_err
-      err_rd, err_wr = IO.pipe
+      err_read, err_write = IO.pipe
     else
-      err_wr = :close
+      err_write = :close
     end
 
     procopts.include?(:in) || procopts[:in] = :close
-    procopts[:out] = out_wr
-    procopts[:err] = err_wr
 
+    read_out && procopts[:out] = out_write
+    read_err && procopts[:err] = err_write
+
+    ## spawn the process and wait for the
+    ## process to exit
     subpid = Process.spawn(cmd, procopts)
-
     subpid, status = Process.wait2(subpid)
 
-    read_out && ( out = IO.new(out_rd.to_i, "r") )
-    read_err && ( err = IO.new(err_rd.to_i, "r") )
+    read_out && ( out = IO.new(out_read.to_i, "r") )
+    read_err && ( err = IO.new(err_read.to_i, "r") )
 
-    read_out && out_wr.close
-    read_err && err_wr.close
+    read_out && out_write.close
+    read_err && err_write.close
 
     if read_out
       out.each_line do |txt|
@@ -43,7 +52,7 @@ class OutProc
       end
     end
 
-    return status
+    return status.exitstatus
 
   ensure
 
@@ -52,25 +61,27 @@ class OutProc
     # err.closed? || err.close
 
     if read_out
-      out_wr.close
-      out_rd.close
+      out_write.close
+      out_read.close
     end
 
     if read_err
-      err_wr.close
-      err_rd.close
+      err_write.close
+      err_read.close
     end
   end
 end
 
 
-/*
+=begin
 
+## Test - this block should show normal method
+## behaviors for OutProc.run when evaluated
 
 out = lambda { |txt| puts "Out: " + txt }
 err = lambda { |txt| puts "Err: " + txt }
 
-puts
-OutProc.run("ls -d /etc /var/frob", read_out: out, read_err: err,  )
+puts IOProc::OutProc.run("ls -d /etc /var/frob", 
+     read_out: out, read_err: err,  )
 
-*/
+=end
