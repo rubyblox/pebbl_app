@@ -42,10 +42,14 @@ describe OptionMap::OptionMap do
     OptionMap::OptionMap.new([:a,:b,:c])
   }
 
-  it "stores initial values (array)" do
+  it "stored initial options (array)" do
     expect(map.getopt(:a)).to be == true
     expect(map.getopt(:b)).to be == true
     expect(map.getopt(:c)).to be == true
+  end
+
+  it "has not stored extra options (array)" do
+    expect(map.getopt(:d)).to be == false
   end
 
   it "updates stored initial options (array)" do
@@ -76,18 +80,22 @@ describe OptionMap::OptionMap do
     OptionMap::OptionMap.new({ :a => :one ,:b => :two,:c => :three})
   }
 
-  it "stores initial values (hash)" do
+  it "stored initial options (hash)" do
     expect(map.getopt(:a)).to be == :one
     expect(map.getopt(:b)).to be == :two
     expect(map.getopt(:c)).to be == :three
+  end
+
+  it "has not stored extra options (hash)" do
+    expect(map.getopt(:d)).to be == false
   end
 
   it "updates stored initial options (hash)" do
     map.setopt(:a,true)
     expect(map.getopt(:a)).to be == true
 
-    map.setopt(:b,false)
-    expect(map.getopt(:b)).to be == false
+    map.setopt(:b,1)
+    expect(map.getopt(:b)).to be == 1
 
     map.setopt(:c,nil)
     expect(map.getopt(:c)).to be == nil
