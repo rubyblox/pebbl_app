@@ -1,21 +1,22 @@
 ## options.rb - Trivial options API
 
-##
-## Trivial options API
-##
+## Trivial Options API
+module OptionMap
+end
 
-## TBD YARD tries to add docs to this reuire call (??)
+## TBD YARD tries to add docs to this require call (??)
 require('./assochash')
 
-## *Option* class.
+
+## *Option* base class.
 ##
 ## Any *Option* implementation must provide a +value+
-## reader method 
+## reader method
 ##
 ## @abstract
 ## @see SimpleOption
 ## @see ValueOption
-class Option
+class OptionMap::Option
 
   ## Abstract constructor for *Option* implementations
   ##
@@ -35,13 +36,13 @@ end
 ## would indicate a value of "true" for that option
 ##
 ## Conversely, the absence of a *SimpleOption* for any
-## named option would generally indicate a value of 'false' 
+## named option would generally indicate a value of 'false'
 ## for that option
 ##
 ## @see ValueOption
 ## @see OptionMap
-class SimpleOption < Option 
-  
+class OptionMap::SimpleOption < OptionMap::Option
+
   ## Return +true+
   ##
   ## @return [true] true
@@ -50,11 +51,12 @@ class SimpleOption < Option
   end
 end
 
+
 ## **Option** class that accepts an arbitrary option value
 ##
 ## @see SimpleOption
 ## @see OptionMap
-class ValueOption < Option
+class OptionMap::ValueOption < OptionMap::Option
 
   ## Create a new *ValueOption* wth the provided +name+ and +value+
   ##
@@ -70,14 +72,13 @@ class ValueOption < Option
 end
 
 
-
 ## General container for **Option** instances
 ##
 ## @see Option
 ## @todo Symbol<->String mapping for **Option** names
 ##  under any single string output syntax or string
 ##  input syntax
-class OptionMap < AssocHash
+class OptionMap::OptionMap < AssocHash::AssocHash
 
   ## Internal constant for the *AssocHash* implementation
   NAMEPROC= lambda { |obj| obj.name }
@@ -89,9 +90,9 @@ class OptionMap < AssocHash
   ##  and each value, the corresponding option value. If an *Array*, every
   ## element will be interpreted as an option name, with all options in the
   ## array set to a value of 'true'
-  ## 
+  ##
   def initialize(options = nil)
-    super(keytest: NAMEPROC)
+    super(key_proc: NAMEPROC)
     if options.instance_of?(Hash)
       options.each do |opt, optv|
         self.setopt(opt,optv)
@@ -124,7 +125,6 @@ class OptionMap < AssocHash
       return false
     end
   end
- 
 
   ## Record the provided +value+ for an *Option* of the provided +name+
   ##
@@ -137,7 +137,7 @@ class OptionMap < AssocHash
       ## updating the OptionMap per the provided value.
       ## this may operate destructively on the OptionMap
       if (value == true)
-        if ! oopt.instance_of?(SimpleOption)
+        if ! oopt.instance_of?(OptionMap::SimpleOption)
           ## NB type conversion under the containing OptionMap
           self.delete(name)
           self.opt_add(name)
@@ -158,7 +158,7 @@ class OptionMap < AssocHash
       #   ## to any specific shell command syntax or other usage.
       #
       ## assumption: the value (neither true nor false) requires a ValueOption
-      elsif oopt.instance_of?(ValueOption)
+      elsif oopt.instance_of?(OptionMap::ValueOption)
         oopt.value = value
       else
         self.delete(name)
@@ -182,10 +182,7 @@ class OptionMap < AssocHash
   ## @param name [Symbol] option name
   ## @return [Boolean] true if an option of the provided +name+ was stored in the *OptionMap+
   def remopt(name)
-    if self.member?(name)
-      oopt = opt_getobj(name)
-      self.delete(oopt)
-    end
+    self.delete(name)
   end
 
   protected
@@ -208,9 +205,9 @@ class OptionMap < AssocHash
   ## @param value [not false] option value
   def opt_add(name, value = true)
     if (value == true)
-      oopt = SimpleOption.new(name)
+      oopt = OptionMap::SimpleOption.new(name)
     else
-      oopt = ValueOption.new(name, value)
+      oopt = OptionMap::ValueOption.new(name, value)
     end
     self.add(oopt)
   end

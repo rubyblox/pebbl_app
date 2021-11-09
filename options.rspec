@@ -1,0 +1,125 @@
+## options.rspec - unit tests for options.rb
+
+describe OptionMap::Option do
+  let(:option) {
+    OptionMap::Option.new(:OptionTest01)
+  }
+
+  it "stores a name" do
+    expect(option.name).to be == :OptionTest01
+    ## option.name.should== :OptionTest01 ## RSpec's succinct earlier syntax
+  end
+
+end
+
+
+describe OptionMap::SimpleOption do
+  let(:option) {
+    OptionMap::SimpleOption.new(:OptionTest02)
+  }
+
+  it "has a true value" do
+    expect(option.value).to be == true
+  end
+
+end
+
+
+describe OptionMap::ValueOption do
+  let(:option) {
+    OptionMap::ValueOption.new(:OptionTest03,:Value)
+  }
+
+  it "stores a value" do
+    expect(option.value).to be == :Value
+  end
+
+end
+
+
+describe OptionMap::OptionMap do
+  let(:map) {
+    OptionMap::OptionMap.new([:a,:b,:c])
+  }
+
+  it "stores initial values (array)" do
+    expect(map.getopt(:a)).to be == true
+    expect(map.getopt(:b)).to be == true
+    expect(map.getopt(:c)).to be == true
+  end
+
+  it "updates stored initial options (array)" do
+    map.setopt(:a,:A)
+    expect(map.getopt(:a)).to be == :A
+
+    map.setopt(:b,:B)
+    expect(map.getopt(:b)).to be == :B
+
+    map.setopt(:c,:C)
+    expect(map.getopt(:c)).to be == :C
+  end
+
+  it "removes each intialized option (array) " do
+    map.remopt(:a)
+    expect(map.getopt(:a)).to be == false
+
+    map.remopt(:b)
+    expect(map.getopt(:b)).to be == false
+
+    map.remopt(:c)
+    expect(map.getopt(:c)).to be == false
+  end
+end
+
+describe OptionMap::OptionMap do
+  let(:map) {
+    OptionMap::OptionMap.new({ :a => :one ,:b => :two,:c => :three})
+  }
+
+  it "stores initial values (hash)" do
+    expect(map.getopt(:a)).to be == :one
+    expect(map.getopt(:b)).to be == :two
+    expect(map.getopt(:c)).to be == :three
+  end
+
+  it "updates stored initial options (hash)" do
+    map.setopt(:a,true)
+    expect(map.getopt(:a)).to be == true
+
+    map.setopt(:b,false)
+    expect(map.getopt(:b)).to be == false
+
+    map.setopt(:c,nil)
+    expect(map.getopt(:c)).to be == nil
+  end
+
+
+  it "removes each intialized option (hash) " do
+    map.remopt(:a)
+    expect(map.getopt(:a)).to be == false
+
+    map.remopt(:b)
+    expect(map.getopt(:b)).to be == false
+
+    map.remopt(:c)
+    expect(map.getopt(:c)).to be == false
+  end
+
+
+  it "stores new options" do
+    map.setopt(:d,true)
+    expect(map.getopt(:d)).to be == true
+    map.setopt(:e,1)
+    expect(map.getopt(:e)).to be == 1
+    map.setopt(:f,nil)
+    expect(map.getopt(:f)).to be == nil
+  end
+end
+
+
+
+# Local Variables:
+# mode: enh-ruby
+# End:
+
+
