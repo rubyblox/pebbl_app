@@ -4,56 +4,92 @@
 ## Trivial options API
 ##
 
+## TBD YARD tries to add docs to this reuire call (??)
 require('./assochash')
 
+## *Option* class.
+##
+## Any *Option* implementation must provide a +value+
+## reader method 
+##
+## @abstract
+## @see SimpleOption
+## @see ValueOption
 class Option
-  ## a generally abstract Option class
+
+  ## Abstract constructor for *Option* implementations
   ##
-  ## any Option implementation must provide a :value reader method
+  ## @param name [Symbol] option name
   def initialize(name)
     @name = name
   end
+
+  ## The name of the option, typically a *Symbol*
   attr_reader :name
 end
 
 
-class SimpleOption < Option
-  ## subclass of Option that is not a ValueOption
+## Subclass of *Option* that is not a *ValueOption*
+##
+## Generally, the presence of a *SimpleOption* in an *OptionMap*
+## would indicate a value of "true" for that option
+##
+## Conversely, the absence of a *SimpleOption* for any
+## named option would generally indicate a value of 'false' 
+## for that option
+##
+## @see ValueOption
+## @see OptionMap
+class SimpleOption < Option 
+  
+  ## Return +true+
   ##
-  ## generally, the presence of a SimpleOption in an OptionMap
-  ## would indicate a value of "true" for that option
-  ##
-  ## conversely, the absence of a SimpleOption for any
-  ## named option would indicate a value of "false' for that option
-  ##
+  ## @return [true] true
   def value()
     return true
   end
 end
 
+## **Option** class that accepts an arbitrary option value
+##
+## @see SimpleOption
+## @see OptionMap
 class ValueOption < Option
-  ## Option class that accepts an arbitrary value
+
+  ## Create a new *ValueOption* wth the provided +name+ and +value+
   ##
-  ## NB Here and elsewhere, this API uses a syntax assumed local
-  ## to a single OptionMap.
-  ##
-  ## Some Option expressions may require transformation before
-  ## representation under an external syntax, e.g for representation
-  ## under the syntax of any single shell command
-  def initialize(name, value = nil)
+  ## @param name [Symbol] option name
+  ## @param value [not false] option value
+  def initialize(name, value = true)
     super(name)
     @value = value
   end
+
+  ## The value of the option
   attr_accessor :value
 end
 
 
-class OptionMap < AssocHash
-  ## general container for Option instances
 
+## General container for **Option** instances
+##
+## @see Option
+## @todo Symbol<->String mapping for **Option** names
+##  under any single string output syntax or string
+##  input syntax
+class OptionMap < AssocHash
+
+  ## Internal constant for the *AssocHash* implementation
   NAMEPROC= lambda { |obj| obj.name }
 
-
+  ## Create a new *OptionMap*, initialized with the set of provided +options+
+  ##
+  ## @param options [Hash|Array|nil] options to store in the new +OptionMap+.
+  ##  If a *Hash*, each key in the hash will provide an option name and each
+  ##  and each value, the corresponding option value. If an *Array*, every
+  ## element will be interpreted as an option name, with all options in the
+  ## array set to a value of 'true'
+  ## 
   def initialize(options = nil)
     super(keytest: NAMEPROC)
     if options.instance_of?(Hash)
@@ -61,16 +97,26 @@ class OptionMap < AssocHash
         self.setopt(opt,optv)
       end
     elsif options.instance_of?(Array)
+      ## FIXME parse each elemment for splitting any name=value expression
       options.each do |opt|
+        ## TBD string to symbol mapping
+        ## - Trim any leading "-*"
+        ## - TBD integration with ruby getopts equiv,
+        ##   for OptionMap usage in cmdline apps
+        ## - String#to_sym
+        ##   NB :":Frob"
         self.setopt(opt,true)
       end
     end
   end
 
-
+  ## Return the option's value, if any option of the provided +name+
+  ## is present, else return false
+  ##
+  ## @param name [Symbol] option name
+  ## @return [any] the value of the option, or +false+ if no option is
+  ##  registered for the +name+
   def getopt(name)
-    ## return the option's value, if any option of the provided name
-    ## is present, else return false
     if self.member?(name)
       oopt = self.opt_getobj(name)
       return oopt.value
@@ -78,14 +124,14 @@ class OptionMap < AssocHash
       return false
     end
   end
+ 
 
+  ## Record the provided +value+ for an *Option* of the provided +name+
+  ##
+  ## @param name [Symbol] option name
+  ## @param value [any] option value
+  ## @return the value for the option
   def setopt(name, value = true)
-    ## update the encapsulated @table to record the provided value
-    ## for an option of the provided name
-    ##
-    ## NB this provides some implicit Option type conversion under the
-    ## containing OptionMap, depending on the syntax of the provided
-    ## value
     if self.member?(name)
       oopt = self.opt_getobj(name)
       ## updating the OptionMap per the provided value.
@@ -131,6 +177,10 @@ class OptionMap < AssocHash
     return value
   end
 
+  ## remove any option of the provided +name+
+  ##
+  ## @param name [Symbol] option name
+  ## @return [Boolean] true if an option of the provided +name+ was stored in the *OptionMap+
   def remopt(name)
     if self.member?(name)
       oopt = opt_getobj(name)
@@ -140,19 +190,23 @@ class OptionMap < AssocHash
 
   protected
 
+  ## trivial encapsulation onto the present implementation as an *AssocHash+
+  ##
+  ## @param name [Symbol] option name
   def opt_getobj(name)
-    ## trivial encapsulation onto the present implementation as
-    ## an AssocHash
     return self.get(name)
   end
 
+  ## utility method for +#setopt
+  ##
+  ## Assumptions
+  ## - No calling method should provide a value of false
+  ## - No calling method should provide a name that is
+  ##   already used for an Option in the +OptionMap+
+  ##
+  ## @param name [Symbol] option name, unique onto the +OptionMap+
+  ## @param value [not false] option value
   def opt_add(name, value = true)
-    ## utility for #setopt
-    ##
-    ## Assumptions
-    ## - No calling method should provide a value of false
-    ## - No calling method should provide a name that is
-    ##   already used for an Option in the OptionMap
     if (value == true)
       oopt = SimpleOption.new(name)
     else
