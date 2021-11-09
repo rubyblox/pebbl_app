@@ -11,22 +11,22 @@ end
 =begin rdoc
 = Overview
 The *OutProc::run* class method provides an extension
-for *Process::spawn*  in supporting a generally functional 
+for *Process::spawn*  in supporting a generally functional
 approach for parsing output from external processes.
 
 In addition to the set of parameters supported by
 *Process::spawn*, the *OutProc::run* method
 accepts a +Proc+ or +lambda+ form for each of the
-method's named parameters, +read_out+ and +read_err+. 
-Any +Proc+ or +lambda+ form provided to these parameters 
-will  be called on each line of output or error text 
+method's named parameters, +read_out+ and +read_err+.
+Any +Proc+ or +lambda+ form provided to these parameters
+will  be called on each line of output or error text
 that was produced by the subprocess.
 
-Both of the named +read_out+ and +read_err+ parameters 
+Both of the named +read_out+ and +read_err+ parameters
 are optional parameters.
 
-Any additional parameters for *Process::spawn* may be 
-passed in the named +options+ parameter to the 
+Any additional parameters for *Process::spawn* may be
+passed in the named +options+ parameter to the
 *OutProc::run*.
 
 The *OutProc::run* method will return the exit status
@@ -34,7 +34,7 @@ of the external process as an integer numeric value.
 
 == Example
 
-Processing an external command's <em>standard output</em> 
+Processing an external command's <em>standard output</em>
 and <em>standard error</em> output, to produce a form
 of tagged output on the standard output stream within the
 <b>ruby(1)</b> process, lastly printing the exit status
@@ -67,21 +67,21 @@ Subsequent output:
   exited.
 
 * Any +read_out+ function will be called before any +read_err+
-  function. Thus, output stream contents will be parsed before 
+  function. Thus, output stream contents will be parsed before
   error stream contents.
 
-* If +read_out+ is provided, any +:out+ value provided in +options+ 
-  will be overwritten. Similarly, if +read_err+ is provided, any 
+* If +read_out+ is provided, any +:out+ value provided in +options+
+  will be overwritten. Similarly, if +read_err+ is provided, any
   +:err+ value provided in +options+ will be overwritten.
 
-* This method does not provide any similar <b>IO.pipe</b> support for 
-  the <em>standard input</em> stream to the subprocess. If no +:in+ 
-  parameter is provided in +options+, an +:in+ parameter will be added, 
+* This method does not provide any similar <b>IO.pipe</b> support for
+  the <em>standard input</em> stream to the subprocess. If no +:in+
+  parameter is provided in +options+, an +:in+ parameter will be added,
   with the value +:close+
 
-* While this method may be applied for line-oriented text parsing, 
+* While this method may be applied for line-oriented text parsing,
   in any methodology generally resembling <b>awk(1)</b>, there is
-  no additional parsing support provided here beyond the immediate 
+  no additional parsing support provided here beyond the immediate
   enacpsulation and stream handling for *Process::spawn*
 
 * This method does not provide any speific support for running a
@@ -92,7 +92,7 @@ Subsequent output:
 class IOProc::OutProc
 
   ## @param cmd [string|array] External command. This parameter
-  ##  uses the same syntax as the +command+ parameter for 
+  ##  uses the same syntax as the +command+ parameter for
   ##  **Process::spawn**
   ## @param read_out [lambda|Proc|nil] If true, functional form to call
   ##  for each line of text on the process <em>standard output</em>
@@ -139,7 +139,7 @@ class IOProc::OutProc
     read_err && ( err = IO.new(err_read.to_i, "r") )
 
     ## IF if these aren't closed before the read,
-    ## the read would indefinitely
+    ## the read would block indefinitely
     read_out && out_write.close
     read_err && err_write.close
 
