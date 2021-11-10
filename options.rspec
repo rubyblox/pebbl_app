@@ -1,5 +1,8 @@
 ## options.rspec - unit tests for options.rb
 
+require('./options') ## the library to test
+
+
 describe OptionMap::Option do
   let(:option) {
     OptionMap::Option.new(:OptionTest01)
@@ -122,6 +125,40 @@ describe OptionMap::OptionMap do
     map.setopt(:f,nil)
     expect(map.getopt(:f)).to be == nil
   end
+
+end
+
+##
+## tests for OptionMap delegation onto the AssocHash API
+##
+
+describe OptionMap::OptionMap do
+
+  let(:default_sym) { ("default-" + rand.to_s[2..]).to_sym }
+
+  let(:default_proc) {
+    lambda { |h,k| default_sym }
+  }
+
+  it "applies a symbol default in the delegate Hash table" do
+    map = OptionMap::OptionMap.new(nil, default: default_sym)
+    expect(map[:UNKNOWN]).to be == default_sym 
+    expect(map.get(:UNKNOWN)).to be == default_sym
+    ## NB an updated behavior for OptionMap#getopt : Using the
+    ## default_proc or default value of the delegate Hash @table 
+    ## to provide a return value, when an option name is not found
+    expect(map.getopt(:UNKNOWN)).to be == default_sym
+  end
+
+  it "applies a proc default in the delegate Hash table" do
+    ## NB same behavior as the previous, though default_sym
+    ## would be accessed here via default_proc
+    map = OptionMap::OptionMap.new(nil, default: default_proc)
+    expect(map[:UNKNOWN]).to be == default_sym 
+    expect(map.get(:UNKNOWN)).to be == default_sym
+    expect(map.getopt(:UNKNOWN)).to be == default_sym
+  end
+
 end
 
 

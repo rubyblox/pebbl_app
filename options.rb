@@ -18,7 +18,7 @@ require('./assochash')
 ## @see ValueOption
 class OptionMap::Option
 
-  ## Abstract constructor for *Option* implementations
+  ## Baseline constructor for *Option* implementations
   ##
   ## @param name [Symbol] option name
   def initialize(name)
@@ -60,24 +60,33 @@ class OptionMap::ValueOption < OptionMap::Option
 
   ## Create a new *ValueOption* wth the provided +name+ and +value+
   ##
-  ## @param name [Symbol] option name
-  ## @param value [not false] option value
-  def initialize(name, value = true)
+  ## @param name [Symbol] The option's name
+  ## @param value [not false] The option's value
+  def initialize(name, value)
     super(name)
     @value = value
   end
 
-  ## The value of the option
+  ## The value of the option.
+  ##
+  ## To avoid ambiguity with the boolean interpretation of
+  ## *SimpleOption*, this value should generally be other than
+  ## +true+ or +false+
   attr_accessor :value
 end
 
 
 ## General container for **Option** instances
 ##
+## === Known Limitations
+##
+## This class does not presently provide any support for
+## representation of option values as external to any single
+## *OptionMap*. i.e this does not provide direct support for any
+## mapping of option values onto any specific shell command
+## syntax.
+##
 ## @see Option
-## @todo Symbol<->String mapping for **Option** names
-##  under any single string output syntax or string
-##  input syntax
 class OptionMap::OptionMap < AssocHash::AssocHash
 
   ## Internal constant for the *AssocHash* implementation
@@ -91,8 +100,9 @@ class OptionMap::OptionMap < AssocHash::AssocHash
   ## element will be interpreted as an option name, with all options in the
   ## array set to a value of 'true'
   ##
-  def initialize(options = nil)
-    super(key_proc: NAMEPROC)
+  def initialize(options = nil, default: false)
+    ## FIXME provide an overwrite proc to super()
+    super(NAMEPROC, default: default)
     if options.instance_of?(Hash)
       options.each do |opt, optv|
         self.setopt(opt,optv)
@@ -118,11 +128,33 @@ class OptionMap::OptionMap < AssocHash::AssocHash
   ## @return [any] the value of the option, or +false+ if no option is
   ##  registered for the +name+
   def getopt(name)
+    ## FIXME document this behavior: The default value
+    ## for the OptionMap is now provided via either
+    ## a default proc or default symbol provided
+    ## during OptionMap initialization - using a
+    ## semantics same as with Hash. If a proc,
+    ## the default would be called with the
+    ## OptionMap (NB not the delegete Hash itself) as its first
+    ## arg and the key value that was "not found" as its
+    ## second arg. If not a proc, the default
+    ## will be returned as a literal value, for any
+    ## option name not stored in the OptionMap
+    ##
+    ## Implementations should ensure that the default
+    ## value (or the return value of the default proc)
+    ## provided to the OptionMap will be valid as an
+    ## option value, when returned from #getopt.
+    ##
+    ## In short, the default is to use
+    ## a default value of false
+    ##
     if self.member?(name)
       oopt = self.opt_getobj(name)
       return oopt.value
+    elsif self.table.default_proc
+      return self.table.default_proc.call(self,name)
     else
-      return false
+      return self.table.default
     end
   end
 
@@ -213,3 +245,7 @@ class OptionMap::OptionMap < AssocHash::AssocHash
   end
 
 end
+
+# Local Variables:
+# fill-column: 65
+# End:
