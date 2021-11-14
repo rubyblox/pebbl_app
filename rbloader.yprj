@@ -1,0 +1,23 @@
+## rbloader project definition		-*- yaml -*-
+name: rbloader
+version: 0.0.1
+summary: Load Ruby source files, reload when updated
+description: RbLoader provides a 'load!' method with
+  an interface generally similer to 'Kernel#require'.
+  Under  'RBLoader::load!' any previouisly loaded Ruby 
+  source file will  be loaded again, if updated since 
+  previous 'load!'. The RbLoader class is defined under 
+  the 'Utils' module.
+## NB lib_files should be listed under the gemspec
+## 'files' field, along with doc_files.
+##
+## For purpose of Rake::TestTask, TBD
+lib_files:
+-  lib/rbloader/rbloader.rb
+## test_files: ## TBD
+## doc_files ## TBD
+license: BSD
+
+## TBD from project environment, if not specified
+## authors
+## email

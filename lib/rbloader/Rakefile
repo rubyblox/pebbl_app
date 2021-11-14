@@ -1,0 +1,23 @@
+
+#require 'spec/rake/spectassk'
+require 'rake/gempackagetask'
+
+require 'rbproject'
+
+all_projects = %q{rbloader}
+
+## NB thinkum-rb @ GH
+
+task :default => [ :all_gems ]
+
+all_projects = [ "rbloader" ]
+
+all_projects.each do |p|
+  proj = RbProject::project(p)
+  proj.gemspecs_new do |s|
+    proj.gem_package_tasks(s) do |t|
+      t.need_zip = true
+      t.need_tar = true
+    end
+  end
+end
