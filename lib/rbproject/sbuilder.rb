@@ -77,10 +77,49 @@ class StructDesc
   def finalize()
     @finalized = true
   end
+
+
+  # def to_struct() ## see below, at mk_structs
+  # end
 end
 
+## Description of a Struct instance and transitively,
+## a Struct class, from serialized data
 class StructInstanceDesc < StructDesc
+  ## FIXME revise this API to use only StructDesc,
+  ## for representation of Struct class information
+  ## external to the Psych Nodes API
+  ## - StructMapping could ostensibly be removed
+  ## - StructTreeBuilder#start_mapping could ostensibly
+  ##   be updated to simply create a StructDesc
+  ##   and store it in e.g @active_struct
+  ##   then adding any field desc under #scalar
+  ##   and at least resetting the active field desc
+  ##   under any "reader" branch (scalar, etc) for
+  ##   what would represent the struct field value.
+  ##   in end_mapping, @active_struct (when true)
+  ##   would also need to be finalized and the field
+  ##   set to false or nil
+  ##
+  ## Albeit, this lot of present code ...
+  ## has been quite time consuming, so far,
+  ## in development even to this point.
+
+  ## TBD: When is to_ruby called ...
+
+  ## FIXME this allows for only one StructInstanceDesc
+  ## per each StructDesc
+  ##
+  ## FIXME provide separate implementations of
+  ## StructDesc and StructInstanceDesc such that
+  ## a StructDesc may be referred from zero or more
+  ## StructInstanceDesc
   def initialize(struct_name = nil, field_values = nil)
+    ## @struct_desc = SomeContext.ensure_struct_dessc(struct_name)
+    ## ^ FIXME in this class usage here, the "SomeContext" would
+    ## be provided by a StructTreeBuilder
+
+    ## FIXME iterate on field_values, assuming a Hash when not false
     if field_values ## assuming: hash table
       super(struct_name, field_values.keys)
     else
@@ -90,13 +129,17 @@ class StructInstanceDesc < StructDesc
   end
 
   def add_field_value(name, val)
-    add_field(name)
+    add_field(name) ## @struct_desc.add_field(name)
     if @field_values
       @field_values[name]=val
     else
       @field_values={ name => val }
     end
   end
+
+##  def mk_instance
+# see to_struct, above, and mk_structs subsq
+##  end
 end
 
 ## ...
@@ -125,10 +168,12 @@ class StructMapping < Psych::Nodes::Mapping
   end
 
   def push_field(name)
+    ## FIXME err if @struct_desc is nil ...
     @last_field = @struct_desc.add_field(name)
   end
 
   def push_field_value(value)
+    ## FIXME err if @struct_desc is nil ...
     @struct_desc.add_field_value(@last_field, value)
   end
 
@@ -139,7 +184,77 @@ class StructMapping < Psych::Nodes::Mapping
 end
 
 
-class StructTreeBuilder <  Psych::TreeBuilder
+## NB FIXME/TBD Visitor/Emitter tooling (output)
+## see
+## lib/psych/visitors/yaml_tree.rb
+##
+
+## general-purpose extension onto *Psych::TreeBuilder*
+##
+## see also
+## - psych:lib/psych/tree_builder.rb
+class ExtTreeBuilder < Psych::TreeBuilder
+
+
+  attr_reader :anchor_map ## Hash
+
+  def initialize()
+    super()
+    @anchor_map = {}
+  end
+
+  def set_anchor(anchor, obj)
+    ## NB the 'alias(anchor)' method in
+    ## psych:lib/psych/tree_builder.rb
+    ## does not perform any substitution
+    ##
+    ## NB alias/anchor substitution in Psych
+    ## may not be performed until e.g #to_ruby
+    ##    in psych:lib/psych/nodes/node.rb
+    ## which calls Visitors::ToRuby.create
+    ##    cf. psych:lib/psych/visitors/to_ruby.rb
+    ##
+    ## In this extended API, alias/anchor substitution
+    ## would need to be performed during *#mk_structs
+    ## and/or in overriding
+    ##   Psych::Visitors::ToRuby#visit_Psych_Nodes_Mapping
+    anchor_map[anchor] = obj
+  end
+
+  def start_mapping(anchor, tag, implicit, style)
+    ret = super()
+    if anchor
+      this = @last
+      set_anchor(anchor, this)
+    end
+    return ret
+  end
+
+  def start_sequence(anchor, tag, implicit, style)
+    ret = super()
+    if anchor
+      this = @last
+      set_anchor(anchor, this)
+    end
+    return ret
+  end
+
+  def scalar(value, anchor, tag, plain, quoted, style)
+    ret = super()
+    if anchor
+      this = @last.children.last
+      set_anchor(anchor, this)
+    end
+    return ret
+  end
+
+end
+
+
+
+
+
+class StructTreeBuilder < ExtTreeBuilder
   ## < .. Psych::Handlers::DocumentStream ??
   ## ^ NB &block' in initialize
 
@@ -156,6 +271,17 @@ class StructTreeBuilder <  Psych::TreeBuilder
     @field_read = false
   end
 
+  ## Retrieve a *StructDesc* for a +struct_name+ provided as
+  ## _+name+_. If no matching +StructDesc+ has been initialized
+  ## to this builder, returns nil
+  def struct_desc_find(name)
+    @structs.find do |st|
+      st.struct_name == name
+    end
+  end
+
+
+
   def start_mapping(anchor, tag, implicit, style)
     ## NB if tag matches "!ruby/struct:",
     ## create a new StructDesc for the name
@@ -171,9 +297,16 @@ class StructTreeBuilder <  Psych::TreeBuilder
                                   self)
       ## FIXME this does not reuse any existing mapping
       @structs << mapping
+      ## TBD this self.send semantics may not be highly efficient.
+      ## If these were defined as protected methods, at least,
+      ## then it would not be necessary. (Patch needed)
       self.send(:set_start_location,mapping)
       @last.children << mapping
       self.send(:push,mapping)
+      ## FIXME while this branch skips the call
+      ## to the superclass method, any non-false
+      ## 'anchor' alias will have to be handled
+      ## here
     else
       super
     end
@@ -188,12 +321,19 @@ class StructTreeBuilder <  Psych::TreeBuilder
       #else
         #super
       end
+      ## NB may need to call to super for all instances.
+      ## By side effect, this may serve to ensure that
+      ## any YAML 'document', under psych, will be ended
+      ## on the input stream
       super
   end
 
   def scalar (value, anchor, tag, plain, quoted, style)
       if @last.instance_of?(StructMapping)
         if @field_read
+          ## FIXME missed if @field_read is true
+          ## but #scalar is not called, e.g if the
+          ## field value is not itself a scalar
           @last.push_field_value(value)
           @field_read=nil
         else
@@ -203,7 +343,76 @@ class StructTreeBuilder <  Psych::TreeBuilder
         super
       end
   end
+
+  ## Define a +Struct+ subtype and instance each
+  ## +StructInstanceDesc+ initialized to this
+  ## +StructTreeBuilder+
+  ##
+  ## @param prefix [String or nil] If a string, specifies
+  ##  a naming prefix to use for each created struct
+  ##  type that is not an anonymous struct
+  ##
+  ## @param overwrite [boolean] If _true_, ovewrite any
+  ##  existing Struct subclass definition for each named Struct type,
+  ##  such that the the named Struct type - with any provided *prefix* -
+  ##  would match a name already declared in +Struct.constants+, If
+  ##  _false_, an error will raised for the first "Name overlap"
+  ##
+#  def mk_structs(prefix: nil, overwrite: nil)
+## FIXME define under a subsq. changeset
+#  end
+
 end
+
+
+## Parse a YAML serialization record as an implicit
+## struct instance record
+##
+## @fixme needs a similar implementation, for an
+##  arbitrary class name (under an arbitrary module
+##  namespace)
+class ImplicitStructTreeBuilder < StructTreeBuilder
+  ## FIXME W.I.P
+  attr_reader :struct_name
+  attr_reader :root_mapping
+  def initialize(struct_name)
+    @struct_name = struct_name
+    @root_mapping = nil
+  end
+
+  def start_document(version, tag_directives, implicit)
+    if (!@root_mapping)
+      root_tag = "!ruby/struct:#{struct_name}"
+      @root_mapping = StructMapping.new(nil, root_tag, implicit, BLOCK,
+                                        self)
+    end
+
+    super
+
+    if (@root_mapping)
+      ## NB this will result in a parse tree
+      ## such that, if the parse tree is
+      ## written back YAML, will not be
+      ## equivalent to the original text.
+      ##
+      ## The output would have the struct
+      ## description in @root_mapping added,
+      ## with the original document in effect
+      ## contained within that struct mapping
+
+      ## NB after the next call, any immediately subsequent
+      ## calls to #scalar should add fields and field values
+      ## to the @root_mapping
+      self.send(:push,@root_mapping)
+    end
+  end
+
+  def end_document(implicit_end = !streaming?)
+    @root_mapping.finalize
+    super
+  end
+end
+
 
 =begin
 
@@ -213,10 +422,10 @@ sbuilder = StructTreeBuilder.new
 parser =  Psych::Parser.new(sbuilder)
 out_1 = parser.parse("--- !ruby/struct:P\nname: Project 01\n")
 
-out_1.handler.structs.each do |stmap|
-desc = stmap.struct_desc
-## now initialize a struct from desc .. (FIXME)
-end
+# out_1.handler.structs.each do |stmap|
+# desc = stmap.struct_desc
+# ## now initialize a struct from desc .. (FIXME)
+# end
 
 ## FIXME have to reinitialize the parser,
 ## or it will keep adding struct descs ..
@@ -226,9 +435,6 @@ out_2 = parser.parse("--- !ruby/struct:POther\nname: Project 02\n")
 
 out_2.handler.structs
 
-
-## that all parsed correctly, but what is it now
-## about the implicit_end= failure again?
 
 
 =end
