@@ -2,10 +2,46 @@ require('psych')
 
 require('set')
 
+
+## Description of a Struct class, from serialized data
 class StructDesc
   attr_reader :struct_name  ## String or nil
   attr_reader :fieldset ## Set
   attr_reader :finalized
+
+  ## If +tag+ begins with the prefix +!ruby/struct:+
+  ## returns any struct name following the prefix,
+  ## or +false+ if there is no name text following
+  ## the prefix. If +tag+ does not match the prefix,
+  ## returns nil.
+  ##
+  ## @param tag [String] a YAML block tag
+  ## @return +nil+, +false+, or a struct name as
+  ##  a *String*
+  ##
+  ##  Assuming that an anonymous struct class cannot
+  ##  normally be encoded in YAML under Ruby, the
+  ##  return value may generally be +nil+ or a
+  ##  *String*
+  ##
+  ## @fixme it should be trivial to define a test case
+  ##  for this method
+  ##
+  ## @fixme Move this method into another class and
+  ##  update to accept any prefix, e.g such as to
+  ##  parse a conventional class name out of a
+  ##  block tag in YAML. That "Other class" may
+  ##  be a general subclass of TreeBuilder
+  def self.name_from_tag(tag)
+    if (tag.match?('^!ruby/struct:'))
+      offset = tag.index(':')
+      if ( offset && ( offset < tag.length ) )
+        tag.slice(1+offset..)
+      else
+        return false
+      end
+    end
+  end
 
   def initialize(struct_name = nil, fieldset = nil)
     ## FIXME does not perform any checking on constructor params,
@@ -66,23 +102,26 @@ end
 ## ...
 
 class StructMapping < Psych::Nodes::Mapping
-  ## TBD integrating this with the following
   attr_reader :struct_desc
   attr_reader :last_field
+  attr_reader :builder
+
   def initialize(anchor = nil, tag = nil,
-                 implicit = true, style = BLOCK)
-    puts("DEBUG StructMapping tag #{tag}")
-    if (tag && tag.match?('^!ruby/struct:'))
-      off = tag.index(':')
-      puts("DEBUG off #{off}")
-      if ( off && ( off < tag.length ) )
-        s_name = tag.slice(1+off..)
-        puts("DEBUG s_name #{s_name}")
-        desc = StructInstanceDesc.new(s_name)
-        @struct_desc = desc
-      end
+                 implicit = true, style = BLOCK,
+                 builder = nil)
+    ## FIXME for back-reference to existing struct/instance descs,
+    ## need to store the active tree builder here,
+    ## e.g via an additional arg 'builder'
+    @builder = builder
+
+    if ( s_name = StructDesc.name_from_tag(tag) )
+      ## FISXME test for the s_name = false case,
+      ## per StructDesc.name_from_tag
+      ## && TBD YAML encoding for an anonymous struct
+      desc = StructInstanceDesc.new(s_name)
+      @struct_desc = desc
     end
-    super
+    super(anchor,tag,implicit,style)
   end
 
   def push_field(name)
@@ -126,11 +165,14 @@ class StructTreeBuilder <  Psych::TreeBuilder
     ## - FIXME must account for nonexistent modules,
     ##  per the provided name from a struct record
     if (tag && tag.match?('^!ruby/struct:'))
-      ## FIXME needs a backref onto the src
-      ## 1) StructMapping.new(...)
-      mapping = StructMapping.new(anchor,tag,implicit,style)
-      structs << mapping
-      ## 2) push ??
+      ## FIXME if not an anonymous struct type and the struct type's
+      ## name matches any existing mapping, then reuse that mapping here
+      mapping = StructMapping.new(anchor, tag, implicit, style,
+                                  self)
+      ## FIXME this does not reuse any existing mapping
+      @structs << mapping
+      self.send(:set_start_location,mapping)
+      @last.children << mapping
       self.send(:push,mapping)
     else
       super
