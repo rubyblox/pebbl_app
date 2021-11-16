@@ -1,10 +1,11 @@
 ## rbloader project definition		-*- yaml -*-
+## --- !ruby/struct:
 name: rbloader
 version: 0.0.1
 summary: Load Ruby source files, reload when updated
 description: RbLoader provides a 'load!' method with
-  an interface generally similer to 'Kernel#require'.
-  Under  'RBLoader::load!' any previouisly loaded Ruby 
+  an interface generally similar to 'Kernel#require'.
+  Under  'RBLoader::load!' any previously loaded Ruby 
   source file will  be loaded again, if updated since 
   previous 'load!'. The RbLoader class is defined under 
   the 'Utils' module.
