@@ -13,15 +13,13 @@ class FieldDesc
 
     ## FIXME cannot call 'send' on actual method objects
 
-    @reader = (reader_name &&
-               in_class.instance_method(reader_name))
+    @reader = reader_name
     if (writer_name == true) && reader_name
       use_writer_name = (reader_name.to_s + "=").to_sym
     else
       use_writer_name = writer_name
     end
-    @writer = (use_writer_name &&
-               in_class.instance_method(use_writer_name))
+    @writer = use_writer_name
   end
 end
 
@@ -36,7 +34,7 @@ class Proj
                          symbolize_names: true).each do
       |name,value|
       fdesc = LOADABLE_DESCS.find  {
-        |f| f.reader.name == name
+        |f| f.reader == name
       }
       if fdesc
         ( writer = fdesc.writer ) &&
@@ -79,4 +77,9 @@ class Proj
 end
 
 
+=begin
+
 $FROB_P = Proj.load_yaml('../../rbloader.yprj')
+## ^ simple enough on the input side ...
+
+=end
