@@ -3,7 +3,8 @@
 require('psych')
 
 
-
+## _ad hoc_ field description for Ruby classes,
+## suitable for simple get/set fields
 class FieldDesc
   attr_reader :in_class
   attr_reader :reader
@@ -24,18 +25,24 @@ class FieldDesc
 end
 
 
+##
+## Project class
+##
 class Proj
 
-  VERSION="0.4.1"
+  VERSION="0.4.2"
 
-  ## FIXME the setter for Psych.dump_tags[Proj]
-  ## was not being evaluated when in an END
-  ## block in this file. Not any END block
-  ## in this file was being evaluated
+  ## FIXME when the setter for Psych.dump_tags[Proj]
+  ## is placed instead in an END block in this file
+  ## and this file is loaded with irb, the END block
+  ## is not being evaluated until irb exits.
+  ##
+  ## Is something translating the END blocks to
+  ## at_exit blocks for load under irb?
   DUMP_TAG= Psych.dump_tags[self] ||=
             "#{self.name}@#{self::VERSION}"
 
-  def self.load_yaml(file)
+  def self.load_yaml(file, **loadopts)
 
     descs = LOADABLE_FIELDS.map do |f|
       FieldDesc.new(self, reader_name: f,
@@ -49,10 +56,16 @@ class Proj
     ##
     ## This assumes that the file can be parsed
     ## as a top-level mapping or dictionary
+    ##
+    ## FIXME this dictionary syntax does not
+    ## allow for project file includes, e.g
+    ## to reuse common project fields, in this
+    ## "YAML is not msbuild XML" hack
 
-    Psych.safe_load_file(file,
-                         symbolize_names: true,
-                         aliases: true).each do
+    loadopts[:symbolize_names] ||= true
+    loadopts[:aliases] ||= true
+
+    Psych.safe_load_file(file, **loadopts).each do
       |name,value|
       fdesc = descs.find  {
         |f| f.reader == name
@@ -77,6 +90,12 @@ class Proj
   attr_accessor :doc_files
   attr_reader   :extra_conf_data ## for serialization
 
+
+  ## FIXME This class needs additional fields, for broader gemspec
+  ## interop - see gemfile(5) and e.g
+  ## Specification Reference @
+  ## https://guides.rubygems.org/specification-reference/
+
   LOADABLE_FIELDS = [:name, :version, :summary,
                      :description, :license, :lib_files,
                      :test_files, :doc_files]
@@ -93,9 +112,10 @@ class Proj
 
   def write_yaml_file(pathname, mode_flags: File::CREAT,
                      **dumpargs)
+    ##
     ## FIXME store the original file pathname, during ::load_yaml
     ##
-    ## & Write to that file, by default, here
+    ## & Write to that file by default, here
     ##
     ## implies: Project Workspace
     ##
@@ -123,15 +143,20 @@ end
 
 
 # END {
-#   ## was not reached
+#   ## FIXME not reached until irb exit?
+#   ## when file is loaded with irb, via #require or #load
+#   ## w/ ruby 3.0.2p107 (Arch Linux)
+#
 #   puts "DEBUG: in END block for #{__FILE__}"
 # }
 
 
 =begin
 
+## trivial tests for Proj serialization/deserialization
+## onto YAML
+
 $FROB_P1 = Proj.load_yaml('../../rbloader.yprj')
-## ^ simple enough on the input side ...
 
 $FROB_S00 = Psych.dump($FROB_P1, line_width: 65, header: true)
 
