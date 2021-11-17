@@ -97,28 +97,14 @@ class Proj
              Psych.load_tags[tag]  = self;
              Psych.dump_tags[self] = tag )
 
-    ## FIXME this may not gracefully handle some
-    ## formatting errors in the file.
-    ##
-    ## This assumes that the file can be parsed
-    ## as a top-level mapping or dictionary
-
-  def self.load_yaml_file(pathname, **loadopts)
+  def self.load_yaml_file(filename, **loadopts)
     ## FIXME may not be immediately useful
     ## for deserialization to any subclass instance
     ##
-    ## FIXME update to provide a 'project_class' arg,
-    ## here defaulting to to 'self', pursuant
-    ## of a usable demonstration of a subclass
-    ## of Proj
-    f = File.open(pathname, "rb:BOM|UTF-8")
+    ## FIXME provide an extended loadopt for file encoding
     instance = self.allocate
-    opts = loadopts.dup
-    opts[:filename] ||= pathname
-    instance.load_yaml_stream(f,**opts)
+    instance.load_yaml_file(filename, **loadopts)
     return instance
-    ensure
-      f.close
   end
 
   attr_accessor :name
@@ -190,6 +176,13 @@ class Proj
 
 
   def load_yaml_file(filename, **loadopts)
+    ## FIXME provide an extended loadopt for file encoding
+    f = File.open(filename, "rb:BOM|UTF-8")
+    opts = loadopts.dup
+    opts[:filename] ||= filename
+    self.load_yaml_stream(f,**opts)
+    ensure
+      f.close
   end
 
   def load_yaml_stream(io, **loadopts)
