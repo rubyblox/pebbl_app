@@ -360,3 +360,7 @@ in #{project_root} for suffix #{suffix}"
     return Rake::GemPackageTask.new(gemspec)
   end
 end
+
+# Local Variables:
+# fill-column: 65
+# End:

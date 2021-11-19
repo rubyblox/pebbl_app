@@ -63,6 +63,23 @@ major revision.
 
 require('psych')
 
+module FieldMap
+  ## assumption: Any class including this class would be a direct
+  ## or indirect subclass of FieldDesc
+  attr_reader :external_class
+  attr_reader :external_name
+
+  def initialize(in_class, name, external_class, external_name)
+    super(in_class, name)
+    @external_class = external_class
+    @xternal_name = external_name
+  end
+
+  def send_value(external_instance, **values)
+    external_instance.call(external_name, **values)
+  end
+end
+
 
 ## _ad hoc_ field description for Ruby classes
 ##
@@ -146,11 +163,27 @@ class FieldDesc
   alias :init_field :set_value
 end
 
+
 class ScalarFieldDesc < FieldDesc
 
   def initialize(in_class, name)
     super
     @type = :scalar
+  end
+end
+
+class ScalarFieldMap < ScalarFieldDesc
+  extend FieldMap
+
+  def export(internal_instance, external_instance)
+    if value_in?(internal_instance)
+      if block_given?
+        yield lambda {|val| send_value(external_instance,val)}
+      else
+          value = get_value(internal_instance)
+          send_value(external_instance, value)
+      end
+    end
   end
 end
 
@@ -165,7 +198,6 @@ end
 ## class for *FieldDesc* types representative of
 ## generally Array-like field values
 class SequenceFieldDesc < EnumerableFieldDesc
-
 
   def initialize(in_class, name)
     super(in_class, name)
@@ -190,6 +222,23 @@ class SequenceFieldDesc < EnumerableFieldDesc
 
   # def remove_value(instance, value)
   # end
+end
+
+
+class SequenceFieldMap < SequenceFieldDesc
+  extend FieldMap
+
+  def export(internal_instance, external_instance)
+    if value_in?(internal_instance)
+      if block_given?
+        yield lambda { |elt| send_value(external_instance, elt) }
+      else
+        get_value(internal_instance).each do |elt|
+          send_value(external_instance, elt)
+        end
+      end
+    end
+  end
 end
 
 
@@ -247,6 +296,45 @@ class MappingFieldDesc < EnumerableFieldDesc
   # end
 end
 
+class MappingFieldMap < MappingFieldDesc
+  extend FieldMap
+
+  def export(internal_instance, external_instance)
+    ## FIXME ...
+
+    if value_in?(internal_instance)
+      if block_given?
+        ## assumption: The calling method will access and
+        ## transform the internal field data for the instance
+        ##
+        ## The lambda yielded to the block in the calling method
+        ## should be called with each key, value pair to send
+        ## to the external instance
+        ##
+        ## NB usage case - implementation for the metadata field
+        ## mapping from an RbProject onto gemspec metdatada
+        yield lambda { |k,v| send_value(external_instance, k, v) }
+      else
+        ## NB usage case for external mapping to
+        ## Gem::Specification instance methods
+        ## #add_development_dependency and
+        ## #add_runtime_dependency from each
+        ## of RbProject fields :development_depends
+        ## and :runtime_depends
+        value = get_value(internal_instance)
+        value.each { |k,v| send_value(external_instance, k, v) }
+      end
+    end
+  end
+end
+
+
+
+# class ObjectFieldDesc < MappingFieldDesc
+# ## NB
+# ## - dispatch to Psych YAML handling (tags && init_with/encode_with methods)
+# ## - tag semantics onto Psych.load_tags && Psych.dump_tags
+# end
 
 ## mixn module for usage under +extend+
 module YAMLExt
@@ -486,7 +574,9 @@ module CollectionAttrs
     # @see #attr_map Define accessor methods for a Hash-like
     # field
     #
-    def extclass.attr_seq(field, trim_plural = true)
+    def extclass.attr_seq(field, trim_plural: true,
+                          add_name: nil, rem_name: nil,
+                          get_name: nil, set_name: nil)
       use_name = field.to_s
       inst_var = ('@' + use_name).to_sym
       ## NB The verb_sfx would generally be the use_name trimmed
@@ -500,10 +590,10 @@ module CollectionAttrs
       ## FIXME this does not provide any RDoc/YARD documentation
       verb_sfx = ( trim_plural && use_name[-1] == "s" ) ?
         use_name[...-1] : use_name
-      add_name = ('add_' + verb_sfx).to_sym
-      rem_name = ('remove_' + verb_sfx).to_sym
-      get_name = use_name.to_sym
-      set_name = (use_name + '=').to_sym
+      add_name ||= ('add_' + verb_sfx).to_sym
+      rem_name ||= ('remove_' + verb_sfx).to_sym
+      get_name ||= use_name.to_sym
+      set_name ||= (use_name + '=').to_sym
 
       ## FIXME at DEBUG log level, log each method name,
       ## the instance variable name, and extclass
@@ -555,13 +645,14 @@ module CollectionAttrs
     #
     # @see extclass.attr_seq Define accessor methods for asn
     #  Array-like field
-    def extclass.attr_map(field)
+    def extclass.attr_map(field, add_name: nil, rem_name: nil,
+                          get_name: nil, set_name: nil)
       use_name = field.to_s
       inst_var = ('@' + use_name).to_sym
-      add_name = ('set_' + use_name).to_sym
-      rem_name = ('remove_' + use_name).to_sym
-      get_name = use_name.to_sym
-      set_name = (use_name + '_map=').to_sym
+      add_name ||= ('set_' + use_name).to_sym
+      rem_name ||= ('remove_' + use_name).to_sym
+      get_name ||= use_name.to_sym
+      set_name ||= (use_name + '_map=').to_sym
 
       ## FIXME at DEBUG log level, log each method name,
       ## the instance variable name, and extclass
@@ -678,9 +769,6 @@ class Proj
   attr_accessor :description
   attr_accessor :license ## FIXME may be a seq. should use spdx syntax when not n/a
   attr_accessor :authors
-  # attr_accessor :lib_files
-  # attr_accessor :test_files
-  # attr_accessor :doc_files
   attr_accessor :fields_from_conf ## for debug & deserialization - array a.t.m
 
   ## attr_accessor :conf_file ## ...
@@ -689,13 +777,13 @@ class Proj
   ## FIXME provide RDoc/YARD docs for all of the
   ## methods defined in the following
   ##
-  ## FIXME lib_files, test_files, require_paths, dependencies
+  ## FIXME lib_files, test_files, require_paths
   ## are generally Ruby project-specific
   attr_seq :require_paths
   attr_seq :lib_files
   attr_seq :test_files
   attr_seq :doc_files
-  attr_seq :dependencies
+  ## attr_seq :dependencies
 
   ## FIXME "metadata keys must be a string" ...
   attr_map :metadata ## for gemspec interop
@@ -716,7 +804,6 @@ class Proj
                       [:lib_files, :sequence],
                       [:test_files, :sequence],
                       [:doc_files, :sequence],
-                      [:dependencies, :sequence],
                       [:authors, :sequence],
                       [:metadata, :mapping]]
 
@@ -970,13 +1057,13 @@ class Proj
         ## that would have been encoded as a YAML mapping
         value.each do |extra_name, extra_value|
           @fields_from_conf.push [:extra_conf_data, extra_name, source_file]
-          self.add_extra_conf_data(extra_name,extra_value)
+          self.set_extra_conf_data(extra_name,extra_value)
         end
       else
         ## unkonwn top level { name => value } pair
         ## will be stored in extra_conf_data
         @fields_from_conf.push [:extra_conf_data, name, source_file]
-        self.add_extra_conf_data(name,value)
+        self.set_extra_conf_data(name,value)
       end
     end
   end
