@@ -728,6 +728,21 @@ class Proj
 
   extend YAMLExt
   YAML_TAG = init_yaml_tag()
+  ##
+  ## NB new feature - not addressed in the following:
+  ## Proj@encode_with_tag should generally be nil, for purpose
+  ## of creating a generalized untagged YAML mapping on output.
+  ##
+  ## If an output stream must be created, such that a new Proj
+  ## object would be initialized when the stream is read, then
+  ## Proj@encode_with_tag == Proj::YAML_TAG should be used
+  ##
+  ## Although Proj@encode_with_tag can be set to any arbitrary
+  ## string value, when not nil, it would be beyond the support
+  ## of this API - at present- to decode an encoded Proj with
+  ## any tag other than Proj::YAML_TAG (FIXME this will need to
+  ## be addressed in a subsequent Proj revision)
+  ##
   ## NB Psych.load_tags is used in initialization of the instance
   ## variable @load_tags for Psych::Visitors::ToRuby as in
   ## psych:lib/psych/visitors/to_ruby.rb. The instance variable
@@ -761,6 +776,8 @@ class Proj
     instance.load_yaml_file(filename, **loadopts)
     return instance
   end
+
+  attr_accessor :encode_with_tag ## FIXME move to a ConfigFile subclass
 
   attr_accessor :name
   attr_accessor :version
@@ -873,7 +890,7 @@ class Proj
   ##  https://guides.rubygems.org/specification-reference/
   def author()
     if ( @authors && ( @authors.length > 1) )
-      raise "Multiple authors defined, in #{__METHOD__} for #{self}"
+      raise "Multiple authors defined, in #{__method__} for #{self}"
     else
       @authors && @authors[0]
     end
@@ -909,16 +926,47 @@ class Proj
   ## @see #load_yaml_file
   ## @see ::load_yaml_file
   def init_with(coder)
+    ## NB If initializing a Proj with this method
+    ## under Psych.load, if not using any calling
+    ## method that would maintain any additional
+    ## state data, it would loose any source file
+    ## pathname. Furthermore, it may then not be
+    ## possible to differentiate what values
+    ## were initialized from an include file
+    ##
+    ## FIXME the naive include file recording
+    ## approach in this API should be reviewed
+    ## for subsequent revision.
+    ## - TBD integration with an OrderedHash
+    ##   extension under #encode_with
+    ## - TBD application of an e.g @conf_fields
+    ##   instance variable, for the configuration API
+    ## - TBD encoding for 'include' directives
+    ##   under the @conf_fields sequence
+    ## - TBD handling for "included files"
+    ##   under "write YAML to file"
+    ##   - TBD initialization of Proj partial configuration
+    ##     objects, for representing the configuration
+    ##     data of any included file
+    ##     - Proj#config_file
+    ##       - ConfigFile#pathname (host pathname ... TBD)
+    ##       - ConfigFile#mtime
+    ##       - Utils::IO::ConfigFile ([<project_root>/lib/]rbproject/configfile.rb) << FileInfo (requires rbloader/fileinfo)
+    ##     - Proj#include_config => ConfigFile
+    ##       "including" ConfigFile - #inicluded_from
+    ##     - Proj#reload_config(reset=false) (presently load_yaml...)
+    ##     - Projg#write_config(includes=false) (presently write_yaml_...)
     (coder.type == :map) ||
       raise("Unsupported coder type #{coder.type} in #{coder}")
 
-    fdescs ||= self.class::mk_fdescs()
+    fdescs = self.class::mk_fdescs()
 
     @fields_from_conf ||= []
     opts = {:symbolize_names => true,
             :aliases => true}
     coder.map.each do |k,v|
-      load_yaml_field(k, v, fdescs, **opts)
+      puts "--[DEBUG] initializing #{self} with #{k} => #{v}"
+      load_yaml_field(k.to_sym, v, fdescs, **opts)
     end
 
   end
@@ -934,16 +982,18 @@ class Proj
   def encode_with(coder)
     ## initialize the coder@map, per each bound
     ## insrtance variable
+
     if (coder.type != :map)
-      raise "Unsupported coder type: #{coder.type} for #{coder} in #{__METHOD__}"
+      raise "Unsupported coder type: #{coder.type} for #{coder} in #{__method__}"
     else
+      coder.tag = encode_with_tag ## NB nil by default
       map = coder.map
     end
 
     ## FIXME the following is not well documented. This may be
     ## of use singularly for Proj mapping onto/from YAML text
 
-    fdescs ||= self.class::mk_fdescs()
+    fdescs = self.class::mk_fdescs()
 
     if @fields_from_conf
       top_src_file = nil
@@ -1072,10 +1122,18 @@ class Proj
   ## initialize this *Proj* using YAML data in the provided
   ## stream
   ##
+  ## @param io [IO or StringIO or String]
+  ##
   ## @note This method will not reset any initialized instance
   ##  variables before loading the YAML stream
   ##
   def load_yaml_stream(io, **loadopts)
+    if io.respond_to?(:eof) && io.eof
+      raise EOFError.new("End of file on stream #{io}")
+    end
+
+    ## NB when reading YAML tagged with Proj::YAML_TAG here,
+    ## Psych will crate a new Proj other than 'self'
 
     ## FIXME this may not gracefully handle some
     ## formatting errors in the file.
@@ -1108,21 +1166,37 @@ class Proj
     ## into the new instance, principally external to #init_with
     fdescs = self.class::mk_fdescs()
 
-    Psych.safe_load(io, **opts).each do
-      ## initialize the new instance 'instance'
-      ## per { key => value } pairs in the data
-      ## deserialized from the top-level mapping
-      ## assumed to have been encoded in the YAML
-      ## stream
-      ##
-      ## Assumptions:
-      ## - the value of <name> is a symbol
-      ## - the value of <value> is a list, hash,
-      ##   or scalar value
-      |name, value|
-      load_yaml_field(name, value, fdescs, **opts)
-    end
-    return self
+    ## FIXME this, for safe_load
+    opts[:permitted_classes] ||= [Proj, Symbol]
+
+    out = Psych.safe_load(io, **opts)
+
+      case out.class.name
+      when Hash.name
+        out.each do
+          ## initialize the new instance 'instance'
+          ## per { key => value } pairs in the data
+          ## deserialized from the top-level mapping
+          ## assumed to have been encoded in the YAML
+          ## stream
+          ##
+          ## Assumptions:
+          ## - the value of <name> is a symbol
+          ## - the value of <value> is a list, hash,
+          ##   or scalar value
+          |name, value|
+                 load_yaml_field(name, value, fdescs, **opts)        end
+
+      when NilClass.name
+        raise "safe_load failed (no output - end of file?) in #{__method__} for stream #{io}"
+      else
+        if ! out.is_a?(Proj)
+          raise "unexpected parser output, class #{out.class} in #{__method__}: #{out}" 
+        else
+          return out
+        end
+      end
+      return self
   end
 
   ##

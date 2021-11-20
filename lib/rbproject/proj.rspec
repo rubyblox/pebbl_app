@@ -1,0 +1,133 @@
+
+require('./proj') ## the library to test
+require('stringio')
+
+describe Proj do
+  let!(:yaml_text_00) { "name: yaml-text-00
+version: 0.0.1
+summary: YAML Text 00
+description: ...
+homepage: https://www.example.com/
+license: bsd-2-clause
+doc_files:
+ - README
+ - nop.txt
+metadata:
+  repository: nop
+"}
+  let(:yaml_text_01) { yaml-text-00.dup.concat("include:
+  tbd.yaml")
+  }
+  let(:yaml_text_tbd) { "doc_files:
+- ChangeLog"
+  }
+
+
+  it "stores YAML tag info in Psych" do
+    ## NB partially a test for the YAMLExt mixin module
+    cn = described_class.name
+    v = described_class::VERSION 
+   tag = described_class::YAML_TAG
+    expect(tag).to be == "#{cn}@#{v}"
+    expect(Psych.load_tags[tag]).to be == cn
+    expect(Psych.dump_tags[described_class]).to be == tag
+  end
+
+  it "parses project fields" do
+    ios = StringIO.new(yaml_text_00)
+    subject.load_yaml_stream(ios);
+    expect(subject.name).to be == 'yaml-text-00'
+    expect(subject.version).to be == '0.0.1'
+    expect(subject.summary).to be == 'YAML Text 00'
+    expect(subject.description).to be == '...'
+    expect(subject.homepage).to be == 'https://www.example.com/'
+    expect(subject.license).to be == 'bsd-2-clause'
+    expect(subject.doc_files.is_a?(Array)).to be true
+    expect(subject.doc_files.length).to be == 2
+    expect(subject.doc_files[0]).to be == 'README'
+    expect(subject.doc_files[1]).to be == 'nop.txt'
+    expect(subject.metadata.is_a?(Hash)).to be true
+    expect(subject.metadata[:repository]).to be == 'nop'
+    ## ensure that additional data was not added
+    expect(subject.extra_conf_data.class).to be == Hash
+    expect(subject.extra_conf_data.length).to be == 0
+  end
+
+  it "writes untagged YAML 1.1" do
+    ios = StringIO.new(yaml_text_00)
+    subject.load_yaml_stream(yaml_text_00)
+    subject.write_yaml_stream(ios)
+    ios.pos = 0
+    expect(ios.gets.chomp).to be == '%YAML 1.1'
+
+    ## when subject.encodes_with_tag = nil (default), the next
+    ## line read should be an untagged document marker
+    expect(ios.gets.chomp).to be == "---"
+
+    ## unstringified keys (on output)
+    # expect(ios.gets.chomp).to be == ':name: yaml-text-00'
+    ## stringified keys (on output)
+    expect(ios.gets.chomp).to be == 'name: yaml-text-00'
+  end
+
+  it "writes tagged YAML 1.1" do
+    ios = StringIO.new(yaml_text_00)
+    subject.load_yaml_stream(yaml_text_00)
+    subject.encode_with_tag = described_class::YAML_TAG
+    subject.write_yaml_stream(ios)
+    ios.pos = 0
+    expect(ios.gets.chomp).to be == '%YAML 1.1'
+
+    ## NB due to the encode_with_tag setting:
+    expect(ios.gets.chomp).to be == "--- !<#{described_class::YAML_TAG}>"
+
+    # expect(ios.gets.chomp).to be == ':name: yaml-text-00' ## unstringified keys
+    expect(ios.gets.chomp).to be == 'name: yaml-text-00' ## stringified keys
+  end
+
+
+  it "reads written YAML" do
+    in_ios = StringIO.new(yaml_text_00)
+    subject.load_yaml_stream(in_ios)
+
+    out_ios = StringIO.new
+    subject.write_yaml_stream(out_ios)
+
+    other = described_class.allocate
+    puts "-- [DEBUG] testing other #{other}"
+    out_ios.pos = 0
+    ## FIXME on tagged YAML, this fails. Psych crates a new Proj
+    other.load_yaml_stream(out_ios)
+
+    # puts "--[DEBUG] out_ios.string: #{out_ios.string}"
+
+    ## ensure extra data was not added
+    expect(other.extra_conf_data.class).to be == Hash
+    expect(other.extra_conf_data.length).to be == 0
+
+    described_class::SERIALIZE_FIELDS.each do |fieldspec|
+      ## ensure each field in the subject is equivalent to
+      ## that field in the other object
+      field_name= fieldspec.is_a?(Array) ? fieldspec[0] : fieldspec
+      ivar = ( "@" + field_name.to_s ).to_sym
+
+      if(subject.instance_variable_defined?(ivar))
+        puts "--[DEBUG] Testing instance variable #{ivar}"
+        ## FIXME fails ... on @name
+        expect(other.instance_variable_defined?(ivar)).
+          to be true
+        expect(subject.instance_variable_get(ivar)).
+          to  be == other.instance_variable_get(ivar)
+      else
+        expect(other.instance_variable_defined?(ivar)).
+          to be false
+      end
+    end
+  end
+
+end
+
+# Local Variables:
+# fill-column: 65
+# mode: enh-ruby
+# End:
