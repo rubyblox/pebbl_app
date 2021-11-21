@@ -789,18 +789,19 @@ class Application
 
 end
 
-# BEGIN {
-#   ## FIXME handle elsewhere
-#   ##
-#   ## FIXME N/A with the Application class defined in this source file
-#   APP = nil
-#   APP ||= Application.new("MAIN").tap {
-#     |app| app.log_level = (
-#       defined?(IRB) && defined?(IRB.conf) ? Logger::DEBUG : Logger::WARN
-#     )
-#   }
-# }
-
+=begin TBD
+BEGIN {
+  ## FIXME handle elsewhere
+  ##
+  ## FIXME N/A with the Application class defined in this source file
+  APP = nil
+  APP ||= Application.new("MAIN").tap {
+    |app| app.log_level = (
+      defined?(IRB) && defined?(IRB.conf) ? Logger::DEBUG : Logger::WARN
+    )
+  }
+}
+=end
 
 ##
 ## Project class
@@ -1045,13 +1046,18 @@ class Proj
 
   ## interop. with the Psych API, as under *Psych.load*
   ##
+  ## This method will typically not be reached unless decoding
+  ## tagged YAML, with a tag equivalent to *YAML_TAG* in this class
+  ##
   ## @param coder [Psych::Coder]
   ##
-  ## @see Psych::Visitors::ToRuby
-  ## @see #encode_with
-  ## @see #load_yaml_stream
-  ## @see #load_yaml_file
-  ## @see ::load_yaml_file
+  ## @see YAML_TAG class constant
+  ## @see #load_yaml_stream instance method
+  ## @see #load_yaml_file instance method
+  ## @see ::load_yaml_file class method
+  ## @see #encode_with instance method, onto the Psych API
+  ## @see #encode_with_tag instance field
+  ## @see Psych::Visitors::ToRuby class
   def init_with(coder)
     ## NB If initializing a Proj with this method
     ## under Psych.load, if not using any calling
@@ -1092,8 +1098,14 @@ class Proj
     opts = {:symbolize_names => true,
             :aliases => true}
     coder.map.each do |k,v|
-      app && app.log_debug("In #{self.class}##{__method__}: initializing #{self} with #{k} => #{v}")
-      ## dispatch:
+      ## NB may not be reached here, loading tagged YAML data
+      ## into an otherwise unininitialized instance
+      # app && app.log_debug("In #{self.class}##{__method__}: initializing #{self} with #{k} => #{v}")
+      $LOGGER &&
+        $LOGGER.debug("In #{self.class}##{__method__}: initializing #{self} with #{k} => #{v}")
+      ## will be reached, even absent of a configured logger:
+      # STDERR.puts "DEBUG #{self} #{k} => #{v}" if !app
+      ## dispatch
       load_yaml_field(k.to_sym, v, fdescs, **opts)
     end
 
@@ -1288,46 +1300,49 @@ class Proj
     opts[:symbolize_names] ||= true
     opts[:aliases] ||= true
 
-    ## NB debug storage - FIXME will not overwrite previous
-    ## entries in @fields_from_conf if the instance is initialized
-    ## more than once, from the same file & includes. That should
-    ## be managed in some calling method, to set @fields_from_conf
-    ## to an empty array before reinitializing the instance from
-    ## configuration files
+    ## NB trivial configuration history - FIXME will not
+    ## overwrite previous entries in @fields_from_conf if the
+    ## instance is initialized more than once, from the same file
+    ## & includes. That may be managed in some calling method,
+    ## to set @fields_from_conf to an empty array before
+    ## reinitializing the instance from configuration files
     @fields_from_conf ||= []
 
-    ## NB The fdecs table will be neededl such as when the YAML
-    ## mapping in the YAML stream does not store the YAML tag
-    ## corresponding to this class. In this case, the parsed
-    ## field data from the YAML stream would have to be loaded
-    ## into the new instance, principally external to #init_with
+    ## fdescs array - used internally for importing values from
+    ## a mapped hash under Psych into this instance, alternately
+    ## for importing field values from any new Proj object
+    ## initialized from a tagged encoding, under Psych.safe_load
     fdescs = self.class::mk_fdescs()
 
-    ## FIXME this, for safe_load
-    opts[:permitted_classes] ||= [Proj, Symbol]
+    ## FIXME a required parameter, when using safe_load
+    ## - needs local paramterization, e.g under further
+    ## usage testing for Proj-to-YAML serialization
+    opts[:permitted_classes] ||= [Proj, Symbol,
+                                  YAMLScalarExt, YAMLIncludeFile]
 
     out = Psych.safe_load(io, **opts)
 
       case out.class.name
       when Hash.name
-        ## Psych parsed a generalized YAML mapping
+        ## Psych has parsed a generalized YAML mapping
         out.each do
           ## initialize this instance per { key => value } pairs in the
           ## data deserialized from the top-level mapping
           ##
           ## Assumptions:
           ## - the value of <name> is a string or symbol
-          ## - the value of <value> is a list, hash,
+          ##   (probably a symbol)
+          ## - the value of <value> is an Array, Hash,
           ##   or scalar value
           |name, value|
                  load_yaml_field(name.to_sym, value, fdescs, **opts)
         end
 
       when NilClass.name
-        raise "safe_load failed (no output - end of file?) in #{__method__} for stream #{io}"
+        raise "safe_load failed (no output - end of file?) in #{self.class}##{__method__} for stream #{io}"
       else
         if ! out.is_a?(Proj)
-          raise "unexpected parser output, class #{out.class} in #{__method__}: #{out}"
+          raise "unexpected output from safe_load in #{self.class}##{__method__}: #{out}"
         else
           ## NB here: out != self
           ##
@@ -1343,8 +1358,8 @@ class Proj
               load_yaml_field(fdesc.name,fdesc.get_value(out), fdescs, **opts)
             end
           end
-          app &&
-            app.log_warn("In #{self.class}##{__method__} for #{self}: Discarding ephemeral instance #{out}")
+          $LOGGER &&
+            $LOGGER.log_warn("In #{self.class}##{__method__} for #{self}: Discarding ephemeral instance #{out}")
           return self
         end
       end
