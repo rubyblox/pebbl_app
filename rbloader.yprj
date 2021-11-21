@@ -1,5 +1,4 @@
 ## rbloader project definition		-*- yaml -*-
-## --- !ruby/struct:
 name: rbloader
 version: 0.0.1
 include: defaults.yprj

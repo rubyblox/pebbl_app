@@ -372,7 +372,9 @@ module YAMLExt
           use_tag = class_name
         end
       end
-      ## FIXME at DEBUG log level, log the tag being used and the
+      defined?(APP) && APP.log_debug(
+        "In #{__method__}: Using tag '#{use_tag}' for class #{self}"
+      )
       ## extclass
       Psych.load_tags[use_tag] = class_name
       Psych.dump_tags[self] = use_tag
@@ -595,8 +597,17 @@ module CollectionAttrs
       get_name ||= use_name.to_sym
       set_name ||= (use_name + '=').to_sym
 
-      ## FIXME at DEBUG log level, log each method name,
-      ## the instance variable name, and extclass
+      # if defined?(APP)
+      #   APP.log_debug(
+      #     "In #{__method__}: inst_var #{inst_var}"
+      #   )
+      #   APP.log_debug(
+      #     "In #{__method__}: add_name #{add_name} rem_name #{rem_name}"
+      #   )
+      #   APP.log_debug(
+      #     "In #{__method__}: get_name #{get_name} set_name #{set_name}"
+      #     )
+      # end
 
       define_method(add_name) { |value|
         if instance_variable_defined?(inst_var) &&
@@ -654,8 +665,17 @@ module CollectionAttrs
       get_name ||= use_name.to_sym
       set_name ||= (use_name + '_map=').to_sym
 
-      ## FIXME at DEBUG log level, log each method name,
-      ## the instance variable name, and extclass
+      # if defined?(APP)
+      #   APP.log_debug(
+      #     "In #{__method__}: inst_var #{inst_var}"
+      #   )
+      #   APP.log_debug(
+      #     "In #{__method__}: add_name #{add_name} rem_name #{rem_name}"
+      #   )
+      #   APP.log_debug(
+      #     "In #{__method__}: get_name #{get_name} set_name #{set_name}"
+      #     )
+      # end
 
       ## NB this o.set_thing(key,value) semantics
       ## may be less than ideal for a hash field
@@ -697,6 +717,89 @@ module CollectionAttrs
   end ## def self.extended(extclass)
 
 end ## module CollectionAttrs
+
+
+require('logger')
+require('forwardable')
+
+## mixin module for adding *log_*+ delegate
+## methods to a class
+module LoggerDelegate
+
+  def self.extended(extclass)
+    ## FIXME no way to pass parameters across Object#extend
+    ##
+    ## e.g the name of the instance variable to delegate to
+    extclass.extend Forwardable
+
+    ## FIXME needs documentation (params)
+    ##
+    ## TBD YARD rendering for define_method in this context
+    ##
+    ## NB application must ensure that the instance variable is
+    ## initialized with a Logger before any delegate method is
+    ## called - see example under Application#initialize
+    define_method(:def_logger_delegate) do | instvar, prefix=:log_ |
+      use_prefix = prefix.to_s
+      Logger.instance_methods(false).
+        select { |elt| elt != :<< }.each do |m|
+          extclass.
+            def_instance_delegator(instvar,m,(use_prefix + m.to_s).to_sym)
+        end ## instance_methods block
+    end ## def_logger_delegate block
+  end ## self.extended block
+end ## LoggerDelegate module
+
+##
+## naive Application class
+##
+class Application
+
+  ## FIXME revise to a mixin module for use under 'extend'
+
+  ## FIXME define a subclass YAMLApplication
+  ## && integrate with a Config::YAMLConfig (file, ...)
+
+  ## - FIXME use a gem for XDG dirs
+  ## - define a default log file under some data dir for
+  ##   this application nmame
+  ## - apply log rotation, when the Application class is
+  ##   initialized with same default "app logger"
+
+  attr_reader :name
+  attr_reader :logger
+
+  extend(LoggerDelegate)
+  def_logger_delegate :@logger
+
+  LOG_LEVEL_DEFAULT = Logger::WARN
+
+  def initialize(name = "App-" + Random.rand.to_s[2..],
+                 logger: nil)
+    @name = name
+    if logger
+      use_logger = logger
+    else
+      use_logger = Logger.new(STDERR)
+      use_logger.level = LOG_LEVEL_DEFAULT
+      use_logger.progname = name
+    end
+    @logger = use_logger
+  end
+
+end
+
+# BEGIN {
+#   ## FIXME handle elsewhere
+#   ##
+#   ## FIXME N/A with the Application class defined in this source file
+#   APP = nil
+#   APP ||= Application.new("MAIN").tap {
+#     |app| app.log_level = (
+#       defined?(IRB) && defined?(IRB.conf) ? Logger::DEBUG : Logger::WARN
+#     )
+#   }
+# }
 
 
 ##
@@ -777,7 +880,7 @@ class Proj
     return instance
   end
 
-  attr_accessor :encode_with_tag ## FIXME move to a ConfigFile subclass
+  attr_reader :encode_with_tag ## FIXME move to a ConfigFile subclass
 
   attr_accessor :name
   attr_accessor :version
@@ -882,6 +985,30 @@ class Proj
     end
   end
 
+  attr_reader :app
+
+  def initialize(app: Application.new("Proj MAIN"))
+    ## FIXME make delegate methods for logging onto app ... logger
+    ## .. FIXME logiging unused except for debug ...
+    @app = app
+  end
+
+  def encode_with_tag=(value)
+    case value
+        when true
+          use_value = self.class::YAML_TAG
+        when false
+          use_value = nil
+        else
+          ## NB this branch may not be very well supported,
+          ## insofar as for reading tagged YAML without further
+          ## configuration onto the Psych API
+          use_value = value
+    end
+    @encode_with_tag = use_value
+  end
+
+
   ##
   ## instance methods for the Proj YAML/Gemspec interop API
   ##
@@ -965,7 +1092,8 @@ class Proj
     opts = {:symbolize_names => true,
             :aliases => true}
     coder.map.each do |k,v|
-      puts "--[DEBUG] initializing #{self} with #{k} => #{v}"
+      app && app.log_debug("In #{self.class}##{__method__}: initializing #{self} with #{k} => #{v}")
+      ## dispatch:
       load_yaml_field(k.to_sym, v, fdescs, **opts)
     end
 
@@ -986,7 +1114,7 @@ class Proj
     if (coder.type != :map)
       raise "Unsupported coder type: #{coder.type} for #{coder} in #{__method__}"
     else
-      coder.tag = encode_with_tag ## NB nil by default
+      coder.tag = @encode_with_tag ## NB nil by default
       map = coder.map
     end
 
@@ -1008,26 +1136,35 @@ class Proj
         case conf_name
         when :include
           include_file= field[1]
-          k = YAMLScalarExt.new("include")
-          v = YAMLIncludeFile.new(include_file)
-          map[k] = v
-          top_src_file ||= field[2]
+          src_file= field[2]
+          if (top_src_file.nil? ||
+              (top_src_file == src_file))
+            ## store only includes from top_src_file
+            k = YAMLScalarExt.new("include")
+            v = YAMLIncludeFile.new(include_file)
+            map[k] = v
+            top_src_file ||= src_file
+          end
+          ## FIXME :metadata hash keys not being "re-stringified" on
+          ## output - not an error ...
         when :extra_conf_data
           src_file = field[2]
           if (top_src_file.nil? ||
               (top_src_file == src_file))
-            k = field[1]
+            ## store only data from top_src_file
+            k = field[1].to_s
             v = @extra_conf_data[k]
-            map[k] = v
+            map[k.to_s] = v
             top_src_file ||= src_file
           end
         else
+          ## use field descs
           src_file = field[1]
           if (top_src_file.nil? ||
               (top_src_file == src_file))
             fdesc = fdescs.find { |f| f.name == conf_name}
             v = fdesc.get_value(self)
-            map[conf_name]=v
+            map[conf_name.to_s]=v
             top_src_file ||= src_file
           end
         end
@@ -1041,7 +1178,7 @@ class Proj
        if fdesc.value_in?(self)
          k = fdesc.name
          v = fdesc.get_value(self)
-         map[k]=v
+         map[k.to_s]=v
        end
       }
     end
@@ -1173,27 +1310,42 @@ class Proj
 
       case out.class.name
       when Hash.name
+        ## Psych parsed a generalized YAML mapping
         out.each do
-          ## initialize the new instance 'instance'
-          ## per { key => value } pairs in the data
-          ## deserialized from the top-level mapping
-          ## assumed to have been encoded in the YAML
-          ## stream
+          ## initialize this instance per { key => value } pairs in the
+          ## data deserialized from the top-level mapping
           ##
           ## Assumptions:
-          ## - the value of <name> is a symbol
+          ## - the value of <name> is a string or symbol
           ## - the value of <value> is a list, hash,
           ##   or scalar value
           |name, value|
-                 load_yaml_field(name, value, fdescs, **opts)        end
+                 load_yaml_field(name.to_sym, value, fdescs, **opts)
+        end
 
       when NilClass.name
         raise "safe_load failed (no output - end of file?) in #{__method__} for stream #{io}"
       else
         if ! out.is_a?(Proj)
-          raise "unexpected parser output, class #{out.class} in #{__method__}: #{out}" 
+          raise "unexpected parser output, class #{out.class} in #{__method__}: #{out}"
         else
-          return out
+          ## NB here: out != self
+          ##
+          ## i.e 'out' was probably deserialized from a tagged
+          ## YAML mapping for any arbitrary instance of this class
+          ##
+          ## The following will proceess serializable fields from
+          ## the new object 'out', for mapping into the object 'self'
+          fdescs.each do |fdesc|
+            if fdesc.value_in?(out)
+              ## NB dispatching each 'out' enumerable
+              ## field per each element, via the following
+              load_yaml_field(fdesc.name,fdesc.get_value(out), fdescs, **opts)
+            end
+          end
+          app &&
+            app.log_warn("In #{self.class}##{__method__} for #{self}: Discarding ephemeral instance #{out}")
+          return self
         end
       end
       return self
@@ -1289,3 +1441,7 @@ IOST.pos=0
 $FROB_P3 = Psych.load_stream(IOST, symbolize_names: true)
 
 =end
+
+# Local Variables:
+# fill-column: 65
+# End:

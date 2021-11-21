@@ -2,7 +2,27 @@
 require('./proj') ## the library to test
 require('stringio')
 
+RSpec.configure do |conf|
+  conf.full_backtrace=true
+  conf.color=false ## DNW ??
+end
+
+
 describe Proj do
+  subject {
+    app=Application.new("TEST");
+    app.log_level=Logger::DEBUG
+    Proj.new(app: app)
+  }
+
+  let(:proj) { subject }
+  let(:tagged_proj) {
+    s = subject.dup;
+    s.encode_with_tag=PROJ::YAML_TAG
+    s
+  }
+
+
   let!(:yaml_text_00) { "name: yaml-text-00
 version: 0.0.1
 summary: YAML Text 00
@@ -26,11 +46,19 @@ metadata:
   it "stores YAML tag info in Psych" do
     ## NB partially a test for the YAMLExt mixin module
     cn = described_class.name
-    v = described_class::VERSION 
+    v = described_class::VERSION
    tag = described_class::YAML_TAG
     expect(tag).to be == "#{cn}@#{v}"
     expect(Psych.load_tags[tag]).to be == cn
     expect(Psych.dump_tags[described_class]).to be == tag
+  end
+
+
+  it "uses a provided Application and logger" do
+    ## FIXME no logging from Proj methods under Proj#init_with
+    expect(subject.app).to_not be nil
+    expect(subject.app.log_progname).to be == "TEST"
+    expect(subject.app.log_level).to be == Logger::DEBUG
   end
 
   it "parses project fields" do
@@ -85,45 +113,65 @@ metadata:
     expect(ios.gets.chomp).to be == 'name: yaml-text-00' ## stringified keys
   end
 
+  shared_examples_for "Proj YAML read/write/read" do
+    ## parameterization for read/write/read examples with
+    ## untagged (default) and tagged YAML mappings - used below
 
-  it "reads written YAML" do
-    in_ios = StringIO.new(yaml_text_00)
-    subject.load_yaml_stream(in_ios)
+    it "reads written YAML" do
+      in_ios = StringIO.new(yaml_text_00)
+      subject.load_yaml_stream(in_ios)
 
-    out_ios = StringIO.new
-    subject.write_yaml_stream(out_ios)
+      out_ios = StringIO.new
+      subject.write_yaml_stream(out_ios)
 
-    other = described_class.allocate
-    puts "-- [DEBUG] testing other #{other}"
-    out_ios.pos = 0
-    ## FIXME on tagged YAML, this fails. Psych crates a new Proj
-    other.load_yaml_stream(out_ios)
+      #expect(subject.app.class).to be Application
 
-    # puts "--[DEBUG] out_ios.string: #{out_ios.string}"
+      other = described_class.new(app: subject.app)
+      ## FIXME also log the describe text
+      subject.app.log_debug "using subject #{subject}"
+      subject.app.log_debug "testing other #{other}"
+      out_ios.pos = 0
+      other.load_yaml_stream(out_ios)
 
-    ## ensure extra data was not added
-    expect(other.extra_conf_data.class).to be == Hash
-    expect(other.extra_conf_data.length).to be == 0
+      described_class::SERIALIZE_FIELDS.each do |fieldspec|
+        ## ensure each field in the subject is equivalent to
+        ## that field in the other object
+        field_name= fieldspec.is_a?(Array) ? fieldspec[0] : fieldspec
+        ivar = ( "@" + field_name.to_s ).to_sym
 
-    described_class::SERIALIZE_FIELDS.each do |fieldspec|
-      ## ensure each field in the subject is equivalent to
-      ## that field in the other object
-      field_name= fieldspec.is_a?(Array) ? fieldspec[0] : fieldspec
-      ivar = ( "@" + field_name.to_s ).to_sym
-
-      if(subject.instance_variable_defined?(ivar))
-        puts "--[DEBUG] Testing instance variable #{ivar}"
-        ## FIXME fails ... on @name
-        expect(other.instance_variable_defined?(ivar)).
-          to be true
-        expect(subject.instance_variable_get(ivar)).
-          to  be == other.instance_variable_get(ivar)
-      else
-        expect(other.instance_variable_defined?(ivar)).
-          to be false
+        if(subject.instance_variable_defined?(ivar))
+          subject.app.log_debug "Testing instance variable #{ivar}"
+          ## FIXME fails ... on @name
+          expect(other.instance_variable_defined?(ivar)).
+            to be true
+          expect(subject.instance_variable_get(ivar)).
+            to  be == other.instance_variable_get(ivar)
+        else
+          expect(other.instance_variable_defined?(ivar)).
+            to be false
+        end
       end
     end
+  end ## shared example
+
+  # it_behaves_like_to "Proj YAML read/write/reader" do
+  #   let(:??) ## can this be used to parameterize a shared example?
+  # end
+
+
+  context "re-reading untagged YAML" do
+    it_should_behave_like "Proj YAML read/write/read"
   end
+
+
+  context "re-reading tagged YAML" do
+    before {
+      subject.encode_with_tag=Proj::YAML_TAG
+    }
+    it_should_behave_like "Proj YAML read/write/read"
+  end
+
+
 
 end
 
