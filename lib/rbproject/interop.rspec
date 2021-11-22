@@ -4,18 +4,23 @@ require('./interop.rb') ## the library to test
 require('rspec/core/shared_context')
 
 class A
-  attr_accessor :slot_a
+  attr_accessor :sl_a
   ## FIXME test unbound internal access for FieldInterBridge
-  attr_accessor :slot_c
+  attr_accessor :sl_c
+  attr_accessor :sl_e
+  attr_accessor :sl_g
   def initialize(sl_a)
-    @slot_a = sl_a
+    @sl_a = sl_a
   end
 end
 
 class B
-  attr_accessor :slot_b
+  attr_accessor :sl_b
+  attr_accessor :sl_d
+  attr_accessor :sl_f
+  attr_accessor :sl_h
   def initialize(sl_b)
-    @slot_b = sl_b
+    @sl_b = sl_b
   end
 end
 
@@ -47,31 +52,17 @@ shared_examples_for "Scalar InterBridge" do
   context "Value transmit" do
     it "exports a scalar value" do
       subject.export(obj_a,obj_b)
-      expect(obj_b.slot_b).to be == 1
+      expect(obj_b.sl_b).to be == 1
     end
 
     it "imports a scalar value" do
       subject.import(obj_b,obj_a)
-      expect(obj_a.slot_a).to be == -1
+      expect(obj_a.sl_a).to be == -1
     end
   end
 
 
-  context "Unconfigured instance acccess" do
-    it "fails under unbound internal getter" do
-      if ! alt_subject.is_a?(FieldInterBridgeMixin)
-        expect{ alt_subject.get_internal(obj_a) }.
-          to raise_error(UnboundField)
-      end
-    end
-
-    it "fails under unbound internal setter" do
-      if ! alt_subject.is_a?(FieldInterBridgeMixin)
-        expect{ alt_subject.set_internal(obj_a,-1) }.
-          to raise_error(UnboundField)
-      end
-    end
-
+  context "instance acccess (unconfigured)" do
     it "fails under unbound external getter" do
       expect{ alt_subject.get_external(obj_b) }.
         to raise_error(UnboundField)
@@ -86,13 +77,11 @@ end
 
 describe InterBridge do
   subject {
-    described_class.new(A,B,
-                        internal_getter: :slot_a,
-                        internal_setter: true,
-                        external_getter: :slot_b,
+    described_class.new(:sl_a, A, B,
+                        external_getter: :sl_b,
                         external_setter: true)
   }
-  let(:alt_subject) { described_class.new(A,B) }
+  let(:alt_subject) { described_class.new(:sl_a, A, B) }
 
   it_behaves_like "Scalar InterBridge"
 end
@@ -100,12 +89,12 @@ end
 
 describe FieldInterBridge do
   subject {
-    described_class.new(A, B, :@slot_a,
-                        external_getter: :slot_b,
+    described_class.new(:sl_a, A, B,
+                        external_getter: :sl_b,
                         external_setter: true)
   }
 
-  let(:alt_subject) { described_class.new(A,B,:@slot_a) }
+  let(:alt_subject) { described_class.new(:sl_a, A, B) }
 
   it_behaves_like "Scalar InterBridge"
 end
@@ -136,15 +125,15 @@ shared_examples_for "Sequence InterBridge" do
     end
 
     it "sets an internal sequence" do
-      subject.set_internal(obj_a, obj_b.slot_b)
+      subject.set_internal(obj_a, obj_b.sl_b)
       expect(subject.get_internal(obj_a)).
-        to equal(obj_b.slot_b)
+        to equal(obj_b.sl_b)
     end
 
     it "sets an external sequence" do
-      subject.set_external(obj_b, obj_a.slot_a)
+      subject.set_external(obj_b, obj_a.sl_a)
       expect(subject.get_external(obj_b)).
-        to equal(obj_a.slot_a)
+        to equal(obj_a.sl_a)
 
     end
   end
@@ -152,24 +141,24 @@ shared_examples_for "Sequence InterBridge" do
   context "Value transmit" do
     it "exports each value" do
       subject.export(obj_a,obj_b)
-      expect(obj_b.slot_b).to be == [-1,-2,-3,1,2,3]
+      expect(obj_b.sl_b).to be == [-1,-2,-3,1,2,3]
     end
 
     it "imports each value" do
       subject.import(obj_b,obj_a)
-      expect(obj_a.slot_a).to be == [1,2,3,-1,-2,-3]
+      expect(obj_a.sl_a).to be == [1,2,3,-1,-2,-3]
     end
 
     it "exports a sequence" do
       subject.export_enum(obj_a,obj_b)
-      expect(obj_b.slot_b).to be == obj_a.slot_a
-      expect(obj_b.slot_b).to_not be equal(obj_a.slot_a)
+      expect(obj_b.sl_b).to be == obj_a.sl_a
+      expect(obj_b.sl_b).to_not be equal(obj_a.sl_a)
     end
 
     it "imports a sequence" do
       subject.import_enum(obj_b,obj_a)
-      expect(obj_a.slot_a).to be == obj_b.slot_b
-      expect(obj_a.slot_a).to_not be equal(obj_b.slot_b)
+      expect(obj_a.sl_a).to be == obj_b.sl_b
+      expect(obj_a.sl_a).to_not be equal(obj_b.sl_b)
     end
   end
 end
@@ -181,10 +170,8 @@ describe SeqInterBridge do
     ## much of this syntax can be encapsulated
     ## in class-local methods, under any
     ## implementation
-    described_class.new(A,B,
-                        internal_getter: :slot_a,
-                        internal_setter: true,
-                        external_getter: :slot_b,
+    described_class.new(:sl_a, A, B,
+                        external_getter: :sl_b,
                         external_setter: true)
   }
   it_behaves_like "Sequence InterBridge"
@@ -198,8 +185,8 @@ describe SeqFieldInterBridge do
     ## much of this syntax can be encapsulated
     ## in class-local methods, under any
     ## implementation
-    described_class.new(A,B,:@slot_a,
-                        external_getter: :slot_b,
+    described_class.new(:sl_a, A, B,
+                        external_getter: :sl_b,
                         external_setter: true)
   }
   it_behaves_like "Sequence InterBridge"
@@ -235,42 +222,41 @@ shared_examples_for "Mapping InterBridge" do
     end
 
     it "sets an internal hash" do
-      subject.set_internal(obj_a, obj_b.slot_b)
+      subject.set_internal(obj_a, obj_b.sl_b)
       expect(subject.get_internal(obj_a)).
         to equal(h_b)
     end
 
     it "sets an external hash" do
-      subject.set_external(obj_b, obj_a.slot_a)
+      subject.set_external(obj_b, obj_a.sl_a)
       expect(subject.get_external(obj_b)).
         to equal(h_a)
-
     end
   end
 
   context "Value transmit" do
     it "exports each mapping" do
       subject.export(obj_a,obj_b)
-      expect(obj_b.slot_b).
+      expect(obj_b.sl_b).
         to be == h_b.merge(h_a)
     end
 
     it "imports each mapping" do
       subject.import(obj_b,obj_a)
-      expect(obj_a.slot_a).
+      expect(obj_a.sl_a).
         to be == h_a.merge(h_b)
     end
 
     it "exports a hash" do
       subject.export_enum(obj_a,obj_b)
-      expect(obj_b.slot_b).to be == h_a
-      expect(obj_b.slot_b).to_not be equal(h_a)
+      expect(obj_b.sl_b).to be == h_a
+      expect(obj_b.sl_b).to_not be equal(h_a)
     end
 
     it "imports a hash" do
       subject.import_enum(obj_b,obj_a)
-      expect(obj_a.slot_a).to be == h_b
-      expect(obj_a.slot_a).to_not be equal(h_b)
+      expect(obj_a.sl_a).to be == h_b
+      expect(obj_a.sl_a).to_not be equal(h_b)
     end
   end
 
@@ -278,10 +264,10 @@ end
 
 describe MappingInterBridge do
   subject {
-    described_class.new(A,B,
-                        internal_getter: :slot_a,
+    described_class.new(:sl_a, A, B,
+                        internal_getter: :sl_a,
                         internal_setter: true,
-                        external_getter: :slot_b,
+                        external_getter: :sl_b,
                         external_setter: true)
   }
   it_behaves_like "Mapping InterBridge"
@@ -290,10 +276,62 @@ end
 
 describe MappingFieldInterBridge do
   subject {
-    described_class.new(A,B,:@slot_a,
-                        external_getter: :slot_b,
+    described_class.new(:sl_a, A, B,
+                        external_getter: :sl_b,
                         external_setter: true)
   }
   it_behaves_like "Mapping InterBridge"
 end
 
+
+describe InterRouter do
+  subject { described_class.new(A, B) }
+  before {
+    subject.add_bridge(:sl_a, InterBridge,
+                       external_getter: :sl_b,
+                       external_setter: true)
+    subject.add_bridge(:sl_c, FieldInterBridge,
+                       external_getter: :sl_d,
+                       external_setter: true)
+    subject.add_bridge(:sl_e, SeqFieldInterBridge,
+                       external_getter: :sl_f,
+                       external_setter: true)
+    subject.add_bridge(:sl_g, MappingFieldInterBridge,
+                       external_getter: :sl_h,
+                       external_setter: true)
+  }
+  let(:seq_a) { [1,2,3] }
+  let(:seq_b) { [-1,-2,-3] }
+  let(:h_a) { {1=>2, 3=>4} }
+  let(:h_b) { {-1=>-2, -3=>-4} }
+  let(:obj_a) {
+    a = A.new(1)
+    a.sl_c = 10
+    a.sl_e = seq_a.dup
+    a.sl_g = h_a.dup
+    a
+  }
+  let(:obj_b) {
+    b = B.new(-1)
+    b.sl_d = -10
+    b.sl_f = seq_b.dup
+    b.sl_h = h_b.dup
+    b
+  }
+
+  it "exports mapped fields" do
+    subject.export_mapped(obj_a,obj_b)
+    expect(obj_b.sl_b).to be == obj_a.sl_a
+    expect(obj_b.sl_d).to be == obj_a.sl_c
+    expect(obj_b.sl_f).to be == seq_b.dup.concat(seq_a)
+    expect(obj_b.sl_h).to be == h_b.merge(h_a)
+  end
+
+  it "imports mapped fields" do
+    subject.import_mapped(obj_b,obj_a)
+    expect(obj_a.sl_a).to be == obj_b.sl_b
+    expect(obj_a.sl_c).to be == obj_b.sl_d
+    expect(obj_a.sl_e).to be == seq_a.dup.concat(seq_b)
+    expect(obj_a.sl_g).to be == h_a.merge(h_b)
+  end
+end

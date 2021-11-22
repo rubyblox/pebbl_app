@@ -3,17 +3,16 @@
 class UnboundField < RuntimeError
   attr_reader :field
   attr_reader :instance
-
   def initialize(field, instance,
                  message: "Unbound field #{field} in #{instance}")
     super(message)
     @field = field
     @instance = instance
   end
-
 end
 
-class InterShim
+## common class for field router and field bridge classes
+class ClassBridge
   attr_reader :internal_class
   attr_reader :external_class
 
@@ -23,49 +22,99 @@ class InterShim
   end
 end
 
-## FIXME partial illustration of API (Prototype)
 
-class InterRouter < InterShim ## TBD ...
-  ## NB first implement, test field-local InterBridge classes
+## trivial mapping class for object interoperability
+class InterRouter < ClassBridge
+  attr_reader :field_map
 
-  attr_reader :import_table
-  attr_reader :export_table
-
-  def add_import_bridge(tbd)
-
+  def initialize(internal_class, external_class)
+    super(internal_class, external_class)
+    @field_map=Hash.new() do |h,name|
+      raise "No field mapping found for #{name}"
+    end
   end
 
-  def find_import_bridge(field)
+  ## @param field [Symbol] field name for the bridge instance
+  ## @param bridge_class [Class] class for the bridge instance
+  ## @param args [any] initialization arguments for the bridg einstance
+  def add_bridge(field, bridge_class, **args)
+    inst = bridge_class.new(field, @internal_class, @external_class, **args)
+    field_map[field]=inst
+    return inst
   end
 
-  def add_export_bridge(tbd)
-
+  ## locate an InterBridge for this InterRouter by field name
+  ##
+  ## @param field [Symbol] field name
+  def find_bridge(field)
+    return field_map[field]
   end
 
-  def find_export_bridge(field)
+  ## import a single field from an external object to an internal object
+  ##
+  ## @param field [Symbol] field name
+  ## @param ext_inst [Object] an instance of the #external_class
+  ## @param int_inst [Object] an instance of the #internal_class
+  ## @see #import_mapped
+  def import(field, ext_inst, int_inst)
+    br = find_bridge(field)
+    br.import(ext_inst,int_inst)
+  end
 
+  ## export a single field from an internal object to an external object
+  ##
+  ## @param field [Symbol] field name
+  ## @param int_inst [Object] an instance of the #internal_class
+  ## @param ext_inst [Object] an instance of the #external_class
+  ## @see #export_mapped
+  def export(field, int_inst, ext_inst)
+    br = find_bridge(field)
+    br.export(int_inst,ext_inst)
+  end
+
+  ## import all mapped fields from an external instance to an internal
+  ## instance
+  ##
+  ## @param ext_inst [Object] an instance of the #external_class
+  ## @param int_inst [Object] an instance of the #internal_class
+  ## @see #import
+  def import_mapped(ext_inst,int_inst)
+    @field_map.each do |field,br|
+      br.import(ext_inst,int_inst)
+    end
+  end
+
+  ## export all mapped fields from an internal instance to an external
+  ## instance
+  ##
+  ## @param int_inst [Object] an instance of the #internal_class
+  ## @param ext_inst [Object] an instance of the #external_class
+  ## @see #export
+  def export_mapped(int_inst,ext_inst)
+    @field_map.each do |field,br|
+      br.export(int_inst,ext_inst)
+        end
   end
 end
 
-##
-## ...
-##
-
-class InterBridge < InterShim
+## method-oriented field bridge for principally scalar mappings
+class InterBridge < ClassBridge
   ## NB illustration in interop.rspec
-
   attr_reader :internal_getter ## for #export
   attr_reader :internal_setter ## for #import
 
   attr_reader :external_getter ## for #import
   attr_reader :external_setter ## for #export
 
-  def initialize(internal_class, external_class,
-                 internal_getter: nil,
-                 internal_setter: nil,
+  attr_reader :name
+
+  def initialize(name, internal_class, external_class,
+                 internal_getter: name,
+                 internal_setter: true,
                  external_getter: nil,
                  external_setter: nil)
-    super(internal_class, external_class)
+    super(internal_class,external_class)
+    @name = name
     internal_getter && ( @internal_getter = internal_getter)
     if (internal_setter == true) && internal_getter
       @internal_setter = (internal_getter.to_s + "=").to_sym
@@ -80,7 +129,6 @@ class InterBridge < InterShim
     end
  end
 
-
   def self.def_instance_reader(name, inst_var)
     define_method(name) { |instance|
       if self.instance_variable_defined?(inst_var)
@@ -91,7 +139,6 @@ class InterBridge < InterShim
       end
     }
   end
-
 
   def self.def_instance_writer(name, inst_var)
     define_method(name) { |instance, value|
@@ -138,16 +185,17 @@ class InterBridge < InterShim
 end
 
 
+## common mixin module for interop bridge types utilizing an
+## instance variable for internal field storage
 module FieldInterBridgeMixin
   def self.included(extclass)
     extclass.attr_reader :instance_var
 
-    def initialize(internal_class, external_class,
-                   instance_var,
+    def initialize(name, internal_class, external_class,
+                   instance_var: ("@" + name.to_s).to_sym,
                    external_getter: nil,
                    external_setter: nil)
-      ## NB it is notably unwieldy, in this part
-      super(internal_class, external_class,
+      super(name, internal_class, external_class,
             external_getter: external_getter,
             external_setter: external_setter)
       @instance_var = instance_var
@@ -171,7 +219,7 @@ module FieldInterBridgeMixin
   end
 
   def export(internal_inst, external_inst)
-    ## NB one key part of the API behaviors with this class:
+    ## NB one key part of API behaviors with this class:
     ## This does not export a value if no value is bound for the
     ## internal field's instance variable
     if value_in?(internal_inst)
@@ -183,28 +231,17 @@ module FieldInterBridgeMixin
 end
 
 
+## *InterBridge* utilizing an instance variable semantics
 class FieldInterBridge < InterBridge
   ## NB reimpl of a FieldDesc
-
-  ## TBD may be reimplemented as a mixin module
-  ## - FIXME test first as a direct class definition
-
-  ## FIXME instance variables internal_getter, internal_setter
-  ## - from the superclass - are redundant here
-
   include FieldInterBridgeMixin
 end
 
-## NB the following more or less depart from a field-based
-## semantics, more towards a sense of value cells in an
-## arbitrary enumerable object
 
+## common class for *InterBridge* mappings utilizing
+## enumerable values for internal and external field
+## storage
 class EnumInterBridge < InterBridge
-  ## NB here and in subclasses, the respective
-  ## getter/setter methods would serve to retireve
-  ## or set the value of the entire enumerable under
-  ## storage
-
   def import_enum(external_inst, internal_inst)
     v = get_external(external_inst).dup
     set_internal(internal_inst, v)
@@ -216,8 +253,10 @@ class EnumInterBridge < InterBridge
   end
 end
 
-class SeqInterBridge < EnumInterBridge
 
+## *InterBridge* for mappings utilizing an Array-like value for internal
+## and external field storage
+class SeqInterBridge < EnumInterBridge
   def add_internal(internal_inst, value)
     get_internal(internal_inst).push(value)
   end
@@ -226,14 +265,14 @@ class SeqInterBridge < EnumInterBridge
     get_external(external_inst).push(value)
   end
 
-  def import_each(external_inst,internal_inst)
+  def import_each(external_inst, internal_inst)
     get_external(external_inst).each do |elt|
       add_internal(internal_inst,elt)
     end
   end
   alias :import :import_each
 
-  def export_each(internal_inst,external_inst)
+  def export_each(internal_inst, external_inst)
     get_internal(internal_inst).each do |elt|
       add_external(external_inst,elt)
     end
@@ -241,15 +280,15 @@ class SeqInterBridge < EnumInterBridge
   alias :export :export_each
 end
 
-
+## *InterBridge* type for mappings utilizing an Array-like value
+##  under an instance variable for internal field storage
 class SeqFieldInterBridge < SeqInterBridge
   include FieldInterBridgeMixin
 end
 
-
-
+## *InterBridge* type for mappings utilizing a Hash-like value for
+## internal and external field storage
 class MappingInterBridge < EnumInterBridge
-
   def add_internal(internal_inst, key, value)
     get_internal(internal_inst)[key] = value
   end
@@ -258,14 +297,14 @@ class MappingInterBridge < EnumInterBridge
     get_external(external_inst)[key] = value
   end
 
-  def import_each(external_inst,internal_inst)
+  def import_each(external_inst, internal_inst)
     get_external(external_inst).each do |k,v|
       add_internal(internal_inst,k,v)
     end
   end
   alias :import :import_each
 
-  def export_each(internal_inst,external_inst)
+  def export_each(internal_inst, external_inst)
     get_internal(internal_inst).each do |k,v|
       add_external(external_inst,k,v)
     end
@@ -273,7 +312,8 @@ class MappingInterBridge < EnumInterBridge
   alias :export :export_each
 end
 
-
+## *InterBridge* type for mappings utilizing a Hash-like value
+##  under an instance variable for internal field storage
 class MappingFieldInterBridge < MappingInterBridge
   include FieldInterBridgeMixin
 end
