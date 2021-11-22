@@ -1,0 +1,234 @@
+## interop.rspec - testing for interop.rb
+
+require('./interop.rb') ## the library to test
+
+shared_examples_for "Scalar InterBridge" do
+  before {
+    class A
+      attr_accessor :slot_a
+      ## FIXME test unbound internal access for FieldInterBridge
+      attr_accessor :slot_c
+      def initialize(sl_a)
+        @slot_a = sl_a
+      end
+    end
+
+    class B
+      attr_accessor :slot_b
+      def initialize(sl_b)
+        @slot_b = sl_b
+      end
+    end
+  }
+  let (:obj_a) { A.new(1) }
+  let (:obj_b) { B.new(-1) }
+
+
+  context "Instance value access" do
+    it "reads an internal value" do
+      expect(subject.get_internal(obj_a)).to be == 1
+    end
+
+    it "reads an external value" do
+      expect(subject.get_external(obj_b)).to be == -1
+    end
+
+    it "writes an internal value" do
+      subject.set_internal(obj_a, -1)
+      expect(subject.get_internal(obj_a)).to be == -1
+    end
+
+    it "writes an external value" do
+      subject.set_external(obj_b, 1)
+      expect(subject.get_external(obj_b)).to be == 1
+    end
+  end
+
+  context "Value transmit" do
+    it "exports a scalar value" do
+      subject.export(obj_a,obj_b)
+      expect(obj_b.slot_b).to be == 1
+    end
+
+    it "imports a scalar value" do
+      subject.import(obj_b,obj_a)
+      expect(obj_a.slot_a).to be == -1
+    end
+  end
+
+
+  context "Unconfigured instance acccess" do
+    it "fails under unbound internal getter" do
+      if ! alt_subject.is_a?(FieldInterBridgeMixin)
+        expect{ alt_subject.get_internal(obj_a) }.
+          to raise_error(UnboundField)
+      end
+    end
+
+    it "fails under unbound internal setter" do
+      if ! alt_subject.is_a?(FieldInterBridgeMixin)
+        expect{ alt_subject.set_internal(obj_a,-1) }.
+          to raise_error(UnboundField)
+      end
+    end
+
+    it "fails under unbound external getter" do
+      expect{ alt_subject.get_external(obj_b) }.
+        to raise_error(UnboundField)
+    end
+
+    it "fails under unbound external setter" do
+      expect{ alt_subject.set_external(obj_b,1) }.
+        to raise_error(UnboundField)
+    end
+  end
+end
+
+describe InterBridge do
+  subject {
+    ## NB this initialization syntax may
+    ## seem other than succinct. Ideally,
+    ## much of this syntax can be encapsulated
+    ## in class-local methods, under any
+    ## implementation
+    described_class.new(A,B,
+                        internal_getter: :slot_a,
+                        internal_setter: true,
+                        external_getter: :slot_b,
+                        external_setter: true)
+  }
+  let(:alt_subject) { described_class.new(A,B) }
+
+  it_behaves_like "Scalar InterBridge"
+end
+
+
+describe FieldInterBridge do
+  subject {
+    ## NB this initialization syntax may
+    ## seem other than succinct. Ideally,
+    ## much of this syntax can be encapsulated
+    ## in class-local methods, under any
+    ## implementation
+    described_class.new(A, B, :@slot_a,
+                        external_getter: :slot_b,
+                        external_setter: true)
+  }
+
+  let(:alt_subject) { described_class.new(A,B,:@slot_a) }
+
+  it_behaves_like "Scalar InterBridge"
+end
+
+
+
+shared_examples_for "Sequence InterBridge" do
+  ## FIXME generalize for application onto SeqFieldInterBridge
+  before {
+    class A
+      attr_accessor :slot_a
+      attr_accessor :slot_c
+      def initialize(sl_a)
+        @slot_a = sl_a
+      end
+    end
+
+    class B
+      attr_accessor :slot_b
+      attr_accessor :slot_d
+      def initialize(sl_b)
+        @slot_b = sl_b
+      end
+    end
+  }
+  let (:obj_a) { A.new([1,2,3]) }
+  let (:obj_b) { B.new([-1,-2,-3]) }
+
+  context "Instance value access" do
+    it "reads an internal value" do
+      expect(subject.get_internal(obj_a)).to be == [1,2,3]
+    end
+
+    it "reads an external value" do
+      expect(subject.get_external(obj_b)).to be == [-1,-2,-3]
+    end
+
+    it "adds an internal value" do
+      subject.add_internal(obj_a, -1)
+      expect(subject.get_internal(obj_a)).to be == [1,2,3,-1]
+    end
+
+    it "adds an external value" do
+      subject.add_external(obj_b, 1)
+      expect(subject.get_external(obj_b)).to be == [-1,-2,-3,1]
+    end
+
+    it "sets an internal sequence" do
+      subject.set_internal(obj_a, obj_b.slot_b)
+      expect(subject.get_internal(obj_a)).
+        to equal(obj_b.slot_b)
+    end
+
+    it "sets an external sequence" do
+      subject.set_external(obj_b, obj_a.slot_a)
+      expect(subject.get_external(obj_b)).
+        to equal(obj_a.slot_a)
+
+    end
+  end
+
+  context "Value transmit" do
+    it "exports each value" do
+      subject.export(obj_a,obj_b)
+      expect(obj_b.slot_b).to be == [-1,-2,-3,1,2,3]
+    end
+
+    it "imports each value" do
+      subject.import(obj_b,obj_a)
+      expect(obj_a.slot_a).to be == [1,2,3,-1,-2,-3]
+    end
+
+    it "exports a sequence" do
+      subject.export_enum(obj_a,obj_b)
+      expect(obj_b.slot_b).to be == obj_a.slot_a
+      expect(obj_b.slot_b).to_not be equal(obj_a.slot_a)
+    end
+
+    it "imports a sequence" do
+      subject.import_enum(obj_b,obj_a)
+      expect(obj_a.slot_a).to be == obj_b.slot_b
+      expect(obj_a.slot_a).to_not be equal(obj_b.slot_b)
+    end
+  end
+end
+
+describe SeqInterBridge do
+  subject {
+    ## NB this initialization syntax may
+    ## seem other than succinct. Ideally,
+    ## much of this syntax can be encapsulated
+    ## in class-local methods, under any
+    ## implementation
+    described_class.new(A,B,
+                        internal_getter: :slot_a,
+                        internal_setter: true,
+                        external_getter: :slot_b,
+                        external_setter: true)
+  }
+  it_behaves_like "Sequence InterBridge"
+end
+
+
+describe SeqFieldInterBridge do
+  subject {
+    ## NB this initialization syntax may
+    ## seem other than succinct. Ideally,
+    ## much of this syntax can be encapsulated
+    ## in class-local methods, under any
+    ## implementation
+    described_class.new(A,B,:@slot_a,
+                        external_getter: :slot_b,
+                        external_setter: true)
+  }
+  it_behaves_like "Sequence InterBridge"
+end
