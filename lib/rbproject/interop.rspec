@@ -1,28 +1,28 @@
 ## interop.rspec - testing for interop.rb
 
 require('./interop.rb') ## the library to test
+require('rspec/core/shared_context')
+
+class A
+  attr_accessor :slot_a
+  ## FIXME test unbound internal access for FieldInterBridge
+  attr_accessor :slot_c
+  def initialize(sl_a)
+    @slot_a = sl_a
+  end
+end
+
+class B
+  attr_accessor :slot_b
+  def initialize(sl_b)
+    @slot_b = sl_b
+  end
+end
+
 
 shared_examples_for "Scalar InterBridge" do
-  before {
-    class A
-      attr_accessor :slot_a
-      ## FIXME test unbound internal access for FieldInterBridge
-      attr_accessor :slot_c
-      def initialize(sl_a)
-        @slot_a = sl_a
-      end
-    end
-
-    class B
-      attr_accessor :slot_b
-      def initialize(sl_b)
-        @slot_b = sl_b
-      end
-    end
-  }
   let (:obj_a) { A.new(1) }
   let (:obj_b) { B.new(-1) }
-
 
   context "Instance value access" do
     it "reads an internal value" do
@@ -86,11 +86,6 @@ end
 
 describe InterBridge do
   subject {
-    ## NB this initialization syntax may
-    ## seem other than succinct. Ideally,
-    ## much of this syntax can be encapsulated
-    ## in class-local methods, under any
-    ## implementation
     described_class.new(A,B,
                         internal_getter: :slot_a,
                         internal_setter: true,
@@ -105,11 +100,6 @@ end
 
 describe FieldInterBridge do
   subject {
-    ## NB this initialization syntax may
-    ## seem other than succinct. Ideally,
-    ## much of this syntax can be encapsulated
-    ## in class-local methods, under any
-    ## implementation
     described_class.new(A, B, :@slot_a,
                         external_getter: :slot_b,
                         external_setter: true)
@@ -123,24 +113,6 @@ end
 
 
 shared_examples_for "Sequence InterBridge" do
-  ## FIXME generalize for application onto SeqFieldInterBridge
-  before {
-    class A
-      attr_accessor :slot_a
-      attr_accessor :slot_c
-      def initialize(sl_a)
-        @slot_a = sl_a
-      end
-    end
-
-    class B
-      attr_accessor :slot_b
-      attr_accessor :slot_d
-      def initialize(sl_b)
-        @slot_b = sl_b
-      end
-    end
-  }
   let (:obj_a) { A.new([1,2,3]) }
   let (:obj_b) { B.new([-1,-2,-3]) }
 
@@ -232,3 +204,96 @@ describe SeqFieldInterBridge do
   }
   it_behaves_like "Sequence InterBridge"
 end
+
+shared_examples_for "Mapping InterBridge" do
+  let(:h_a) { {1 =>2, 2=> 3} }
+  let(:h_b) { {-1 => -2, -2 => -3} }
+  let (:obj_a) { A.new(h_a) }
+  let (:obj_b) { B.new(h_b)}
+
+  context "Instance value access" do
+    it "reads an internal value" do
+      expect(subject.get_internal(obj_a)).
+        to be == h_a
+    end
+
+    it "reads an external value" do
+      expect(subject.get_external(obj_b)).
+        to be == h_b
+    end
+
+    it "maps an internal value" do
+      subject.add_internal(obj_a, -1, -2)
+      expect(subject.get_internal(obj_a)[-1]).
+        to be == -2
+    end
+
+    it "maps an external value" do
+      subject.add_external(obj_b, 1, 2)
+      expect(subject.get_external(obj_b)[1]).
+        to be == 2
+    end
+
+    it "sets an internal hash" do
+      subject.set_internal(obj_a, obj_b.slot_b)
+      expect(subject.get_internal(obj_a)).
+        to equal(h_b)
+    end
+
+    it "sets an external hash" do
+      subject.set_external(obj_b, obj_a.slot_a)
+      expect(subject.get_external(obj_b)).
+        to equal(h_a)
+
+    end
+  end
+
+  context "Value transmit" do
+    it "exports each mapping" do
+      subject.export(obj_a,obj_b)
+      expect(obj_b.slot_b).
+        to be == h_b.merge(h_a)
+    end
+
+    it "imports each mapping" do
+      subject.import(obj_b,obj_a)
+      expect(obj_a.slot_a).
+        to be == h_a.merge(h_b)
+    end
+
+    it "exports a hash" do
+      subject.export_enum(obj_a,obj_b)
+      expect(obj_b.slot_b).to be == h_a
+      expect(obj_b.slot_b).to_not be equal(h_a)
+    end
+
+    it "imports a hash" do
+      subject.import_enum(obj_b,obj_a)
+      expect(obj_a.slot_a).to be == h_b
+      expect(obj_a.slot_a).to_not be equal(h_b)
+    end
+  end
+
+end
+
+describe MappingInterBridge do
+  subject {
+    described_class.new(A,B,
+                        internal_getter: :slot_a,
+                        internal_setter: true,
+                        external_getter: :slot_b,
+                        external_setter: true)
+  }
+  it_behaves_like "Mapping InterBridge"
+end
+
+
+describe MappingFieldInterBridge do
+  subject {
+    described_class.new(A,B,:@slot_a,
+                        external_getter: :slot_b,
+                        external_setter: true)
+  }
+  it_behaves_like "Mapping InterBridge"
+end
+

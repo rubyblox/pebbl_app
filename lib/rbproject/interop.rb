@@ -214,7 +214,6 @@ class EnumInterBridge < InterBridge
     v = get_internal(internal_inst).dup
     set_external(external_inst, v)
   end
-
 end
 
 class SeqInterBridge < EnumInterBridge
@@ -232,7 +231,6 @@ class SeqInterBridge < EnumInterBridge
       add_internal(internal_inst,elt)
     end
   end
-
   alias :import :import_each
 
   def export_each(internal_inst,external_inst)
@@ -240,7 +238,6 @@ class SeqInterBridge < EnumInterBridge
       add_external(external_inst,elt)
     end
   end
-
   alias :export :export_each
 end
 
@@ -261,12 +258,11 @@ class MappingInterBridge < EnumInterBridge
     get_external(external_inst)[key] = value
   end
 
-  def import_each(internal_inst,external_inst)
+  def import_each(external_inst,internal_inst)
     get_external(external_inst).each do |k,v|
       add_internal(internal_inst,k,v)
     end
   end
-
   alias :import :import_each
 
   def export_each(internal_inst,external_inst)
@@ -274,7 +270,6 @@ class MappingInterBridge < EnumInterBridge
       add_external(external_inst,k,v)
     end
   end
-
   alias :export :export_each
 end
 
