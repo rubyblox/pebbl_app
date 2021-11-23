@@ -340,7 +340,7 @@ describe VarFieldHBridge do
   }
   let(:h) { {} }
   subject {
-    described_class.new(:sl_a, A, Hash)
+    described_class.new(:sl_a, A)
   }
 
   it "uses a symbol as an export key" do

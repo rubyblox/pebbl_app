@@ -97,48 +97,6 @@ class FieldRouter < ClassBridge
   end
 end
 
-
-class HashFieldRouter < FieldRouter
-  def import_mapped(h,int_inst)
-    ## NB This would not address 'include' objects in a mapping
-    h.each do |k,v|
-      name = k.to_sym
-      bridge = self.find_bridge(name)
-      if (bridge)
-        bridge.import_value(v,int_inst)
-      else
-        if block_given?
-          ## e.g add to Proj#extra_conf_data
-          ## FIXME needs illustration in test
-          yield(k,v)
-        else
-          raise "No mapping found for #{k} in #{self} and no
-block provided"
-        end
-      end
-    end
-  end
-
-
-  def export_mapped(int_inst,h)
-    ## NB this would export values in the field order
-    ## in which @field_map is defined
-    @field_map.each do |field,bridge|
-      # exp_name=self.name_for_export(field)
-      if bridge.value_in?(int_inst)
-        value = bridge.get_internal(int_inst)
-        ## FIXME this departs from other FieldBridge
-        ## implementations in that it assumes that
-        ## no value is bound for the field name in the
-        ## hash. This does not iterate to add values,
-        ## for any sequence or map value from the
-        ## internal instance
-        bridge.set_external(h,value)
-      end
-    end
-  end
-end
-
 ## method-oriented field bridge for principally scalar mappings
 class FieldBridge < ClassBridge
   ## NB illustration in interop.rspec
@@ -243,9 +201,10 @@ module VarFieldBridgeMixin
                    instance_var: ("@" + name.to_s).to_sym,
                    external_getter: nil,
                    external_setter: nil)
-      super(name, internal_class, external_class,
-            external_getter: external_getter,
-            external_setter: external_setter)
+      args = {}
+      external_getter && ( args[:external_getter]=external_getter )
+      external_setter && ( args[:external_setter]=external_setter )
+      super(name, internal_class, external_class, **args)
       @instance_var = instance_var
     end
   end
@@ -287,6 +246,13 @@ end
 
 
 module FieldHBridgeMixin
+
+  def self.included(extclass)
+    def initialize(name, internal_class, external_class = Hash)
+      super(name,internal_class,external_class)
+    end
+  end ## self.included
+
   def name_for_export()
     ## NB using symbols in external hash keys, for application
     ## data. For purpose of interoperability, the keys can be
@@ -334,10 +300,24 @@ class VarFieldHBridge < FieldHBridge
   ## class SeqVarFieldHBridge ##...
   ## class MappingFieldHBridge ##...
   ## class MappingVarFieldHBridge ##...
+  ## ... or TBD etc ...
+  ## class FieldRouter::Bridge::Seq::FieldHBridge ##...
+  ## class FieldRouter::Bridge::Seq::VarFieldHBridge ##...
+  ## class FieldRouter::Bridge::Map::FieldHBridge ##...
+  ## class FieldRouter::Bridge::Map::VarFieldHBridge ##...
   include VarFieldBridgeMixin
+  include FieldHBridgeMixin
+
+  def initialize(name, internal_class,
+                 external_class = Hash,
+                 instance_var: ("@" + name.to_s).to_sym)
+    ## NB the 'super' call chain, here, may not be obvious
+    super(name, internal_class, external_class)
+    @instance_var = instance_var
+  end
 end
 
-## common class for *FieldBridge* mappings utilizing
+## common class for *FieldBridge* onto fields utilizing
 ## enumerable values for internal and external field
 ## storage
 class EnumFieldBridge < FieldBridge
@@ -367,8 +347,6 @@ class SeqFieldBridge < EnumFieldBridge
   def import_value(value,internal_inst)
     ## NB appends - does not reset the internal value before
     ## importing each element
-    ##
-    ## FIXME use this under hash subclasses
     value.each do |elt|
       add_internal(internal_inst, elt)
     end
@@ -409,8 +387,6 @@ class MappingFieldBridge < EnumFieldBridge
   def import_value(value,internal_inst)
     ## NB appends - does not reset the internal value before
     ## importing each key, value pair
-    ##
-    ## FIXME use this under hash subclasses
     value.each do |k,v|
       add_internal(internal_inst, k, v)
     end
