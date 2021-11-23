@@ -60,42 +60,20 @@ shared_examples_for "Scalar FieldBridge" do
       expect(obj_a.sl_a).to be == -1
     end
   end
-
-
-  context "instance acccess (unconfigured)" do
-    it "fails under unbound external getter" do
-      expect{ alt_subject.get_external(obj_b) }.
-        to raise_error(UnboundField)
-    end
-
-    it "fails under unbound external setter" do
-      expect{ alt_subject.set_external(obj_b,1) }.
-        to raise_error(UnboundField)
-    end
-  end
 end
 
-describe FieldBridge do
+describe FieldBroker::Bridge::FieldBridge do
   subject {
-    described_class.new(:sl_a, A, B,
-                        external_getter: :sl_b,
-                        external_setter: true)
+    described_class.new(:sl_a, A, B, external_name: :sl_b)
   }
-  let(:alt_subject) { described_class.new(:sl_a, A, B) }
-
   it_behaves_like "Scalar FieldBridge"
 end
 
 
-describe VarFieldBridge do
+describe FieldBroker::Bridge::VarFieldBridge do
   subject {
-    described_class.new(:sl_a, A, B,
-                        external_getter: :sl_b,
-                        external_setter: true)
+    described_class.new(:sl_a, A, B, external_name: :sl_b)
   }
-
-  let(:alt_subject) { described_class.new(:sl_a, A, B) }
-
   it_behaves_like "Scalar FieldBridge"
 end
 
@@ -161,7 +139,7 @@ shared_examples_for "Sequence FieldBridge" do
   end
 end
 
-describe SeqFieldBridge do
+describe FieldBroker::Bridge::Seq::FieldBridge do
   subject {
     ## NB this initialization syntax may
     ## seem other than succinct. Ideally,
@@ -169,14 +147,13 @@ describe SeqFieldBridge do
     ## in class-local methods, under any
     ## implementation
     described_class.new(:sl_a, A, B,
-                        external_getter: :sl_b,
-                        external_setter: true)
+                        external_name: :sl_b)
   }
   it_behaves_like "Sequence FieldBridge"
 end
 
 
-describe SeqVarFieldBridge do
+describe FieldBroker::Bridge::Seq::VarFieldBridge do
   subject {
     ## NB this initialization syntax may
     ## seem other than succinct. Ideally,
@@ -184,8 +161,7 @@ describe SeqVarFieldBridge do
     ## in class-local methods, under any
     ## implementation
     described_class.new(:sl_a, A, B,
-                        external_getter: :sl_b,
-                        external_setter: true)
+                        external_name: :sl_b)
   }
   it_behaves_like "Sequence FieldBridge"
 end
@@ -260,81 +236,25 @@ shared_examples_for "Mapping FieldBridge" do
 
 end
 
-describe MappingFieldBridge do
+describe FieldBroker::Bridge::Map::FieldBridge do
   subject {
     described_class.new(:sl_a, A, B,
-                        internal_getter: :sl_a,
-                        internal_setter: true,
-                        external_getter: :sl_b,
-                        external_setter: true)
+                        external_name: :sl_b)
   }
   it_behaves_like "Mapping FieldBridge"
 end
 
 
-describe MappingVarFieldBridge do
+describe FieldBroker::Bridge::Map::VarFieldBridge do
   subject {
     described_class.new(:sl_a, A, B,
-                        external_getter: :sl_b,
-                        external_setter: true)
+                        external_name: :sl_b)
   }
   it_behaves_like "Mapping FieldBridge"
 end
 
 
-describe FieldRouter do
-  subject { described_class.new(A, B) }
-  before {
-    subject.add_bridge(:sl_a, FieldBridge,
-                       external_getter: :sl_b,
-                       external_setter: true)
-    subject.add_bridge(:sl_c, VarFieldBridge,
-                       external_getter: :sl_d,
-                       external_setter: true)
-    subject.add_bridge(:sl_e, SeqVarFieldBridge,
-                       external_getter: :sl_f,
-                       external_setter: true)
-    subject.add_bridge(:sl_g, MappingVarFieldBridge,
-                       external_getter: :sl_h,
-                       external_setter: true)
-  }
-  let(:seq_a) { [1,2,3] }
-  let(:seq_b) { [-1,-2,-3] }
-  let(:h_a) { {1=>2, 3=>4} }
-  let(:h_b) { {-1=>-2, -3=>-4} }
-  let(:obj_a) {
-    a = A.new(1)
-    a.sl_c = 10
-    a.sl_e = seq_a.dup
-    a.sl_g = h_a.dup
-    a
-  }
-  let(:obj_b) {
-    b = B.new(-1)
-    b.sl_d = -10
-    b.sl_f = seq_b.dup
-    b.sl_h = h_b.dup
-    b
-  }
-
-  it "exports mapped fields" do
-    subject.export_mapped(obj_a,obj_b)
-    expect(obj_b.sl_b).to be == obj_a.sl_a
-    expect(obj_b.sl_d).to be == obj_a.sl_c
-    expect(obj_b.sl_f).to be == seq_b.dup.concat(seq_a)
-    expect(obj_b.sl_h).to be == h_b.merge(h_a)
-  end
-
-  it "imports mapped fields" do
-    subject.import_mapped(obj_b,obj_a)
-    expect(obj_a.sl_a).to be == obj_b.sl_b
-    expect(obj_a.sl_c).to be == obj_b.sl_d
-    expect(obj_a.sl_e).to be == seq_a.dup.concat(seq_b)
-    expect(obj_a.sl_g).to be == h_a.merge(h_b)
-  end
-end
-
-describe VarFieldHBridge do
+describe FieldBroker::Bridge::VarFieldHBridge do
   let(:obj_a) {
     a = A.new(1)
   }
@@ -376,8 +296,129 @@ describe VarFieldHBridge do
     expect(not_found).to be true
   end
 
+  ## FIXME test subject#import, subject#export ...
+end
+
+
+describe FieldBroker::FieldBroker do
+  subject { described_class.new(A, B) }
+  before {
+    subject.add_bridge(:sl_a, FieldBroker::Bridge::FieldBridge,
+                       external_name: :sl_b)
+    subject.add_bridge(:sl_c, FieldBroker::Bridge::VarFieldBridge,
+                       external_name: :sl_d)
+    subject.add_bridge(:sl_e, FieldBroker::Bridge::Seq::VarFieldBridge,
+                       external_name: :sl_f)
+    subject.add_bridge(:sl_g, FieldBroker::Bridge::Map::VarFieldBridge,
+                       external_name: :sl_h)
+  }
+  let(:seq_a) { [1,2,3] }
+  let(:seq_b) { [-1,-2,-3] }
+  let(:h_a) { {1=>2, 3=>4} }
+  let(:h_b) { {-1=>-2, -3=>-4} }
+  let(:obj_a) {
+    a = A.new(1)
+    a.sl_c = 10
+    a.sl_e = seq_a.dup
+    a.sl_g = h_a.dup
+    a
+  }
+  let(:obj_b) {
+    b = B.new(-1)
+    b.sl_d = -10
+    b.sl_f = seq_b.dup
+    b.sl_h = h_b.dup
+    b
+  }
+
+  it "exports mapped fields" do
+    subject.export_mapped(obj_a,obj_b)
+    expect(obj_b.sl_b).to be == obj_a.sl_a
+    expect(obj_b.sl_d).to be == obj_a.sl_c
+    expect(obj_b.sl_f).to be == seq_b.dup.concat(seq_a)
+    expect(obj_b.sl_h).to be == h_b.merge(h_a)
+  end
+
+  it "imports mapped fields" do
+    subject.import_mapped(obj_b,obj_a)
+    expect(obj_a.sl_a).to be == obj_b.sl_b
+    expect(obj_a.sl_c).to be == obj_b.sl_d
+    expect(obj_a.sl_e).to be == seq_a.dup.concat(seq_b)
+    expect(obj_a.sl_g).to be == h_a.merge(h_b)
+  end
+end
+
+describe FieldBroker::HFieldBroker do
+  subject { described_class.new(A) }
+  before {
+    subject.add_bridge(:sl_a,
+                       FieldBroker::Bridge::FieldHBridge,
+                       external_name: :sl_b)
+    subject.add_bridge(:sl_c,
+                       FieldBroker::Bridge::VarFieldHBridge,
+                       external_name: :sl_d)
+    subject.add_bridge(:sl_e,
+                       FieldBroker::Bridge::Seq::VarFieldHBridge,
+                       external_name: :sl_f)
+    subject.add_bridge(:sl_g,
+                       FieldBroker::Bridge::Map::VarFieldHBridge,
+                       external_name: :sl_h)
+  }
+  let(:seq_a) { [1,2,3] }
+  let(:seq_b) { [-1,-2,-3] }
+  let(:h_a) { {1=>2, 3=>4} }
+  let(:h_b) { {-1=>-2, -3=>-4} }
+  let(:obj_a) {
+    a = A.new(1)
+    a.sl_c = 10
+    a.sl_e = seq_a.dup
+    a.sl_g = h_a.dup
+    a
+  }
+  let(:obj_b) {
+    {:sl_b => -1,
+     :sl_d => -10,
+     :sl_f => seq_b.dup,
+     :sl_h => h_b.dup
+    }
+  }
+
+  it "exports mapped fields" do
+    subject.export_mapped(obj_a, obj_b)
+    expect(obj_b[:sl_b]).to be == obj_a.sl_a
+    expect(obj_b[:sl_d]).to be == obj_a.sl_c
+    expect(obj_b[:sl_f]).to be == seq_b.dup.concat(seq_a)
+    expect(obj_b[:sl_h]).to be == h_b.merge(h_a)
+  end
+
+  it "imports mapped fields" do
+    subject.import_mapped(obj_b,obj_a)
+    expect(obj_a.sl_a).to be == obj_b[:sl_b]
+    expect(obj_a.sl_c).to be == obj_b[:sl_d]
+    expect(obj_a.sl_e).to be == seq_a.dup.concat(seq_b)
+    expect(obj_a.sl_g).to be == h_a.merge(h_b)
+  end
+
+  it "fails for unknown hash fields on import (no block)" do
+    obj_b[:sl_z]="Z"
+    extra_data={}
+    expect {
+      subject.import_mapped(obj_b,obj_a)
+    }.to raise_error(FieldBroker::FieldBridgeNotFound)
+  end
+
+
+  it "yields to block for unknown hash fields on import" do
+    obj_b[:sl_z]="Z"
+    extra_data={}
+    subject.import_mapped(obj_b,obj_a) { |name,value|
+      extra_data[name]=value
+    }
+    expect(extra_data[:sl_z]).to be == "Z"
+  end
 
 end
+
 
 # Local Variables:
 # fill-column: 65
