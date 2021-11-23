@@ -47,7 +47,7 @@ class InterRouter < ClassBridge
   ##
   ## @param field [Symbol] field name
   def find_bridge(field)
-    return field_map[field]
+    return field_map[field.to_sym]
   end
 
   ## import a single field from an external object to an internal object
@@ -57,8 +57,8 @@ class InterRouter < ClassBridge
   ## @param int_inst [Object] an instance of the #internal_class
   ## @see #import_mapped
   def import(field, ext_inst, int_inst)
-    br = find_bridge(field)
-    br.import(ext_inst,int_inst)
+    bridge = find_bridge(field)
+    bridge.import(ext_inst,int_inst)
   end
 
   ## export a single field from an internal object to an external object
@@ -68,8 +68,8 @@ class InterRouter < ClassBridge
   ## @param ext_inst [Object] an instance of the #external_class
   ## @see #export_mapped
   def export(field, int_inst, ext_inst)
-    br = find_bridge(field)
-    br.export(int_inst,ext_inst)
+    bridge = find_bridge(field)
+    bridge.export(int_inst,ext_inst)
   end
 
   ## import all mapped fields from an external instance to an internal
@@ -79,8 +79,8 @@ class InterRouter < ClassBridge
   ## @param int_inst [Object] an instance of the #internal_class
   ## @see #import
   def import_mapped(ext_inst,int_inst)
-    @field_map.each do |field,br|
-      br.import(ext_inst,int_inst)
+    @field_map.each do |field,bridge|
+      bridge.import(ext_inst,int_inst)
     end
   end
 
@@ -91,8 +91,8 @@ class InterRouter < ClassBridge
   ## @param ext_inst [Object] an instance of the #external_class
   ## @see #export
   def export_mapped(int_inst,ext_inst)
-    @field_map.each do |field,br|
-      br.export(int_inst,ext_inst)
+    @field_map.each do |field,bridge|
+      bridge.export(int_inst,ext_inst)
         end
   end
 end
@@ -170,6 +170,8 @@ class InterBridge < ClassBridge
   def_instance_writer(:set_internal,:@internal_setter)
   def_instance_writer(:set_external,:@external_setter)
 
+  alias :import_value :set_internal
+
   ## ^ NB internal_* methods will be overridden
   ## under field-based subclasses
 
@@ -181,6 +183,10 @@ class InterBridge < ClassBridge
   def export(internal_inst,external_inst)
     v = get_internal(internal_inst)
     set_external(external_inst, v)
+  end
+
+  def value_in?(internal_inst)
+    return true
   end
 end
 
@@ -238,6 +244,55 @@ class FieldInterBridge < InterBridge
 end
 
 
+module HashInterBridgeMixin
+  def name_for_export()
+    ## NB using symbols in external hash keys, for application
+    ## data. For purpose of interoperability, the keys can be
+    ## translated to or from string values, during export or
+    ## import onto any strongly typed syntax e.g with YAML
+    ##
+    ## if needed, this method can be overridden in
+    ## any subclass
+    return @name
+  end
+
+  def value_ext?(external_inst)
+    external_inst.key?(self.name_for_export())
+  end
+
+  def set_external(external_inst, value)
+    name = self.name_for_export()
+    external_inst[name]=value
+  end
+
+  def get_external(external_inst, default=false)
+    name = self.name_for_export()
+    if external_inst.key?(name)
+      external_inst[name]
+    else
+      ## NB providing block args similar to a default proc
+      ## for a Hash
+      yield(external_inst,name) if block_given?
+      return default
+    end
+  end
+end
+
+## *InterBridge* type for field name and value export to a *Hash*
+class HashInterBridge < InterBridge
+  include HashInterBridgeMixin
+end
+
+class FieldHashInterBridge < HashInterBridge
+  ## FIXME this class naming convention is unwieldy,
+  ## though descriptive
+  ##
+  ## FIXME soon ...
+  ## class SeqFieldHashInterBridge ##...
+  ## class MappingFieldHashInterBridge ##...
+  include FieldInterBridgeMixin
+end
+
 ## common class for *InterBridge* mappings utilizing
 ## enumerable values for internal and external field
 ## storage
@@ -263,6 +318,14 @@ class SeqInterBridge < EnumInterBridge
 
   def add_external(external_inst, value)
     get_external(external_inst).push(value)
+  end
+
+  def import_value(value,internal_inst)
+    ## NB appends - does not reset the internal value before
+    ## importing each element
+    value.each do |elt|
+      add_internal(internal_inst, elt)
+    end
   end
 
   def import_each(external_inst, internal_inst)
@@ -297,6 +360,14 @@ class MappingInterBridge < EnumInterBridge
     get_external(external_inst)[key] = value
   end
 
+  def import_value(value,internal_inst)
+    ## NB appends - does not reset the internal value before
+    ## importing each key, value pair
+    value.each do |k,v|
+      add_internal(internal_inst, k, v)
+    end
+  end
+
   def import_each(external_inst, internal_inst)
     get_external(external_inst).each do |k,v|
       add_internal(internal_inst,k,v)
@@ -317,3 +388,8 @@ end
 class MappingFieldInterBridge < MappingInterBridge
   include FieldInterBridgeMixin
 end
+
+
+# Local Variables:
+# fill-column: 65
+# End:

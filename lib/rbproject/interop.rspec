@@ -99,8 +99,6 @@ describe FieldInterBridge do
   it_behaves_like "Scalar InterBridge"
 end
 
-
-
 shared_examples_for "Sequence InterBridge" do
   let (:obj_a) { A.new([1,2,3]) }
   let (:obj_b) { B.new([-1,-2,-3]) }
@@ -335,3 +333,52 @@ describe InterRouter do
     expect(obj_a.sl_g).to be == h_a.merge(h_b)
   end
 end
+
+describe FieldHashInterBridge do
+  let(:obj_a) {
+    a = A.new(1)
+  }
+  let(:h) { {} }
+  subject {
+    described_class.new(:sl_a, A, Hash)
+  }
+
+  it "uses a symbol as an export key" do
+    expect(subject.name.class).to be Symbol
+    expect(subject.name_for_export).to be == subject.name
+  end
+
+  it "sets a field value in a hash map" do
+    subject.set_external(h,-1)
+    expect(h.length).to be == 1
+    expect(h.key?(subject.name_for_export)).to be true
+    expect(h[subject.name_for_export]).to be == -1
+  end
+
+  it "gets a field value from a hash map" do
+    subject.set_external(h,-1)
+    expect(subject.get_external(h)).to be == -1
+    expect(h).to be == {subject.name_for_export => -1}
+  end
+
+  it "returns a default value for unbound external key" do
+    default = ("unbound-" + Random.rand.to_s[2..]).to_sym
+    expect(subject.get_external(h,default)).to be == default
+  end
+
+  it "yelds to a block for unbound external key" do
+    not_found = false
+    subject.get_external(h) do |inst,name|
+      expect(inst).to be == h
+      expect(name).to be == subject.name_for_export
+      not_found = true
+    end
+    expect(not_found).to be true
+  end
+
+
+end
+
+# Local Variables:
+# fill-column: 65
+# End:
