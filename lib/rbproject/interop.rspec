@@ -5,7 +5,7 @@ require('rspec/core/shared_context')
 
 class A
   attr_accessor :sl_a
-  ## FIXME test unbound internal access for FieldInterBridge
+  ## FIXME test unbound internal access for FieldFieldBridge
   attr_accessor :sl_c
   attr_accessor :sl_e
   attr_accessor :sl_g
@@ -25,7 +25,7 @@ class B
 end
 
 
-shared_examples_for "Scalar InterBridge" do
+shared_examples_for "Scalar FieldBridge" do
   let (:obj_a) { A.new(1) }
   let (:obj_b) { B.new(-1) }
 
@@ -75,7 +75,7 @@ shared_examples_for "Scalar InterBridge" do
   end
 end
 
-describe InterBridge do
+describe FieldBridge do
   subject {
     described_class.new(:sl_a, A, B,
                         external_getter: :sl_b,
@@ -83,11 +83,11 @@ describe InterBridge do
   }
   let(:alt_subject) { described_class.new(:sl_a, A, B) }
 
-  it_behaves_like "Scalar InterBridge"
+  it_behaves_like "Scalar FieldBridge"
 end
 
 
-describe FieldInterBridge do
+describe VarFieldBridge do
   subject {
     described_class.new(:sl_a, A, B,
                         external_getter: :sl_b,
@@ -96,10 +96,10 @@ describe FieldInterBridge do
 
   let(:alt_subject) { described_class.new(:sl_a, A, B) }
 
-  it_behaves_like "Scalar InterBridge"
+  it_behaves_like "Scalar FieldBridge"
 end
 
-shared_examples_for "Sequence InterBridge" do
+shared_examples_for "Sequence FieldBridge" do
   let (:obj_a) { A.new([1,2,3]) }
   let (:obj_b) { B.new([-1,-2,-3]) }
 
@@ -161,7 +161,7 @@ shared_examples_for "Sequence InterBridge" do
   end
 end
 
-describe SeqInterBridge do
+describe SeqFieldBridge do
   subject {
     ## NB this initialization syntax may
     ## seem other than succinct. Ideally,
@@ -172,11 +172,11 @@ describe SeqInterBridge do
                         external_getter: :sl_b,
                         external_setter: true)
   }
-  it_behaves_like "Sequence InterBridge"
+  it_behaves_like "Sequence FieldBridge"
 end
 
 
-describe SeqFieldInterBridge do
+describe SeqVarFieldBridge do
   subject {
     ## NB this initialization syntax may
     ## seem other than succinct. Ideally,
@@ -187,10 +187,10 @@ describe SeqFieldInterBridge do
                         external_getter: :sl_b,
                         external_setter: true)
   }
-  it_behaves_like "Sequence InterBridge"
+  it_behaves_like "Sequence FieldBridge"
 end
 
-shared_examples_for "Mapping InterBridge" do
+shared_examples_for "Mapping FieldBridge" do
   let(:h_a) { {1 =>2, 2=> 3} }
   let(:h_b) { {-1 => -2, -2 => -3} }
   let (:obj_a) { A.new(h_a) }
@@ -260,7 +260,7 @@ shared_examples_for "Mapping InterBridge" do
 
 end
 
-describe MappingInterBridge do
+describe MappingFieldBridge do
   subject {
     described_class.new(:sl_a, A, B,
                         internal_getter: :sl_a,
@@ -268,33 +268,33 @@ describe MappingInterBridge do
                         external_getter: :sl_b,
                         external_setter: true)
   }
-  it_behaves_like "Mapping InterBridge"
+  it_behaves_like "Mapping FieldBridge"
 end
 
 
-describe MappingFieldInterBridge do
+describe MappingVarFieldBridge do
   subject {
     described_class.new(:sl_a, A, B,
                         external_getter: :sl_b,
                         external_setter: true)
   }
-  it_behaves_like "Mapping InterBridge"
+  it_behaves_like "Mapping FieldBridge"
 end
 
 
-describe InterRouter do
+describe FieldRouter do
   subject { described_class.new(A, B) }
   before {
-    subject.add_bridge(:sl_a, InterBridge,
+    subject.add_bridge(:sl_a, FieldBridge,
                        external_getter: :sl_b,
                        external_setter: true)
-    subject.add_bridge(:sl_c, FieldInterBridge,
+    subject.add_bridge(:sl_c, VarFieldBridge,
                        external_getter: :sl_d,
                        external_setter: true)
-    subject.add_bridge(:sl_e, SeqFieldInterBridge,
+    subject.add_bridge(:sl_e, SeqVarFieldBridge,
                        external_getter: :sl_f,
                        external_setter: true)
-    subject.add_bridge(:sl_g, MappingFieldInterBridge,
+    subject.add_bridge(:sl_g, MappingVarFieldBridge,
                        external_getter: :sl_h,
                        external_setter: true)
   }
@@ -334,7 +334,7 @@ describe InterRouter do
   end
 end
 
-describe FieldHashInterBridge do
+describe VarFieldHBridge do
   let(:obj_a) {
     a = A.new(1)
   }

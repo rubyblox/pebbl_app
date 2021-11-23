@@ -24,7 +24,7 @@ end
 
 
 ## trivial mapping class for object interoperability
-class InterRouter < ClassBridge
+class FieldRouter < ClassBridge
   attr_reader :field_map
 
   def initialize(internal_class, external_class)
@@ -43,7 +43,7 @@ class InterRouter < ClassBridge
     return inst
   end
 
-  ## locate an InterBridge for this InterRouter by field name
+  ## locate an FieldBridge for this FieldRouter by field name
   ##
   ## @param field [Symbol] field name
   def find_bridge(field)
@@ -97,8 +97,50 @@ class InterRouter < ClassBridge
   end
 end
 
+
+class HashFieldRouter < FieldRouter
+  def import_mapped(h,int_inst)
+    ## NB This would not address 'include' objects in a mapping
+    h.each do |k,v|
+      name = k.to_sym
+      bridge = self.find_bridge(name)
+      if (bridge)
+        bridge.import_value(v,int_inst)
+      else
+        if block_given?
+          ## e.g add to Proj#extra_conf_data
+          ## FIXME needs illustration in test
+          yield(k,v)
+        else
+          raise "No mapping found for #{k} in #{self} and no
+block provided"
+        end
+      end
+    end
+  end
+
+
+  def export_mapped(int_inst,h)
+    ## NB this would export values in the field order
+    ## in which @field_map is defined
+    @field_map.each do |field,bridge|
+      # exp_name=self.name_for_export(field)
+      if bridge.value_in?(int_inst)
+        value = bridge.get_internal(int_inst)
+        ## FIXME this departs from other FieldBridge
+        ## implementations in that it assumes that
+        ## no value is bound for the field name in the
+        ## hash. This does not iterate to add values,
+        ## for any sequence or map value from the
+        ## internal instance
+        bridge.set_external(h,value)
+      end
+    end
+  end
+end
+
 ## method-oriented field bridge for principally scalar mappings
-class InterBridge < ClassBridge
+class FieldBridge < ClassBridge
   ## NB illustration in interop.rspec
   attr_reader :internal_getter ## for #export
   attr_reader :internal_setter ## for #import
@@ -193,7 +235,7 @@ end
 
 ## common mixin module for interop bridge types utilizing an
 ## instance variable for internal field storage
-module FieldInterBridgeMixin
+module VarFieldBridgeMixin
   def self.included(extclass)
     extclass.attr_reader :instance_var
 
@@ -237,14 +279,14 @@ module FieldInterBridgeMixin
 end
 
 
-## *InterBridge* utilizing an instance variable semantics
-class FieldInterBridge < InterBridge
+## *FieldBridge* utilizing an instance variable semantics
+class VarFieldBridge < FieldBridge
   ## NB reimpl of a FieldDesc
-  include FieldInterBridgeMixin
+  include VarFieldBridgeMixin
 end
 
 
-module HashInterBridgeMixin
+module FieldHBridgeMixin
   def name_for_export()
     ## NB using symbols in external hash keys, for application
     ## data. For purpose of interoperability, the keys can be
@@ -278,25 +320,27 @@ module HashInterBridgeMixin
   end
 end
 
-## *InterBridge* type for field name and value export to a *Hash*
-class HashInterBridge < InterBridge
-  include HashInterBridgeMixin
+## *FieldBridge* type for field name and value export to a *Hash*
+class FieldHBridge < FieldBridge
+  include FieldHBridgeMixin
 end
 
-class FieldHashInterBridge < HashInterBridge
+class VarFieldHBridge < FieldHBridge
   ## FIXME this class naming convention is unwieldy,
   ## though descriptive
   ##
   ## FIXME soon ...
-  ## class SeqFieldHashInterBridge ##...
-  ## class MappingFieldHashInterBridge ##...
-  include FieldInterBridgeMixin
+  ## class SeqFieldHBridge ##...
+  ## class SeqVarFieldHBridge ##...
+  ## class MappingFieldHBridge ##...
+  ## class MappingVarFieldHBridge ##...
+  include VarFieldBridgeMixin
 end
 
-## common class for *InterBridge* mappings utilizing
+## common class for *FieldBridge* mappings utilizing
 ## enumerable values for internal and external field
 ## storage
-class EnumInterBridge < InterBridge
+class EnumFieldBridge < FieldBridge
   def import_enum(external_inst, internal_inst)
     v = get_external(external_inst).dup
     set_internal(internal_inst, v)
@@ -309,9 +353,9 @@ class EnumInterBridge < InterBridge
 end
 
 
-## *InterBridge* for mappings utilizing an Array-like value for internal
+## *FieldBridge* for mappings utilizing an Array-like value for internal
 ## and external field storage
-class SeqInterBridge < EnumInterBridge
+class SeqFieldBridge < EnumFieldBridge
   def add_internal(internal_inst, value)
     get_internal(internal_inst).push(value)
   end
@@ -323,6 +367,8 @@ class SeqInterBridge < EnumInterBridge
   def import_value(value,internal_inst)
     ## NB appends - does not reset the internal value before
     ## importing each element
+    ##
+    ## FIXME use this under hash subclasses
     value.each do |elt|
       add_internal(internal_inst, elt)
     end
@@ -343,15 +389,15 @@ class SeqInterBridge < EnumInterBridge
   alias :export :export_each
 end
 
-## *InterBridge* type for mappings utilizing an Array-like value
+## *FieldBridge* type for mappings utilizing an Array-like value
 ##  under an instance variable for internal field storage
-class SeqFieldInterBridge < SeqInterBridge
-  include FieldInterBridgeMixin
+class SeqVarFieldBridge < SeqFieldBridge
+  include VarFieldBridgeMixin
 end
 
-## *InterBridge* type for mappings utilizing a Hash-like value for
+## *FieldBridge* type for mappings utilizing a Hash-like value for
 ## internal and external field storage
-class MappingInterBridge < EnumInterBridge
+class MappingFieldBridge < EnumFieldBridge
   def add_internal(internal_inst, key, value)
     get_internal(internal_inst)[key] = value
   end
@@ -363,6 +409,8 @@ class MappingInterBridge < EnumInterBridge
   def import_value(value,internal_inst)
     ## NB appends - does not reset the internal value before
     ## importing each key, value pair
+    ##
+    ## FIXME use this under hash subclasses
     value.each do |k,v|
       add_internal(internal_inst, k, v)
     end
@@ -383,10 +431,10 @@ class MappingInterBridge < EnumInterBridge
   alias :export :export_each
 end
 
-## *InterBridge* type for mappings utilizing a Hash-like value
+## *FieldBridge* type for mappings utilizing a Hash-like value
 ##  under an instance variable for internal field storage
-class MappingFieldInterBridge < MappingInterBridge
-  include FieldInterBridgeMixin
+class MappingVarFieldBridge < MappingFieldBridge
+  include VarFieldBridgeMixin
 end
 
 
