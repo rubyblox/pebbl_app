@@ -1,0 +1,34 @@
+#!/usr/bin/env ruby
+
+## gemreg(1)
+
+## TBD
+##
+## * cmds that can be used from package managers, e.g alpm-hooks(5)
+## gemreg add <gemspec_path>
+## gemreg remove <gemspec_path>
+## gemreg update <gemspec_path>
+## * cmds that can be used for introspection at CLI
+## gemreg list <query_args> ## FIXME query syntax needs some focus in design
+## gemreg info <gemspec_list>
+## gemreg docs [<subcmd>] [<query>|<gemspec_list>] # the orignal goal of this. UI TBD
+## * cmds for gemreg service maintenance
+## gemreg lint # remove gemspecs no longer available in the filesystem, with notification unless --silent
+## gemreg config-edit # edit the YAML config file for the gemreg service, using --editor <cmd> or env EDITOR=<cmd> or e.g xdg-open from e.g Arch xdg-utils
+## gemreg config-dump # dump the YAML config file for the gemreg service, with further info if 'gemreg --debug'
+##
+## TBD
+## - integration with Bundler & project-local gemreg oprns
+##   - This tool would be designed originally for support of system-level gemspecs, e.g provided by an OS package manager
+##   - Once that much support would be designed, it may be trivial to port for projects e.g using a <proj>/.gemreg/ dir
+##     - assuming some way to determine a "project root" directory e.g 'gemreg --project [dir]' using PWD as defualt [dir]
+## - 'gemreg docs' => implement rather with a 'gemdocs' tool
+##    - e.g generate documentation for Ruby files referenced from a gemspec
+##    - e.g list documentation produced in reference to a gemspec - e.g for *.rb files and files under s.extra_rdoc_files (for a gemspec s)
+##    - e.g update documentation ... e.g on package update
+##    - e.g add documentation ... manually or on package install
+##    - e.g remove documentatuion ... manually or on package removal
+## - gemspec browser
+## - documentation browser - GTK3 (incl. GTK3 Builder + Glade), gio/gvfs, ..., and GTK WebKit via Ruby
+## - internal storage semantics for the gemreg service - configuration and "registered gems" (incl. last gemspec file update time)
+##    - favoring YAML, really no database system needed for this tree-like reference system
