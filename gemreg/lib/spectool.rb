@@ -217,12 +217,11 @@ found for name #{name}: #{cached}", name: name)
     ## objects:
     ## - Gem::Specification::LOAD_CACHE
     ## - @@stubs in Gem::Specification - as via Gem::Specification::stubs
-    ## - @@all [array] in Gem::Specification - as via Gem::Specification::_all
-    ## - whatever cache is being used by Gem::Specification::find_by_name(...)
+    ## - @@all in Gem::Specification - as via Gem::Specification::_all
     ## - @@stubs_by_name in Gem::Specification, as via Gem::Specification::stubs_for(...)
-    ## - See also: Gem::Specifications::all= (not useful for activated gems)
+    ## - See also: Gem::Specifications::all= (NB May not be useful for activated gems)
     ## - Gem.loaded_specs, synchronizing on Gem::LOADED_SPECS_MUTEX,
-    ##   and used under Gem#activate (NB do not access, for this)
+    ##   and used under Gem#activate
     ##
     def self.load(file, &block)
       usefile = File.expand_path(file)
@@ -235,12 +234,12 @@ found for name #{name}: #{cached}", name: name)
           begin
             ## FIXME this pwd call is problematic, but will be necessary
             ## for evaluation of some Gem Specs, e.g for yard - such
-            ## that uses 'find' to compute the set of spec files
-            pwd=Dir.pwd
+            ## that uses the 'find' shell command, to compute the set of
+            ## spec files
             Dir.chdir(File.dirname(file))
             last = usebind.eval(text, usefile)
           ensure
-            Dir.chdir(pwd)
+            Dir.chdir(lastpwd)
           end
         }
         if last.is_a?(Gem::Specification)
