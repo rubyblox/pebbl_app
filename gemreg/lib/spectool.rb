@@ -229,6 +229,7 @@ found for name #{name}: #{cached}", name: name)
         text = File.read(usefile, external_encoding: "UTF-8")
         usebind = block_given? ? block.binding : binding
         lastpwd = Dir.pwd
+        filedir=File.dirname(file)
         last = nil
         PWD_LOCK.synchronize {
           begin
@@ -236,7 +237,7 @@ found for name #{name}: #{cached}", name: name)
             ## for evaluation of some Gem Specs, e.g for yard - such
             ## that uses the 'find' shell command, to compute the set of
             ## spec files
-            Dir.chdir(File.dirname(file))
+            Dir.chdir(filedir)
             last = usebind.eval(text, usefile)
           ensure
             Dir.chdir(lastpwd)
@@ -244,6 +245,9 @@ found for name #{name}: #{cached}", name: name)
         }
         if last.is_a?(Gem::Specification)
           last.loaded_from = usefile
+          ## ensure a correct value for #full_gem_path
+          ## cf. pathname hacking in Gem::BasicSpecification
+          last.full_gem_path=filedir
           yield last if block_given?
           return last
         else
@@ -274,6 +278,9 @@ did not return a Gem Specification: #{last}",
     ## error will be raised.
     ##
     ## *Known Limitations*
+    ##
+    ## This method does not work with 'default' gem installations, e.g
+    ## the psych gem installation as provided in Ruby distribution (FIXME)
     ##
     ## This method shares any limitations of the overriding *load*
     ## method.
