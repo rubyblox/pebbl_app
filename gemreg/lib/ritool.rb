@@ -4,44 +4,353 @@ require 'rdoc'
 
 ## module <TBD> ...
 
+class QueryError < RuntimeError
+end
+
+## TBD compatability for the following, onto YARD's RI-like tooling
+
 require 'forwardable'
 class StoreTool
 
-  extend(Forwardable)
-  def_delegators(:@store,*RDoc::Store.instance_methods(false))
+  ## FIXME this utility class needs a desktop UI
 
+  ## Return an RI Driver for this class
+  ##
+  ## @return [RDoc::RI::Driver]
+  def self.driver
+    @driver ||= RDoc::RI::Driver.new()
+  end
+
+  ## Set the RI Driver for this class
+  ##
+  ## @param drv [RDoc::RI::Driver] the RI Driver
+  ## @return [RDoc::RI::Driver] the provided driver
+  def self.driver=(drv)
+    @driver=drv
+  end
+
+
+  ## Retrieve the +:system+ RDoc Store for this Ruby environment
+  ##
+  ## @see system_storetool
+  ## @return [RDoc::Store]
+  def self.system_store
+    s = driver.stores.find { |s| s.type == :system }
+    if s
+      return s
+    else
+      raise QueryError.new("No RDoc storage found with type :system")
+    end
+  end
+
+  ## Retrieve a delgating SystemStoreTool for this Ruby environment
+  ##
+  ## @return [SystemStoreTool]
+  def self.system_storetool
+    @system_storetool ||= SystemStoreTool.new(system_store)
+  end
+
+  ## Retrieve the +:site+ RDoc Store for this Ruby environment
+  ##
+  ## @return [RDoc::Store]
+  ## @see site_storetool
+  def self.site_store
+    s = driver.stores.find { |s| s.type == :site }
+    if s
+      return s
+    else
+      raise QueryError.new("No RDoc storage found with type :site")
+    end
+  end
+
+  ## Retrieve a delgating SiteStoreTool for this Ruby environment
+  ##
+  ## @return [SiteStoreTool]
+  def self.site_storetool
+    @site_storetool ||= SiteStoreTool.new(site_store)
+  end
+
+  ## Retrieve the +:home+ RDoc Store for this Ruby environment
+  ##
+  ## @return [RDoc::Store]
+  ## @see site_storetool
+  def self.home_store
+    s = driver.stores.find { |s| s.type == :home }
+    if s
+      return s
+    else
+      raise QueryError.new("No RDoc storage found with type :home")
+    end
+  end
+
+  ## Retrieve a delgating HomeStoreTool for this Ruby environment
+  ##
+  ## @return [HomeStoreTool]
+  def self.home_storetool
+    @site_storetool ||= HomeStoreTool.new(home_store)
+  end
+
+
+  ## Retrieve an RDoc Store for this named gem in this Ruby environment
+  ##
+  ## @param name [String or Gem::Specification] the gem name, or a Gem
+  ##  specification defining the gem
+  ## @param version [String] version qualifier for the gem, used when
+  ##  quering the Gem Specification cache if a string name is provided
+  ## @return [RDoc::Store]
+  ## @see gem_storetool
+  def self.gem_store(origin, version = "> 0.0")
+    if origin.instance_of?(Gem::Specification)
+      ## FIXME does not check for version parity
+      ## given origin.version and the provided version
+      gem = origin
+    else
+      gem = Gem::Specification.find_by_name(origin, version) ## NB may err
+    end
+
+    fn = gem.full_name
+    store = driver.stores.find { |s|
+      ## FIXME fails at the rdoc gem, under one local installation via
+      ## OS package manager
+      ##
+      ## FIXME of limited use for the rspec gem, under one local
+      ## installation via the same OS package manager
+      ( s.type == :gem ) && ( s.source == fn )
+    }
+
+    store || ( raise QueryError.new(
+      "No RDoc storage found for gem #{origin} version #{version}"
+    ))
+  end
+
+  ## Retrieve a delgating GemStoreTool for this Ruby environment
+  ##
+  ## @param name [String] the gem name
+  ## @param version [String] version qualifier for the gem
+  ## @return [GemStoreTool]
+  def self.gem_storetool(name, version = "> 0.0")
+    ## FIXME this will always call find_by_name
+    spec = Gem::Specification::find_by_name(name, version)
+    if @gem_storetools && (st = @gem_storetools[spec.full_name])
+        st
+    else
+      store = gem_store(spec)
+      if store.source != spec.full_name
+        raise new QueryError(
+          "Version mismatch: source #{store.source} != #{spec.full_name}"
+        )
+      else
+        st = GemStoreTool.new(store, spec)
+      end
+
+      if @gem_storetools
+        @gem_storetools[spec.full_name] = st
+      else
+        @gem_storetools = {spec.full_name => st}
+        st
+      end
+    end
+  end
+
+  extend(Forwardable)
+  def_delegators(:@store,*RDoc::Store.public_instance_methods(false))
+
+  ## The RDoc Store for this delegating instance
   attr_reader :store
 
+  ## Initialize the instance with a provided RDoc Store
+  ##
+  ## @param store [RDoc::Store]
   def initialize(store)
     @store = store
   end
-end
 
-class GemStoreTool < StoreTool
-  ## store.type => :gem
+  ## <<Utility Methods>>
 
-  attr_reader :spec
+  ## Retrieve the list of class names for the RDoc Store in this
+  ## delegating StoreTool
+  ##
+  ## *Examples*
+  ##
+  ## +StoreTool.system_storetool.classes(/Thread/)+
+  ## +StoreTool.system_storetool.classes(/^JSON::/)+
+  ## +StoreTool.gem_storetool('rdoc').classes+
+  ##
+  ## @param expr [Regexp or nil] If non-nil, a regular expression to
+  ##   use in filtering the class names provided under the delegate RDoc
+  ##   Store
+  ##
+  ## @return [Array of String] class names
+  ##
+  ## @see modules
+  def classes(expr = nil)
+    ## NB while there's also the delegate #all_classes method,
+    ## it may not appear to be in common use
+    classes = @store.ancestors.keys
+    return expr ? classes.grep(expr) : classes
+  end
 
-  def initialize(store, spec)
+  ## Retrieve the list of module names for the RDoc Store in this
+  ## delegating StoreTool
+  ##
+  ## @param expr [Regexp or nil] If non-nil, a regular expression to
+  ##   use in filtering the module names provided under the delegate
+  ##   RDoc Store
+  ##
+  ## @return [Array of String] class names
+  ##
+  ## @see classes
+  def modules(expr = nil)
+    ## NB there's also the delegate #all_modules method,
+    ## though it may not appear to be in common use
+    classes = @store.ancestors.keys
+    namespaces = @store.module_names
+    modules = namespaces.difference(classes)
+    return expr ? modules.grep(expr) : modules
+  end
+
+  ## Retrieve a sequence of cdesc files provided under the RDoc Store of
+  ## this delegating StoreTool
+  ##
+  ## @return [Array of String] the cdesc files, as absolute pathnames
+  def cdesc_files()
+    ## FIXME/TBD: cdesc API under RDoc/RI ??
+    ## - FIXME it would be useful if the OS package manager had intalled
+    ##   RI docs for the RDoc gem installation. Failing that, 'gem install'
+    ##   may serve to provide the ri docs under a latest release of rdoc
+    @store.module_names.map { |name|
+      @store.class_file(name)
+    }
+  end
+
+  ## Retrieve the pathnanme of a cdesc file provided under the RDoc
+  ## Store of this delegating StoreTool
+  ##
+  ## @return [String] pathname of the cdesc file
+  def find_cdesc_file(name)
+    ## calls store.class_file and then performs a filesystem test on
+    ## that method's return value
+    ##
+    ## e.g
+    ## StoreTool.gem_storetool('yard').find_cdesc_file("Object")
+    cdesc = @store.class_file(name)
+    if File.exists?(cdesc)
+      cdesc
+    else
+      raise QueryError.new("No cdesc found for #{name} in #{self.source}")
+    end
+  end
+
+  ## Retrieve a sequence of instance method names defined for a class
+  ## under the RDoc Store of this delegating StoreTool
+  ##
+  ## @param name [String] the class' name
+  ## @return [Array of String] instance method names
+  def instance_methods_for(name)
+    ## e.g
+    ## StoreTool.gem_storetool('yard').instance_methods_for('Object')
+    methods = @store.instance_methods
+    if methods.key?(name)
+      methods[name]
+    else
+      ## NB the named class may or may not be defined e.g in the gem or
+      ## system installation
+      raise QueryError.new("No instance methods defined for #{name} in #{self.source}")
+    end
+  end
+
+  ## Retrieve a sequence of class method names defined for a class
+  ## under the RDoc Store of this delegating StoreTool
+  ##
+  ## @param name [String] the class' name
+  ## @return [Array of String] class method names
+  def class_methods_for(name)
+    ## e.g
+    ## StoreTool.gem_storetool('yard').class_methods_for('YARD::CLI::Command')
+    ## => ["run"]
+    methods = @store.class_methods
+    if methods.key?(name)
+      methods[name]
+    else
+      ## NB the named class may or may not be defined e.g in the gem or
+      ## system installation
+      raise QueryError.new("No class methods defined for #{name} in #{self.source}")
+    end
+  end
+end  ## StoreTool
+
+## TBD additional specialization for the :system, :site, and :home
+## types of RDoc Store
+
+## delegating StoreTool class for +:system+ RDoc Store type
+class SystemStoreTool < StoreTool
+  def initialize(store = StoreTool.system_store)
     super(store)
-    @spec = spec
   end
 end
 
-class SystemStoreTool < StoreTool
-  ## store.type => :system
-end
-
+## delegating StoreTool class for +:site+ RDoc Store type
 class SiteStoreTool < StoreTool
-  ## store.type => :site
+  def initialize(store = StoreTool.site_store)
+    super(store)
+  end
 end
 
+## delegating StoreTool class for +:home+ RDoc Store type
 class HomeStoreTool < StoreTool
-  ## store.type => :home
+  def initialize(store = StoreTool.home_store)
+    super(store)
+  end
+end
+
+## delegating StoreTool class for +:gem+ RDoc Store type
+class GemStoreTool < StoreTool
+  ## store.type => :gem
+
+  ## return the name with version for the Gem defined to the RDoc Store
+  ## of this deletaging instance
+  alias :gem_full_name :source
+
+  ## the cached Gem Specification for this GemStoreTool
+  attr_reader :gem_spec
+
+  ## Initialize a new GemStoreTool delegating to the specified store,
+  ## for the provided Gem Specification
+  ##
+  ## @param store [RDoc::Store]
+  ## @param spec [Gem::Specification]
+  def initialize(store, spec)
+    super(store)
+    @gem_spec = spec
+  end
+
+  ## return the Gem name for this GemStoreTool
+  ##
+  ## @return [String] the Gem's name without qualifier for
+  ##  the Gem's version, as a string
+  ##
+  ## @see gem_version
+  ## @see gem_full_name
+  def gem_name()
+    @gem_spec.name
+  end
+
+  ## return the Gem version for this GemStoreTool
+  ##
+  ## @return [String] the version expression, as a string
+  ##
+  ## @see gem_name
+  ## @see gem_full_name
+  def gem_version()
+    @gem_spec.version.version
+  end
 end
 
 
 class RITool
+  ## FIXME orphaned beside latest StoreTool, GemStoreTool development [Remove]
+
+  ## :nodoc: FIXME docs
   def self.driver
     @driver ||= RDoc::RI::Driver.new()
   end
@@ -62,55 +371,20 @@ class RITool
     driver.list_known_classes(exprs.map { |exp| exp.to_s })
   end
 
-  ## NB @driver.stores => ...array...
-  ##
-  ## drv.stores.length
-  ## => 17
-  ##
-  ## drv.stores[0].class
-  ## => RDoc::Store
-  ##
-  ## drv.stores[0].module_names.class
-  ## => Array (of strings)
-  ##
-  ## drv.stores[0].module_names.length
-  ## => 1269 e.g
-  ##
-  ## drv.stores[0].path
-  ## => "/usr/share/ri/3.0.0/system"
-  ##
-  ## drv.stores.map { |s| s.path }
-  ## => ["/usr/share/ri/3.0.0/system", "/usr/share/ri/3.0.0/site", ...]
-  ##
-  ## drv.stores.last.class.instance_methods(false)
-  ## => [...]
-
-  ## TBD: Query API in/for rdoc's RI db (??)
-
   # def self.namespaces(*exprs)
   #   ## modules and classes ...
   # end
 
-  def self.gem_store(name)
-    gem = Gem::Specification.find_by_name(name)
-    fn = gem.full_name
-
-    driver.stores.find { |s|
-      ( s.type == :gem ) && ( s.source == fn )
-    } || raise("No RDoc storage found for gem #{name}")
-
-  end
-
   def self.gem_namespaces(name)
-    store = self.gem_store(name)
-    store.module_names
+    st = StoreTool.gem_store(name)
+    st.module_names
     ## NB classes with inheritance (mixin modules and each superclass):
     ## store.ancestors => { ... }
   end
 
   def self.defined_classes(name)
-    store = self.gem_store(name)
-    store.ancestors.keys
+    st = StoreTool.gem_storetool(name)
+    st.defined_classes
 
     ## NB store.class_file(name) ... spurious results possible e.g
     ## RITool.gem_store('yard').class_file("frobject")
@@ -119,54 +393,77 @@ class RITool
   end
 
   def self.defined_modules(gem)
-    store = self.gem_store(gem)
-    classes = store.ancestors.keys
-    names = store.module_names
-    names.difference(classes)
+    st = StoreTool.gem_store(gem)
+    st.defined_modules
   end
 
   def self.gem_cdesc_files(name)
-    store = self.gem_store(name)
-    store.module_names.map { |name|
-      store.class_file(name)
-    }
+    st = StoreTool.gem_store(name)
+    st.cdesc_files
   end
 
   def self.gem_find_cdesc_file(gem,name)
     ## e.g RITool.gem_find_cdesc_file('yard','Object')
-    store = self.gem_store(gem)
-    cdesc = store.class_file(name)
-    if File.exists?(cdesc)
-      cdesc
-    else
-      raise "No cdesc found for #{name} in #{gem}"
-    end
+    st = StoreTool.gem_store(gem)
+    st.find_cdesc_file(name)
   end
 
 
   def self.gem_instance_methods_for(gem, name)
     ## e.g RITool.gem_instance_methods_for('yard','Object')
-    store = self.gem_store(gem)
-    methods = store.instance_methods
-    if methods.key?(name)
-      methods[name]
-    else
-      ## NB the class may or may not be defined under the gem
-      raise "No instance methods defined for #{name} in #{gem}"
-    end
+    st = StoreTool.gem_store(gem)
+    st.instance_methods_for(name)
   end
 
   def self.gem_class_methods_for(gem, name)
     ## e.g RITool.gem_class_methods_for('yard','YARD::CLI::Command')
     ## => ["run"]
-    store = self.gem_store(gem)
-    methods = store.class_methods
-    if methods.key?(name)
-      methods[name]
-    else
-      ## NB the class may or may not be defined under the gem
-      raise "No class methods defined for #{name} in #{gem}"
-    end
+    st = StoreTool.gem_store(gem)
+    st.class_methods_for(name)
   end
 
+  ## FIXME now update the previous classes to provide an API onto RDoc's
+  ## marshaled *.ri files, suitable for usage in a user interface
+  ## application e.g an ri browser w/ IRB/Pry/... REPL
+
 end
+
+=begin TBD - parsing an rdoc cdesc file with Marshal.load & subsq
+
+str = File.read "#{ENV['HOME']}/.local/share/gem/ruby/3.0.0/doc/rdoc-6.3.3/ri/RDocTask/cdesc-RDocTask.ri"
+obj = Marshal.load str
+
+obj.class
+=> RDoc::NormalClass
+^ NB the format's visual representation does not provide a very clear
+  distinction of class and instance methods, displaying all of those in
+  the same methods list. (FIXME)
+
+obj.class.instance_method(:inspect).source_location
+=> ["/usr/lib/ruby/gems/3.0.0/gems/rdoc-6.3.1/lib/rdoc/normal_class.rb", 39]
+^ TBD patching RDoc to store source locations in the cdesc/method/... marshal data
+
+obj.method_list
+=> <<Array of RDoc::AnyMethod>>
+
+obj.method_list[0].visibility
+=> :public
+
+obj.method_list[0].file_name
+=> <pathname relative to the gem's home>
+
+obj.method_list[0].name
+=> "new"
+
+obj.method_list[0].singleton
+=> true
+# i.e in this context, it's a class method, as the
+# obj.method_list[0].parent_name denotes a class
+
+obj.method_list[10].name
+=> "rdoc_target"
+
+obj.method_list[10].singleton
+=> false ## i.e an instance method
+
+=end
