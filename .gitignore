@@ -3,3 +3,8 @@
 .#*
 *.bak
 *.log
+## GLib2/Gtk
+# binary files from glib-compile-resources(1)
+*.gresource
+# binary files from glib-compile-schemas(1)
+gschemas.compiled
