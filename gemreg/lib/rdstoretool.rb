@@ -1,4 +1,4 @@
-## ritool.rb
+## rdstoretool.rb - utility classes for query onto RDoc::Store objects
 
 require 'rdoc'
 
@@ -348,18 +348,19 @@ end
 
 
 class RITool
-  ## FIXME orphaned beside latest StoreTool, GemStoreTool development [Remove]
+  ## NB orphaned beside latest StoreTool, GemStoreTool development
 
-  ## :nodoc: FIXME docs
   def self.driver
     @driver ||= RDoc::RI::Driver.new()
   end
 
+  ## prototype - delegating method ono RDoc::RI::Driver#display_exprts
   def self.display_exprs(*exprs)
     ## NB any of exprs may be a regular expression
     driver.display_exprs(exprs.map { |exp| exp.to_s })
   end
 
+  ## prototype - delegating method onto RDoc::RI::Driver#list_known_classes
   def self.display_classes(*exprs)
     ## NB can be called with an empty *exprs seq
     ##
@@ -369,57 +370,6 @@ class RITool
     ##
     ## NB see [driver.rb]#list_known_classes
     driver.list_known_classes(exprs.map { |exp| exp.to_s })
-  end
-
-  # def self.namespaces(*exprs)
-  #   ## modules and classes ...
-  # end
-
-  def self.gem_namespaces(name)
-    st = StoreTool.gem_store(name)
-    st.module_names
-    ## NB classes with inheritance (mixin modules and each superclass):
-    ## store.ancestors => { ... }
-  end
-
-  def self.defined_classes(name)
-    st = StoreTool.gem_storetool(name)
-    st.defined_classes
-
-    ## NB store.class_file(name) ... spurious results possible e.g
-    ## RITool.gem_store('yard').class_file("frobject")
-    ## => "/usr/lib/ruby/gems/3.0.0/doc/yard-0.9.26/ri/frobject/cdesc-frobject.ri"
-    ## ... so, should only be called e.g on a mapping of store.module_names
-  end
-
-  def self.defined_modules(gem)
-    st = StoreTool.gem_store(gem)
-    st.defined_modules
-  end
-
-  def self.gem_cdesc_files(name)
-    st = StoreTool.gem_store(name)
-    st.cdesc_files
-  end
-
-  def self.gem_find_cdesc_file(gem,name)
-    ## e.g RITool.gem_find_cdesc_file('yard','Object')
-    st = StoreTool.gem_store(gem)
-    st.find_cdesc_file(name)
-  end
-
-
-  def self.gem_instance_methods_for(gem, name)
-    ## e.g RITool.gem_instance_methods_for('yard','Object')
-    st = StoreTool.gem_store(gem)
-    st.instance_methods_for(name)
-  end
-
-  def self.gem_class_methods_for(gem, name)
-    ## e.g RITool.gem_class_methods_for('yard','YARD::CLI::Command')
-    ## => ["run"]
-    st = StoreTool.gem_store(gem)
-    st.class_methods_for(name)
   end
 
   ## FIXME now update the previous classes to provide an API onto RDoc's
