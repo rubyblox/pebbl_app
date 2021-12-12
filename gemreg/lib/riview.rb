@@ -590,6 +590,26 @@ class GBuilderApp < Gtk::Application
     self.class.builder ||= Gtk::Builder.new
   end
 
+  def run()
+    self.register() || raise("register failed")
+    ## super(gtk_cmdline_args) # TBD
+    Gtk.main()
+  end
+
+  def run_threaded()
+    NamedThread.new("#{self.class.name} 0x#{self.__id__.to_s(16)}#run") {
+      run()
+    }
+  end
+
+  def quit()
+    self.windows.each { |w|
+      w.unmap
+      w.destroy
+    }
+    super()
+    Gtk.main_quit()
+  end
 end
 
 =begin TBD
@@ -619,26 +639,5 @@ class RIViewApp < GBuilderApp
     w = AppWindow.new(self)
     self.add_window(w)
     w.present
-  end
-
-  def run()
-    self.register() || raise("register failed")
-    ## super(gtk_cmdline_args) # TBD
-    Gtk.main()
-  end
-
-  def run_threaded()
-    NamedThread.new("#{self.class.name} 0x#{self.__id__.to_s(16)}#run") {
-      run()
-    }
-  end
-
-  def quit()
-    self.windows.each { |w|
-      w.unmap
-      w.destroy
-    }
-    super()
-    Gtk.main_quit()
   end
 end
