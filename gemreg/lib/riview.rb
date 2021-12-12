@@ -239,53 +239,142 @@ class BuilderApp < BuilderUI
   end
 end
 
+## general-purpose mixin module for TemplateBuilder submodules
+##
+## @see ResourceTemplateBuilder
+## @see FileTemplateBuilder
 module TemplateBuilder
   def self.extended(extclass)
-    def extclass.use_resource_bundle(path)
-      ## FIXME store the GResource for later _unregister, unref, etc
-      resource = GIO::Resource.load(path)
-      resource._register
-    end
+
+    ## set the template path to be used for this class
+    ##
+    ## @see ResourceTemplateBuilder::init
+    ## @see FileTemplateBuilder::init
     def extclass.use_template(path)
       ## FIXME err if the variable is already defined/non-null
         @template = path
     end
+
+    ## retrieve the template path to be used for this class
+    ##
+    ## @see ResourceTemplateBuilder::init
+    ## @see FileTemplateBuilder::init
     def extclass.template
       @template
     end
+
+    ## return a boolean value indicating whether this class hass been
+    ## registered
+    ##
+    ## @see ::register
     def extclass.registered?()
       @registered == true
     end
+
+    ## ensure that the +type_register+ class method is called exactly
+    ## once, for this class
+    ##
+    ## @see Gtk::Container::type_register
+    ## @see Gtk::Widget::type_register
+    ## @see GLib::Object::type_register
     def extclass.register()
       if ! registered?
         self.type_register
         @registered=true
       end
     end
+  end
+end
+
+module ResourceTemplateBuilder
+  def self.extended(extclass)
+    extclass.extend TemplateBuilder
+
+    ## ensure that a resource bundle at the provided +path+ is
+    ## registered at most once, for this class
+    ##
+    ## @see ::init
+    ## @see ::resource_bundle_path
+    ## @see ::resource_bundle
+    def extclass.use_resource_bundle(path)
+      ## NB storing the bundle in extclass, such that  _unregister and
+      ## unref (??) can be called for the Resource bundle, during some
+      ## pre-exit/pre-gc cleanup method
+      if @bundle
+        warn "Bundle for #{@bundle_path} already registered for #{self}. Ignoring #{path}"
+      else
+        ## FIXME this pathname expansion needs cleanup
+        gem_dir=File.expand_path("..", File.dirname(__FILE__))
+        use_path = File.expand_path(path,gem_dir)
+
+        @bundle_path = use_path
+        @bundle = Gio::Resource.load(use_path)
+        @bundle._register ## NB not the same as GApplication app#register
+      end
+    end
+
+    ## returns the string filename used for initializing the
+    ## singleton Gio::Resource bundle for this class, or nil if no
+    ## resource bundle has been registered
+    ##
+    ## @see ::use_resource_bundle
+    ## @see ::bundle
+    def extclass.resource_bundle_path
+      @bundle_path
+    end
+
+    ## returns any singleton Gio::Resource bundle registered for this
+    ## class, or nil if no bundle has been registered
+    ##
+    ## @see ::use_resource_bundle
+    ## @see ::bundle_path
+    def extclass.resource_bundle
+      @bundle
+    end
+
+    ## set this class' template as a resource path
+    ##
+    ## The resource path for the configured template must provide a
+    ## valid resource path onto the resource bundle initialized to this
+    ## class
+    ##
+    ## This method is used by GTK
+    ##
+    ## @see ::use_resource_bundle
+    ## @see ::use_template
     def extclass.init
-      ## FIXME fails under AppWindow.init
+      ## FIXME this could but presently does not validate the @template
+      ## resource path onto any registered @bundle for the class
+
+      ## FIXME this needs more project tooling
       ##
-      ## set_template needs a GResource path, and does not accept
-      ## a filename
+      ## see also glib-compile-resources(1) && Rake
+      ##  ... --generate riview.gresource.xml ...
       ##
-      ## FIXME this needs a lot more project tooling
+      ## NB glib-compile-schemas(1) && GApplication (&& Rake)
+
+      ## NB here, @template must represent a GResource path, not a filename
+      set_template(resource: @template)
+    end
+    extclass.register
+  end
+end
+
+module FileTemplateBuilder
+  def self.extended(extclass)
+    extclass.extend TemplateBuilder
+
+    ## load this class' template as a file
+    ##
+    ## This method is used by GTK
+    ##
+    ## @see ::use_template
+    def extclass.init
+      ## FIXME this pathname expansion needs cleanup
       gem_dir=File.expand_path("..", File.dirname(__FILE__))
       use_path = File.expand_path(@template,gem_dir)
       if File.exists?(use_path)
-        ## FIXME provide an alternate method using Gio::Resource
-        ## see GResource::g_resource_load in the GNOME GIO reference manual
-        ## vis a vis local use_resource_bundle(...) which should be
-        ## called first
-        ##
-        ## see also glib-compile-resources(1) && Rake
-        ##  ... --generate riview.gresource.xml ...
-        ##
-        ## NB here, @template must represent a GResource path, not a filename
-        #set_template(resource: @template)
-
-        ## here, only the glade UI file is used...
-        ##
-        ## cf. ~/.local/share/gem/ruby/3.0.0/gems/gio2-3.4.9/lib/gio2/file.rb
+        ## NB ~/.local/share/gem/ruby/3.0.0/gems/gio2-3.4.9/lib/gio2/file.rb
         ## && GFile, GFileInputStream pages under GNOME devhelp
         gfile = Gio::File.open(path: use_path)
         fio = gfile.read
@@ -298,7 +387,7 @@ module TemplateBuilder
           ##
           ## TBD The template bytes data may be reused internally in Gtk ?
           fio.unref()
-          ffile.unref()
+          gfile.unref()
         end
       else
         raise "Template file does not exist: #{use_path}"
@@ -310,7 +399,7 @@ end
 
 class AppWindow < Gtk::ApplicationWindow
   ## ^ NB class name must match that provided in the ui template definition
-  extend TemplateBuilder
+  extend FileTemplateBuilder
 
   ## FIXME integrate with an extension onto Gtk::Application
 
@@ -324,11 +413,93 @@ class AppWindow < Gtk::ApplicationWindow
   #self.use_template("/space/thinkum/RIView/ui/riview.glade")
 
 
-  def initialize()
-    super()
+  ## NB any Gtk::Builder may not have immediate access to this any
+  ## declarations in this class' template
+  ##
+  ## see also
+  ## ** self::bind_template_child && ?? AppWindow aw#get_template_child **
+  ## also self.template_children
+
+  ## FIXME just use bind_template_child_full(name,true,0)
+  ## for each needed name/obj under the template decl in the UI file
+  ##
+  ## then access later via the same name, using a Gtk::Builder
+  ## for the class && the name
+  #self.bind_template_child("WindowLayoutBox") ## test ...
+  self.bind_template_child("MenuClose", internal_child: true)
+
+  self.bind_template_child_full("RIPageView", true, 0)
+
+  ## FIXME objects that should be shared across every Window in RIView
+  ## - RITagTable01 (presently defined in the UI file)
+  ## - configuration UI (TBD - see docs)
+  ##   - NB needs gschema additions in this project
+  ##
+  ## FIXME initialized similarly for every window, though distinct in each:
+  ## - RITreeStore
+  ##   - could be reused, except for the "expanded" column
+  ##   - initialize from a common data source in the application class
+
+
+  ## FIXME have to manage the beloved menubar and menu in separate UI
+  ## files, for this thing?
+  ## - & actions (by necessity, are actually not deprecated)
+
+  def initialize(application = nil)
+    if application
+      super(application: application)
+    else
+      super()
+    end
+
+    name = self.class.name
+    close_proc = lambda { |obj|
+      application.remove_window(self) if application
+      self.unmap()
+      self.destroy()
+      if (application && application.windows.length.zero?)
+        Gtk.main_quit
+      end
+    }
+    self.signal_connect("destroy", &close_proc)
+    self.name=name
+    self.set_title(name)
+
+
+    # mclose = self.get_template_child(self.class, "MenuClose")
+    ## same as ....
+    # mclose = self.MenuClose
+    ## or ..., given the :internal_child param on the bind call above ...
+    # ** mclose = self.get_internal_child(Gtk::Builder.new,"MenuClose") **
+    ## ^ FIXME apply that onto the ObjectFactory pattern for this impl
+
     # self.present
     # Gtk.main
   end
+end
+
+class RIDocView < Gtk::TextView
+  extend FileTemplateBuilder
+  ## FIXME only one template-based class per UI file...?
+  self.use_template("ui/docview.ui")
+=begin e.g
+aw = AppWindow.new
+notebook = aw.get_internal_child(Gtk::Builder.new,"RIPageView")
+docview = RIDocView.new
+
+...docview.buffer.tags... ??
+
+notebook.append_page(docview)
+...
+
+FIXME may have to make a dynamic object of Gtk::TextBuffer
+for the docview, in order to reuse a common tags table - can provide the
+tags table only in the TextBuffer constructor. Initialize and set via
+application
+- the TextBuffer must be new for each tab of the RIPageView notebook,
+  but each should reuse a common tags table, such that would be
+  configured for its visual qualities under application preferences
+=end
 end
 
 
@@ -377,4 +548,97 @@ class RIView < BuilderApp
     super()
   end
 
+end
+
+
+
+class GBuilderApp < Gtk::Application
+
+  def self.builder=(builder)
+    if @builder && (@builder != builder)
+      warn "Builder #{@builder} already initialized for #{self}. Ignoring #{builder}"
+    else
+      @builder = builder
+    end
+  end
+
+  def self.builder
+    @builder
+  end
+
+  def self.add_ui_file(file)
+    ## NB this assumes that the UI file
+    ## does not contain any template decls.
+    ##
+    ## i.e each object initialized from the file
+    ## will be initialized at most once
+    ## for this class
+    if File.exists?(file)
+      begin
+        # Signal.trap("SIGABRT","IGNORE")
+        @builder.add_from_file(file)
+      ensure
+        # Signal.trap("SIGABRT","SYSTEM_DEFAULT")
+      end
+    else
+      raise "File not found: #{file}"
+    end
+  end
+
+  def initialize(name)
+    super(name)
+    self.class.builder ||= Gtk::Builder.new
+  end
+
+end
+
+=begin TBD
+class GTemplateBuilderApp < GBuilderApp
+  extend FileTemplateBuilder
+end
+=end
+
+class RIViewApp < GBuilderApp
+
+  def initialize()
+    super("space.thinkum.riview") ## ??
+    ## FIXME set a filesystem base directory in the class
+    self.signal_connect("startup") {
+      ## forms to run subsq. of successful register()
+      ##
+      ## NB this will be activated by register() only once per process.
+      self.map_app_window_new
+    }
+  end
+
+  def map_prefs_window()
+    ## TBD
+  end
+
+  def map_app_window_new()
+    w = AppWindow.new(self)
+    self.add_window(w)
+    w.present
+  end
+
+  def run()
+    self.register() || raise("register failed")
+    ## super(gtk_cmdline_args) # TBD
+    Gtk.main()
+  end
+
+  def run_threaded()
+    NamedThread.new("#{self.class.name} 0x#{self.__id__.to_s(16)}#run") {
+      run()
+    }
+  end
+
+  def quit()
+    self.windows.each { |w|
+      w.unmap
+      w.destroy
+    }
+    super()
+    Gtk.main_quit()
+  end
 end
