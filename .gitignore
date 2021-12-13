@@ -1,0 +1,8 @@
+*~
+*.bak
+*.tmp
+.#*
+*#
+*.log
+.*.done
+*.shout
