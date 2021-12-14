@@ -221,7 +221,7 @@ module LogManager
 end
 
 
-require_relative('rdstoretool.rb')
+require_relative('storetool.rb')
 require_relative('spectool.rb')
 
 
@@ -429,9 +429,6 @@ module ResourceTemplateBuilder
       ## unref (??) can be called for the Resource bundle, during some
       ## pre-exit/pre-gc cleanup method
       if @bundle
-        ## NB no such thing as #unregister for a GIO GApplication
-        ## - must restart the process, if an app is already registered
-        ## for this app's name (DBus, etc)
         warn "Bundle for #{@bundle_path} already registered for #{self}. Ignoring #{path}"
       else
         ## FIXME this pathname expansion needs cleanup
@@ -529,17 +526,26 @@ module FileTemplateBuilder
 end
 
 class TreeBuilder
-  def initialize(store)
+  attr_reader :store, :iterator
+
+  def initialize(store, iterator = store.append(nil))
     @store = store
+    @iterator = iterator
   end
 
-  def add_branch(*data, iterator: store.append(nil))
+  def add_branch(*data, iterator: self.iterator, append_iterator: true)
     iterator.set_values(data)
-    return store.append(iterator) ## => new iterator for branch child nodes
+    ## ??
+    if append_iterator
+      return store.append(iterator)
+    else
+      return iterator
+    end
   end
 
-  def add_leaf(*data, iterator: store.append(nil))
-    iterator.set_values(data)
+  def add_leaf(*data, iterator: self.iterator)
+    #iterator.set_values(data)
+    store.append(iterator).set_values(data)
     return iterator
   end
 end
@@ -617,21 +623,41 @@ class RIViewWindow < Gtk::ApplicationWindow
     ## NB ~/.local/share/gem/ruby/3.0.0/gems/gtk3-3.4.9/sample/misc/treestore.rb
 
     store = ui_internal("RITreeStore")
-    itersys = store.append(nil)
+    #itersys = store.append(nil)
 
     empty = "".freeze
 
-    ## NB TreeBuilder needs test, after next changeset
-    #builder = TreeBuilder.new(store)
-    # itersys = builder.add_branch(true, "System", "Store", nil, the_system_store)
-    # iternext = builder.add_branch(true, "Abbrev", "Module", "Abbrev, some_module_data)
-    # builder.add_leaf(true, "abbrev", "Class Method", "Abbrev::abbrev", other_data1, iterator: iternext)
-    # builder.add_leaf(true, "abbrev", "Instance Method", "Abbrev#abbrev", other_data2, iterator: iternext)
+    ## NB TreeBuilder tests
+    builder = TreeBuilder.new(store)
+    systore = application.system_store
+    sysproxy = DataProxy.new(systore)
+    sitestore = application.site_store
+    siteproxy = DataProxy.new(sitestore)
+    homestore = application.home_store
+    homeproxy = DataProxy.new(homestore)
+    gemstores = application.gem_stores
+    ## FIXME one data proxy per each gem store, indexed under a local
+    ## hash table with same keys as in gem_stores
 
-    ## NB GtkTreeStore uses a different append semantics than GtkListStore
-    #iter1 = store.append(itersys[1]) ## ????
+    ## FIXME though it's not the most succinct thing still, this should
+    ## be reading for testing with iteration onto the site store -
+    ## modules, classes, methods
 
-    application.log_debug("itersys: #{itersys.inspect}")
+    itersys = builder.add_branch(true, "System", "Store", nil, sysproxy)
+    builder.add_branch(true, "Abbrev", "Module", "Abbrev", sysproxy,
+                       iterator: itersys, append_iterator: false)
+    builder.add_leaf(true, "abbrev", "Class Method", "Abbrev::abbrev", sysproxy, 
+                     iterator: itersys)
+    builder.add_leaf(true, "abbrev", "Instance Method", "Abbrev#abbrev", sysproxy, 
+                     iterator: itersys)
+
+    iternext = builder.add_leaf(true, "A", "B", "C", sysproxy)
+    builder.add_leaf(true, "D", "E", "F", sysproxy, iterator: iternext)
+
+    iternext = store.append(iternext)
+    builder.add_branch(true, "G", "H", "I", sysproxy,
+                       iterator: iternext, append_iterator: false)
+    builder.add_leaf(true, "J", "K", "G::J", sysproxy, iterator: iternext)
 
 
     ## FIXME remove the 'exp' column from the tree store/model
@@ -639,23 +665,20 @@ class RIViewWindow < Gtk::ApplicationWindow
     ## GTK handles the "folded state" internal to the UI,
     ## independent of the data model
 
-
-    ## TreeBuilder.add_branch(true, "System, "RI Store" iterator = store.append(nil)) => iteratorRet != iterator
-    itersys.set_values([true, "System", "RI Store"])
-    iternext = store.append(itersys)
-    #store.append(itersys).set_values([true,"Abbrev", "Module"])
-    iternext.set_values([true,"Abbrev", "Module", "Abbrev"])
-    ## NB RI has Abbrev.abbrev documented a both a class method and an
+    # itersys.set_values([true, "System", "RI Store"])
+    # iternext = store.append(itersys)
+    # iternext.set_values([true,"Abbrev", "Module", "Abbrev"])
+    ## NB RI has Abbrev.abbrev documented as both a class method and an
     ## instance method (defined under a module, in each and both)
     ##
     ## - Ruby does not show it under Abbrev.instance_methods()
     ##   but does show it under Abbrev.singleton_methods()
     ##
     ## TreeTool.add_leaf(iterator, data) => iteratorRet == iterator
-    store.append(iternext).
-      set_values([true,"abbrev","Class Method","Abbrev::abbrev"]) ## leaf node
-    store.append(iternext). ## TBD Namespace#method syntax here
-      set_values([true,"abbrev","Instance Method","Abbrev#abbrev"]) ## leaf node
+    # store.append(iternext).
+    #   set_values([true,"abbrev","Class Method","Abbrev::abbrev"]) ## leaf node
+    # store.append(iternext). ## TBD Namespace#method syntax here
+    #   set_values([true,"abbrev","Instance Method","Abbrev#abbrev"]) ## leaf node
 
     ## NB this needs lookahead for modules w/ submodules, etc
     iternext = store.append(itersys)

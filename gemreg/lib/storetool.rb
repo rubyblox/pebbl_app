@@ -1,4 +1,4 @@
-## rdstoretool.rb - utility classes for query onto RDoc::Store objects
+## storetool.rb - utility classes for query onto RDoc::Store objects
 
 require 'rdoc'
 
