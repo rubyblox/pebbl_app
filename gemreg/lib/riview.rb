@@ -1,28 +1,70 @@
 # riview.rb
 
+## test:
+##  app = RIViewApp.new; app.run_threaded
+
 require 'gtk3'
 
 require('logger')
 require('forwardable')
-## mixin module for adding *log_*+ delegate methods to a class
+
+## Extension module for adding *log_*+ delegate methods as instance
+## methods within an extending class.
+##
+## This module will define a class method +def_logger_delegate+. This
+## class method may then be called within an extending class +c+,
+## as to define a set of instance methods under +c+ that will dispatch
+## to all of the local instance methods except +<<+ on +Logger+.
+##
+## Any of those delegating instance methods may be overridden, after the
+## initial call to +def_logger_delegate+ in the extending class.
+##
+##
+## @see LogManager, providing support for initialization of logger
+##  storage within a class, and support for shadowing the *Kernel.warn*
+##  method with s proc dispatching to an arbitrary *Logger*
+##
 module LoggerDelegate
 
   def self.extended(extclass)
-    ## FIXME cannot pass parameters across Object#extend
-    ##
-    ## e.g the name of the instance variable to delegate to
-    ##
-    ## => available via a paramter to def_logger_delegate
-    ## in the extending class
     extclass.extend Forwardable
 
     ## FIXME needs documentation (params)
     ##
-    ## TBD YARD rendering for define_method in this context
+    ## TBD YARD rendering for define_method in this context,
+    ## beside the methods defined when the method defined here would be
+    ## evaluated in an extending class.
+    ##
+    ## The delegate methods would not appear in any source definition for
+    ## the delegating class, outside of the usage of this module.
     ##
     ## NB application must ensure that the instance variable is
     ## initialized with a Logger before any delegate method is
-    ## called - see example under Application#initialize
+    ## called - see example under GBuilderApp#initialize
+    ##
+    ##
+    ## *Syntax*
+    ##
+    ## +def_logger_delegate(instvar,prefix=:log_)+
+    ##
+    ## The +prefix+ parameter for *def_logger_delegate* provides a
+    ## prefix name for each of the delegate methods, such that each
+    ## delegate method will dispatch to a matching method on the logger
+    ## denoted in the instance variable named in +instvar+. +prefix+ may
+    ## be provided as a string or a symbol.
+    ##
+    ## The +instvar+ param should be a symbol, denoting an instance
+    ## variable that will be initialized to a logger in instances of the
+    ## extending class.
+    ##
+    ## In applications, the instance logger may be provided in reusing a
+    ## logger stored in the extending class, such that may be managed
+    ## within a class extending the *LogManager+ module. Within
+    ## instances of the extending class, the instance variable denoted
+    ## to +def_logger_delegate+ may then be initialized to the value of
+    ## the class logger, such as within an +initialize+ method defined
+    ## in the extending class.
+    ##
     define_method(:def_logger_delegate) do | instvar, prefix=:log_ |
       use_prefix = prefix.to_s
       Logger.instance_methods(false).
@@ -33,6 +75,154 @@ module LoggerDelegate
     end
   end
 end
+
+
+## Extension module providing internal storage for class-based logging
+## and override of the method *Kernel.warn*
+##
+## This module defines the following class methods, in an extending
+## class +c+:
+##
+## - *+c.logger=+*
+## - *+c.logger+*
+## - *+c.make_warning_proc+*
+## - *+c.manage_warnings+*
+##
+## The +manage_warnings+ method will define a method overriding the
+## default *Kernel.warn* method, such that a top level call to +warn+
+## will call the overriding method.
+##
+## This will not remove the definition of the orignial *Kernel.warn*
+## method, such that be called directly as *Kernel.warn*
+##
+## The method +make_warning_proc+ will provide the *Proc* object to use
+## for the overriding +warn+ method, such that will be defined in
+## +manage_warnings+. By default, +make_warning_proc+ will return a
+## +Lambda+ proc with a parameter signature equivalent to the the
+## original +Kernel.warn+ in Ruby 3.0.0.
+##
+## If +make_warning_proc+ is overriden in the extending class before
+## +manage_warnings+ is called, then the overriding method will be used
+## in +manage_warnings+
+##
+##
+## For purposes of class-focused log management, the class methods
+## +logger=+ and +logger+ may be used in the extending class, as to
+## access a logger that would be stored within the class definition. The
+## class logger may or may not be equivalent to the logger provided to
+## +manage_warnings+
+##
+## The logger provided to +manage_warnings+ will not be stored
+## internally. It's assumed that the logger provided to that method
+## would be stored within some value in the extending class.
+##
+## @see *GBuilderApp*, providing an example of this module's application,
+##      under instance-level integration with *LoggerDelegate*
+##
+## @see *LoggerDelegate*, providing instance methods via method
+##      delegation, for logger access within application objects
+##
+## @see *Logger*, providing an API for arbitrary message logging in Ruby
+##
+module LogManager
+  def self.extended(extclass)
+
+    def extclass.logger=(logger)
+      if @logger
+        warn("@logger already bound to #{@logger} in #{self} " +
+             "- ignoring #{logger}", uplevel: 0) unless @logger.eql?(logger)
+        @logger
+      else
+        @logger = logger
+      end
+    end
+
+    def extclass.logger
+      @logger # || warn("No logger defined in class #{self}", uplevel: 0)
+    end
+
+    def extclass.make_warning_proc(logger)
+      lambda { |*data, uplevel: 0, category: nil|
+        ## NB unlike with the standard Kernel.warn method ...
+        ## - this proc will use a default uplevel = 0, as to ensure that some
+        ##   caller info will generally be presented in the warning message
+        ## - this proc will accept any warning category
+        ## - this proc's behaviors will not differ based on the warning category
+        ## - this proc will ensure that #to_s will be called directly on
+        ##   every provided message datum
+        unless ($VERBOSE.nil?)
+
+          nmsgs = data.length
+          nomsg = nmsgs.zero?
+
+          if category
+            catpfx = '[' + category.to_s + '] '
+          else
+            catpfx = ''
+          end
+
+          if uplevel
+            callerinfo = caller[uplevel]
+            if nomsg
+              firstmsg = catpfx + callerinfo
+            else
+              firstmsg = catpfx + callerinfo + ': '
+            end
+          else
+            firstmsg = catpfx
+          end
+
+          unless nomsg
+            firstmsg = firstmsg + data[0].to_s
+          end
+
+          logger.warn(firstmsg)
+
+          unless( nomsg || nmsgs == 1 )
+            data[1...nmsgs].each { |datum| logger.warn(catpfx + datum.to_s) }
+          end
+        end
+        return nil
+      }
+    end
+
+    def extclass.manage_warnings(kernlogger)
+      if kernlogger.respond_to?(:warn)
+        ## NB the logger used here may be inequivalent to self.logger
+        ##
+        ## This will not store the kernlogger for any later access.
+        ##
+        ## It's assumed that the logger object provided to this method
+        ## would be stored in the extending class.
+        ##
+        proc = self.make_warning_proc(kernlogger)
+        ## NB Kernel.method(:warn) should retrieve the same initial value,
+        ## even after the following call to Kernel.define_method
+        ##
+        ## FIXME for purpose of documentation, that should be tested
+        ## under an rspec definition for this module. Theoretically,
+        ## that behavior may change under any future release of Ruby,
+        ## and a different behavior may be implemented in any other Ruby
+        ## implementation.
+        ##
+        ## For purposes of this module's application, albeit,
+        ## that behavior does not denote a function requirement - i.e
+        ## whether Kernel.method(:warn) will return the same value
+        ## before and after manage_warnings is called, such that it
+        ## would in Ruby 3.0.0
+        ##
+        Kernel.define_method(:warn, &proc)
+        return proc
+      else
+        raise "object does not provide a #warn method: #{kernlogger}"
+      end
+    end
+  end
+end
+
+
+require_relative('rdstoretool.rb')
+require_relative('spectool.rb')
 
 
 ## Thread class accepting a thread name in the constructor
@@ -52,217 +242,45 @@ class NamedThread < Thread
 end
 
 
-class BuilderUI
-  ## FIXME move some of the following into a module decl
-
-  ## NB Glade
-  ## - FIXME two main ways to use Glade UI definitions
-  ##
-  ##   - via Gtk::Builder
-  ##
-  ##   - via templates, assuming some specific syntax in the UI
-  ##     definition file and correspondingly, in the Ruby sources
-  ##     using the same
-  ##
-  ##     - thence, via UI decls distributed under a GResource bundle
-  ##
-  ##     - or via UI decls distributed as individual files
-  ##
-  ##     * NB for an application window defined via a template, this
-  ##       entails defining the app menu bar in a separate UI file -
-  ##       - see GtkApplication docs under devehelp, for a description
-  ##         of the assumptions implemented in the same
-  ##
-  ## - FIXME this needs GtkApplication/Gtk::Application integration
-  attr_reader :builder
-  attr_reader :mapped_objects
-
-  def initialize(file)
-    @mapped_objects ||= [] ## FIXME not needed under a Gtk::Application impl
-    @builder = Gtk::Builder.new()
-    add_ui_file(file)
-  end
-
-  def add_ui_file(file)
-    ## FIXME under some Glade XML, something errs here, and it puts
-    ## the ruby process into a failed process state, e.g
-    ##
-    ## => "Object with ID  not found" i.e error parsing the Builder UI desc
-    ##    NB the message provides a line, column number pair for the
-    ##    error in the Builder UI (XML) file
-    ##
-    ## => an error with GtkMenuItem - which is not a "deprecated"
-    ##    Gtk widget but appears to be a bit problematic
-    ##
-
-    ## FIXME the following may err and abort the calling process
-    ## - can that be trapped before abort ?? overriding any existing
-    ##   SIGABRT handling (FIXME needs a regular test case)
-    begin
-      # Signal.trap("SIGABRT","IGNORE")
-      @builder.add_from_file(file)
-    ensure
-      # Signal.trap("SIGABRT","SYSTEM_DEFAULT")
-    end
-  end
-
-  ## FIXME refactor some of the following onto Gtk::Application
-
-  def map_object(object)
-    unless @mapped_objects.find { |obj| obj.eql?(object) }
-      @mapped_objects.push(object)
-    end
-    object.show
-  end
-
-  def destroy_object(object)
-    if ( @mapped_objects.delete(object) )
-      object.destroy
-    end
-  end
-
-  def unmap_object(obj)
-    obj.unmap
-  end
-
-  def unmap_objects()
-    @mapped_objects.each { |obj|
-      unmap_object(obj)
-    }
-  end
-
-  def destroy_objects()
-    @mapped_objects.each { |obj|
-      destroy_object obj
-    }
-  end
-
-end
-
-class BuilderApp < BuilderUI
-  ## FIXME integrate with Gtk::Application
-  ## -> NB Gtk::Application::id_is_valid?(...)
-  ##    via Gio::Application::id_is_valid?(...)
-  ## -> NB dbus & Gtk::Application
-  ## -> NB resource paths & Gtk::Application
-  ## -> TBD desktop session managers (&& DBus) & Gtk::Application
-  ## -> TBD menubars & Gtk::Application
-  ##    -> See devehlp for GtkApplication, GApplication
-  ## !> NB Gio::Application "startup" signal (devhelp)
-  ## !> NB Gtk::Application app#add_window, app#windows, app#remove_window
-  ##    && possible side effects of app#remove_window presumably when
-  ##    app#windows then presents an empty set
-  ## ! TBD Gio::Application app#run (?? GTK cmdline args ??)
-  ## ! TBD Gio::Application app#activate
-  ## ! TBD Gio::Application app#quit
-  ## ! TBD Gio::Application app#open
-  attr_reader :name
-
-  extend LoggerDelegate
-  def_logger_delegate(:@logger)
-
-  LOG_LEVEL_DEFAULT = Logger::DEBUG
-
-  def initialize(file, name: self.class.name,
-                logger: nil)
-    @name = name
-    ## NB ensuring the logger is initialized before calling the
-    ## superclass constructor
-    if logger
-      use_logger = logger
-    else
-      use_logger = Logger.new(STDERR)
-      use_logger.level = LOG_LEVEL_DEFAULT
-      use_logger.progname = name
-    end
-    @logger = use_logger
-    super(file)
-  end
-
-  def add_ui_file(file)
-    ## NB Verbose logging under debug - the superclass method
-    ## may produce errrors under Gtk, such that may abort the
-    ## Ruby process
-    log_debug("Adding UI file to builder: #{file}")
-    super
-    log_debug("Added UI file to builder: #{file}")
-  end
-
-  def run()
-    log_debug("Starting GTK Main loop - in thread #{Thread.current}")
-    Gtk.main()
-    log_debug("Run returning - in thread #{Thread.current}")
-  end
-
-  def quit()
-    log_debug("GTK Quit - in thread #{Thread.current}")
-    Gtk.main_quit()
-  end
-
-  def run_threaded()
-    ## TBD set the thread's name
-    ##
-    ## NB does not need to call g_thread_init
-    ## assuming GLib >= 2.32 on the host
-    ## cf. https://docs.gtk.org/glib/threads.html
-    log_debug("Run : from thread #{Thread.current}")
-    ## FIXME Is there no way to create a thread without
-    ## running it immediately, in Ruby?
-    ## The constructor does not allow for setting a thread name, here
-
-    # GLib::Thread.init if GLib::Thread.supported?
-    ## ^ NB should not be necessary w/ recent GLib releases.
-    ## It does not change the present uselessness of this method, either
-
-    NamedThread.new(@name) { run() }
-  end
-
-  def ui_object(id)
-    builder.get_object(id)
-  end
-
-  def map_object(object)
-    log_debug("Mapping object #{object}")
-    super
-  end
-
-  def unmap_object(object)
-    ## FIXME this log message appears normally now
-    log_debug("Unmapping object #{object}")
-    super
-  end
-
-  def destroy_object(object)
-    ## FIXME this log message does not ever appear
-    log_debug("Destroying object #{object}")
-    super
-  end
-end
-
-## general-purpose mixin module for TemplateBuilder submodules
+## Extension module for any class defining a new subtype of
+## GLib::Object (GObject)
 ##
-## @see ResourceTemplateBuilder
-## @see FileTemplateBuilder
-module TemplateBuilder
+## When used in a class definition +c+ via *+Module.extend+*, this module
+## will define the following methods in the extending class +c+:
+##
+## - *+c.register+* calling +c.type_register+ exactly once for the
+##   extending class
+##
+## - *+c.registered?+* returning a boolean value indicating whether
+##   the class' type has already been registered to *GLib*.
+##
+## The *+type_register+* method is typically a class method provided
+## under the class *+GLib::Object+* and its subclasses.
+##
+## When extending this method in a class definition, the class'
+## *+register+* method should be called at some point within the class
+## definition - whether in the extending class or in some subclass of
+## the extending class.
+##
+## Example
+##
+##    class ExtObject < GLib::Object
+##      extend GTypeExt
+##      self.register
+##      # ...
+##    end
+##
+## This method is extended in the following extension modules, in which
+## *self.register* will be called automatically when the module is
+## extended in any extending class:
+##
+## - *ResourceTemplateBuilder*
+## - *FileTemplateBuilder*
+##
+## It's assumed that this module will be extended from some direct or
+## indirect subclass of *+GLib::Object+*
+module GTypeExt
   def self.extended(extclass)
-
-    ## set the template path to be used for this class
-    ##
-    ## @see ResourceTemplateBuilder::init
-    ## @see FileTemplateBuilder::init
-    def extclass.use_template(path)
-      ## FIXME err if the variable is already defined/non-null
-        @template = path
-    end
-
-    ## retrieve the template path to be used for this class
-    ##
-    ## @see ResourceTemplateBuilder::init
-    ## @see FileTemplateBuilder::init
-    def extclass.template
-      @template
-    end
-
     ## return a boolean value indicating whether this class hass been
     ## registered
     ##
@@ -286,6 +304,116 @@ module TemplateBuilder
   end
 end
 
+
+class DataProxy < GLib::Object # < GLib::Boxed
+  extend GTypeExt
+  self.register ## register the type, exactly once
+
+  ## FIXME this does not create or use any data_changed property
+  ## but should, or this is only suitable for read-only data access
+  ## in a GTK application (FIXME not yet tested, as such)
+  ##
+  ## - what really is the syntax for GLib::Param::Object.new ??
+  ##   - what meaning would any integer values have, in that call?
+  ##   - what external method does it call? whether in GLib or in any C
+  ##     code under Ruby GNOME?
+
+  # install_property(GLib::Param::Object.new("data_changed","DataChanged","user data changed",???,???))
+
+  attr_accessor :data
+  def initialize(data)
+    super()
+    @data = data
+  end
+end
+
+
+module UIBuilder
+  def self.extended(extclass)
+    def extclass.builder()
+      @builder ||= Gtk::Builder.new()
+    end
+
+    def extclass.builder=(builder)
+      if @builder && (@builder != builder)
+        warn "in #{self}: :builder is already bound to #{@builder}. Ignoring builder #{builder}"
+      else
+        @builder = builder
+      end
+    end
+
+    def extclass.add_ui_file(file)
+      ## TBD usage for testing - presently unused here
+
+      ## NB this assumes that the UI file
+      ## does not contain any template decls.
+      ##
+      ## i.e each object initialized from the file
+      ## will be initialized at most once
+      ## for this class
+      @builder.add_from_file(file)
+    end
+
+    def extclass.add_ui_resource(path)
+      ## NB this assumes that the UI file
+      ## does not contain any template decls.
+      ##
+      ## i.e each object initialized from the file
+      ## will be initialized at most once
+      ## for this class
+      @builder.add_from_resource(path)
+    end
+
+    def extclass.ui_object(id)
+      ## NB may return nil
+      @builder.get_object(id)
+    end
+  end
+end
+
+## general-purpose mixin module for TemplateBuilder extension modules
+##
+## @see ResourceTemplateBuilder
+## @see FileTemplateBuilder
+module TemplateBuilder
+  def self.extended(extclass)
+    extclass.extend GTypeExt
+    extclass.extend UIBuilder
+
+    ## set the template path to be used for this class
+    ##
+    ## @see ResourceTemplateBuilder::init
+    ## @see FileTemplateBuilder::init
+    def extclass.use_template(path)
+      ## FIXME err if the variable is already defined/non-null
+        @template = path
+    end
+
+    ## retrieve the template path to be used for this class
+    ##
+    ## @see ResourceTemplateBuilder::init
+    ## @see FileTemplateBuilder::init
+    def extclass.template
+      @template
+    end
+
+    ## @see #ui_internal
+    def extclass.bind_ui_internal(id)
+      ## FIXME test for usage
+      self.bind_template_child_full(id, true, 0)
+    end
+
+    ## NB this defines an instance method ui_internal in extclass
+    extclass.define_method(:ui_internal) { |id|
+        self.get_internal_child(self.class.builder, id)
+    }
+
+  end
+
+
+end
+
+
 module ResourceTemplateBuilder
   def self.extended(extclass)
     extclass.extend TemplateBuilder
@@ -301,6 +429,9 @@ module ResourceTemplateBuilder
       ## unref (??) can be called for the Resource bundle, during some
       ## pre-exit/pre-gc cleanup method
       if @bundle
+        ## NB no such thing as #unregister for a GIO GApplication
+        ## - must restart the process, if an app is already registered
+        ## for this app's name (DBus, etc)
         warn "Bundle for #{@bundle_path} already registered for #{self}. Ignoring #{path}"
       else
         ## FIXME this pathname expansion needs cleanup
@@ -397,94 +528,209 @@ module FileTemplateBuilder
   end
 end
 
-class AppWindow < Gtk::ApplicationWindow
-  ## ^ NB class name must match that provided in the ui template definition
+class TreeBuilder
+  def initialize(store)
+    @store = store
+  end
+
+  def add_branch(*data, iterator: store.append(nil))
+    iterator.set_values(data)
+    return store.append(iterator) ## => new iterator for branch child nodes
+  end
+
+  def add_leaf(*data, iterator: store.append(nil))
+    iterator.set_values(data)
+    return iterator
+  end
+end
+
+class RIViewWindow < Gtk::ApplicationWindow
+
+  extend(LoggerDelegate)
+  def_logger_delegate(:@logger)
+  attr_reader :logger
+  LOG_LEVEL_DEFAULT = Logger::DEBUG
+
   extend FileTemplateBuilder
-
-  ## FIXME integrate with an extension onto Gtk::Application
-
   self.use_template("ui/appwindow.glade")
-  ## FIXME needs more integration with the type decls in the template file
-  ##
-  ## FIXME needs interop with RIView initialization
-  ## ... indep. of window class impl - use one (template or no template)
 
-  # self.use_resource_bundle(...)
-  #self.use_template("/space/thinkum/RIView/ui/riview.glade")
-
-
-  ## NB any Gtk::Builder may not have immediate access to this any
-  ## declarations in this class' template
-  ##
-  ## see also
-  ## ** self::bind_template_child && ?? AppWindow aw#get_template_child **
-  ## also self.template_children
-
-  ## FIXME just use bind_template_child_full(name,true,0)
-  ## for each needed name/obj under the template decl in the UI file
-  ##
-  ## then access later via the same name, using a Gtk::Builder
-  ## for the class && the name
-  #self.bind_template_child("WindowLayoutBox") ## test ...
-  self.bind_template_child("MenuClose", internal_child: true)
-
-  self.bind_template_child_full("RIPageView", true, 0)
-
-  ## FIXME objects that should be shared across every Window in RIView
-  ## - RITagTable01 (presently defined in the UI file)
-  ## - configuration UI (TBD - see docs)
-  ##   - NB needs gschema additions in this project
-  ##
-  ## FIXME initialized similarly for every window, though distinct in each:
-  ## - RITreeStore
-  ##   - could be reused, except for the "expanded" column
-  ##   - initialize from a common data source in the application class
-
-
-  ## FIXME have to manage the beloved menubar and menu in separate UI
-  ## files, for this thing?
-  ## - & actions (by necessity, are actually not deprecated)
-
-  def initialize(application = nil)
-    if application
-      super(application: application)
+  def set_window_action(name, &block)
+    application.log_debug("Adding action '#{name}' in #{self} (#{Thread.current})")
+    act = Gio::SimpleAction.new(name)
+    act.signal_connect("activate", &block)
+    if @win_actions
+      @win_actions[name] = act
     else
-      super()
+      @win_actions = { name => act }
     end
+    self.add_action(act)
+    return act
+  end
 
-    name = self.class.name
-    close_proc = lambda { |obj|
-      application.remove_window(self) if application
-      self.unmap()
-      self.destroy()
-      if (application && application.windows.length.zero?)
-        Gtk.main_quit
-      end
+  def self.finalizer_proc(unrefs)
+    proc {
+      unrefs.each { |obj|
+        obj.unref if obj.respond_to?(:unref)
+      }
     }
-    self.signal_connect("destroy", &close_proc)
+  end
+
+  self.bind_ui_internal("RIPageView") ## NB x RIDocView
+  self.bind_ui_internal("RITreeStore") ## TBD
+
+  ## @param application [GBuilderApp]
+  def initialize(application)
+    super(application: application)
+
+    @logger = application.logger
+
+    set_window_action("new") {
+      @logger.debug("Action 'new' in #{self} (#{Thread.current})")
+      application.map_app_window_new
+    }
+    set_window_action("prefs") {
+      @logger.debug("Action 'prefs' in #{self} (#{Thread.current})")
+      application.map_prefs_window
+    }
+    closeAct = set_window_action("close") {
+      @logger.debug("Action 'close' in #{self} (#{Thread.current})")
+      application.remove_window(self)
+      self.unmap
+      self.destroy
+      application.quit if application.windows.length.zero?
+    }
+    set_window_action("quit") {
+      @logger.debug("Action 'quit' in #{self} (#{Thread.current})")
+      closeAct.activate
+      application.quit
+    }
+
+    self.signal_connect("destroy") {
+      @logger.debug("Signal 'destory' in #{self} (#{Thread.current})")
+      closeAct.activate
+    }
+
+    name = self.class.name ## NB during development
     self.name=name
     self.set_title(name)
 
+    ## NB ~/.local/share/gem/ruby/3.0.0/gems/gtk3-3.4.9/sample/misc/treestore.rb
 
-    # mclose = self.get_template_child(self.class, "MenuClose")
-    ## same as ....
-    # mclose = self.MenuClose
-    ## or ..., given the :internal_child param on the bind call above ...
-    # ** mclose = self.get_internal_child(Gtk::Builder.new,"MenuClose") **
-    ## ^ FIXME apply that onto the ObjectFactory pattern for this impl
+    store = ui_internal("RITreeStore")
+    itersys = store.append(nil)
 
-    # self.present
-    # Gtk.main
+    empty = "".freeze
+
+    ## NB TreeBuilder needs test, after next changeset
+    #builder = TreeBuilder.new(store)
+    # itersys = builder.add_branch(true, "System", "Store", nil, the_system_store)
+    # iternext = builder.add_branch(true, "Abbrev", "Module", "Abbrev, some_module_data)
+    # builder.add_leaf(true, "abbrev", "Class Method", "Abbrev::abbrev", other_data1, iterator: iternext)
+    # builder.add_leaf(true, "abbrev", "Instance Method", "Abbrev#abbrev", other_data2, iterator: iternext)
+
+    ## NB GtkTreeStore uses a different append semantics than GtkListStore
+    #iter1 = store.append(itersys[1]) ## ????
+
+    application.log_debug("itersys: #{itersys.inspect}")
+
+
+    ## FIXME remove the 'exp' column from the tree store/model
+    ##
+    ## GTK handles the "folded state" internal to the UI,
+    ## independent of the data model
+
+
+    ## TreeBuilder.add_branch(true, "System, "RI Store" iterator = store.append(nil)) => iteratorRet != iterator
+    itersys.set_values([true, "System", "RI Store"])
+    iternext = store.append(itersys)
+    #store.append(itersys).set_values([true,"Abbrev", "Module"])
+    iternext.set_values([true,"Abbrev", "Module", "Abbrev"])
+    ## NB RI has Abbrev.abbrev documented a both a class method and an
+    ## instance method (defined under a module, in each and both)
+    ##
+    ## - Ruby does not show it under Abbrev.instance_methods()
+    ##   but does show it under Abbrev.singleton_methods()
+    ##
+    ## TreeTool.add_leaf(iterator, data) => iteratorRet == iterator
+    store.append(iternext).
+      set_values([true,"abbrev","Class Method","Abbrev::abbrev"]) ## leaf node
+    store.append(iternext). ## TBD Namespace#method syntax here
+      set_values([true,"abbrev","Instance Method","Abbrev#abbrev"]) ## leaf node
+
+    ## NB this needs lookahead for modules w/ submodules, etc
+    iternext = store.append(itersys)
+    iternext.set_values([true,"CGI", "Module", "CGI"])
+    ## FIXME store the providing StoreTool in the DataProxy instance -
+    ## usin one DataProxy for each StoreTool
+    store.append(iternext).set_values([true,"Escape","Module", "CGI::Escape",
+                                       ## FIXME need to test activation
+                                       ## handling + value retrieval here
+                                      DataProxy.new("miscdata")])
+
+    itersite = store.append(nil)
+    itersite.set_values([true, "Site", "RI Store"]) ## NB typically an empty RI store
+    #store.append(itersite).set_values([true,"C","D"])
+
+    iterhome = store.append(nil)
+    iterhome.set_values([true, "Home", "RI Store"]) ## NB typically an empty RI store
+    #store.append(iterhome).set_values([true,"E","F"])
+    #store.append(iterhome).set_values([true,"G","H"])
+
+    itergems = store.append(nil)
+    itergems.set_values([true, "Gems", "RI Store"])
+    store.append(itergems).set_values([true, "B", "Test"])
+
+
+    ## FIXME the following do not show up
+    @topic_store = store
+
+    @pageview = ui_internal("RIPageView")
+
+    ObjectSpace.define_finalizer(self, self.class.finalizer_proc(
+      @win_actions.values
+    ))
+
+    ## NB @ ActionMap, SimpleActionMap API in Ruby GTK support
+    ## ~/.local/share/gem/ruby/3.0.0/gems/gio2-3.4.9/test/test-action-map.rb
+    ##
+    ## NB defined as modules:
+    ## ~/.local/share/gem/ruby/3.0.0/gems/gio2-3.4.9/lib/gio2/action.rb
+    ## ~/.local/share/gem/ruby/3.0.0/gems/gio2-3.4.9/lib/gio2/action-map.rb
+    ##
+    ## FIXME no Ruby impl for GIO's GPropertyAction - needs impl or similar
+  end
+
+  def unmap()
+    @logger.debug("#{__method__} #{self} (#{Thread.current})")
+    super
+  end
+
+  def destroy()
+    @logger.debug("#{__method__} #{self} (#{Thread.current})")
+    super
   end
 end
+
 
 class RIDocView < Gtk::TextView
   extend FileTemplateBuilder
   ## FIXME only one template-based class per UI file...?
   self.use_template("ui/docview.ui")
+
+  self.bind_ui_internal("DocTextView")
+
+  attr_reader :buffer
+
+  def initialize(application)
+    self.class.builder ||= application.class.builder
+    view = ui_internal("DocTextView")
+    @buffer = Gtk::TextBuffer.new()
+    view.buffer = buffer
+  end
+
 =begin e.g
-aw = AppWindow.new
-notebook = aw.get_internal_child(Gtk::Builder.new,"RIPageView")
+aw = RIViewWindow.new
+notebook = aw.ui_internal("RIPageView")
 docview = RIDocView.new
 
 ...docview.buffer.tags... ??
@@ -503,125 +749,186 @@ application
 end
 
 
-class RIView < BuilderApp
 
-  def initialize(name: self.class.name)
-    ## FIXME support initializing gem_dir from a gem spec's full_gem_path
-    gem_dir=File.expand_path("..",File.dirname(__FILE__))
-    glade_file=File.expand_path("ui/riview.glade",gem_dir)
-    super(glade_file, name: name)
+class RIViewPrefsWindow < Gtk::Dialog
+  extend(LoggerDelegate)
+  def_logger_delegate(:@logger)
+  attr_reader :logger
+  LOG_LEVEL_DEFAULT = Logger::DEBUG
 
-    ## FIXME do the following for each window mapping request
+  ## TBD GLib::Log usage in e.g
+  ## ~/.local/share/gem/ruby/3.0.0/gems/glib2-3.4.9/lib/glib2.rb
 
-    window = ui_object("RIView")
+  extend FileTemplateBuilder
+  self.use_template("ui/prefs.ui")
 
-    close_proc = lambda { |obj|
-      # window = obj.window ## FIXME may not be the ApplicationWindow
-      ## NB using 'window' from the binding environment here
+  ## ensure that some objects from the template will be accessible
+  ## within each instance
+  self.bind_ui_internal("SystemStorePath")
+  self.bind_ui_internal("SiteStorePath")
+  self.bind_ui_internal("HomeStorePath")
+  self.bind_ui_internal("GemPathsListStore")
 
-      unmap_object(window) ## NB This would DNW with what widget.window returns
-      destroy_object(window)
-      self.quit if @mapped_objects.length.zero?
+  # def self.string_gvalue(str)
+  ## utility method, presently unused
+  #   GLib::Value.new(GLib::Type["gchararray"],str)
+  # end
+
+  def initialize(application)
+    self.class.builder ||= application.class.builder
+    @application = application
+    @logger = application.logger
+    super()
+
+    entry = ui_internal("SystemStorePath")
+    entry.set_text(application.system_store.path)
+    entry = ui_internal("SiteStorePath")
+    entry.set_text(application.site_store.path)
+    entry = ui_internal("HomeStorePath")
+    entry.set_text(application.home_store.path)
+
+    store = ui_internal("GemPathsListStore") ## is a Gtk::ListStore
+    application.gem_stores.each { |path, st|
+      spec = st.gem_spec
+      store.append.set_values(0 => spec.name,
+                              1 => spec.version.version,
+                              2 => path,
+                              3 => spec.full_name)
     }
-    window.signal_connect("destroy", &close_proc)
-    window.name=name
-    window.set_title(name)
 
-
-    mclose = ui_object("MenuClose")
-    mclose.signal_connect("activate", &close_proc)
+    ## FIXME initialize entries for the font prefs page,
+    ## onto the Ruby API for GNOME Pango support
   end
 
-  def run()
-    ## FIXME add the window to a list of locally window-mapped UI objects,
-    ## for use in #quit
-    window = ui_object("RIView")
-    map_object(window)
-    #  window.raise ## private method ????
-    super()
+  def destroy()
+    ## NB GTK may be calling a destroy method internally
+    @logger.debug("#{__method__} @ #{self} (#{Thread.current})")
+    super
   end
 
-  def quit()
-    ## destroy any initialized UI objects - top-level app windows, mainly
-    unmap_objects()
-    destroy_objects()
-    super()
+  def close()
+    @logger.debug("#{__method__} @ #{self} (#{Thread.current})")
+    super
   end
-
 end
-
 
 
 class GBuilderApp < Gtk::Application
 
-  def self.builder=(builder)
-    if @builder && (@builder != builder)
-      warn "Builder #{@builder} already initialized for #{self}. Ignoring #{builder}"
-    else
-      @builder = builder
-    end
-  end
+  extend(LoggerDelegate)
+  def_logger_delegate(:@logger)
+  attr_reader :logger
+  LOG_LEVEL_DEFAULT = Logger::DEBUG
 
-  def self.builder
-    @builder
-  end
+  extend UIBuilder
 
-  def self.add_ui_file(file)
-    ## NB this assumes that the UI file
-    ## does not contain any template decls.
+  extend LogManager
+
+  def initialize(name, logger: nil)
+    # @state = :initialized
+
+    ## NB @logger will be used for the LoggerDelegate extension,
+    ## providing instance-level access to the app/class logger
+    @logger = logger ? logger :
+      Logger.new(STDERR, level: LOG_LEVEL_DEFAULT, progname: name)
+
+    ## NB ensuring that the logger used to shadow Kernel.warn
+    ## will have a progname == "kernel", otherwise with the same
+    ## field values as the selected app/class logger
     ##
-    ## i.e each object initialized from the file
-    ## will be initialized at most once
-    ## for this class
-    if File.exists?(file)
-      begin
-        # Signal.trap("SIGABRT","IGNORE")
-        @builder.add_from_file(file)
-      ensure
-        # Signal.trap("SIGABRT","SYSTEM_DEFAULT")
-      end
-    else
-      raise "File not found: #{file}"
+    ## NB using a shallow copy - reusing any objects provided in the
+    ## logdev and formatter fields of the selected app logger
+    self.class.logger ||= @logger
+    if (@sys_logger.nil?)
+      sl = @logger.dup
+      sl.progname = "kernel"
+      @sys_logger = sl
     end
-  end
+    self.class.manage_warnings(@sys_logger)
 
-  def initialize(name)
+
     super(name)
+    ## ensure that a local Gtk::Builder is initialized for this
+    ## application, via a class attr.
+    ##
+    ## This buider may be used for some template access or generally for
+    ## Glade UI access. The builder - as a class property - would be
+    ## used with the following extension modules
+    ## - UIBuilder
+    ## - ResourceTemplateBuilder
+    ## - FileTemplateBuilder
+    ##
+    ## see also:
+    ## ResourceTemplateBuilder.use_resource_bundle
+    ##
+    ## [FIXME] move this to the documentation for this method
+    ## and see how it's formatted in RIView, while using all these
+    ## YARD tags around - needs more project tooling. see also pkgsrc
     self.class.builder ||= Gtk::Builder.new
+    # self.signal_connect("shutdown") {
+    #   # FIXME - ensure any local method will be called for app shutdown procedures
+    # }
   end
 
   def run()
-    self.register() || raise("register failed")
-    ## super(gtk_cmdline_args) # TBD
-    Gtk.main()
+    @logger.debug("#{__method__} in #{Thread.current}")
+    begin
+      self.register()
+    rescue Gio::IOError::Exists
+      ## NB
+      ## - there is no unregister method for Applications in GTK
+      ## - this application has not been defined with a flag
+      ##   G_APPLICATION_NON_UNIQUE, however that may be represented
+      ##   in the Ruby API. If it was defined as such, TBD side effects
+      @logger.fatal("Unable to register #{self}")
+    else
+      ## super(gtk_cmdline_args) # TBD
+      @logger.debug("#{__method__} calling Gtk.main in #{Thread.current}")
+      # @state = :run
+      Gtk.main()
+    end
+    @logger.debug("#{__method__} returning in #{Thread.current}")
   end
 
   def run_threaded()
+    @logger.debug("#{__method__} from #{Thread.current}")
     NamedThread.new("#{self.class.name} 0x#{self.__id__.to_s(16)}#run") {
       run()
     }
   end
 
   def quit()
+    @logger.debug("#{__method__} in #{Thread.current}")
+    # @state = :quit
     self.windows.each { |w|
+      @logger.debug("#{__method__} destroying window #{w} in #{Thread.current}")
       w.unmap
       w.destroy
     }
     super()
+    @logger.debug("Gtk.main_quit in #{Thread.current}")
+    ## NB this may be redundant here:
     Gtk.main_quit()
   end
-end
 
-=begin TBD
-class GTemplateBuilderApp < GBuilderApp
-  extend FileTemplateBuilder
+  def add_window(window)
+    @logger.debug("Adding window #{window} to #{self} (#{Thread.current})")
+    super
+  end
+
+  def remove_window(window)
+    @logger.debug("Removing window #{window} from #{self} (#{Thread.current})")
+    super
+  end
+
 end
-=end
 
 class RIViewApp < GBuilderApp
 
+  attr_reader :system_store, :site_store, :home_store, :gem_stores
+
   def initialize()
-    super("space.thinkum.riview") ## ??
+    super("space.thinkum.riview")
     ## FIXME set a filesystem base directory in the class
     self.signal_connect("startup") {
       ## forms to run subsq. of successful register()
@@ -629,15 +936,78 @@ class RIViewApp < GBuilderApp
       ## NB this will be activated by register() only once per process.
       self.map_app_window_new
     }
+    @system_store=StoreTool.system_storetool
+    @site_store=StoreTool.site_storetool
+    @home_store=StoreTool.home_storetool
+    h = {}
+    Gem::Specification::find_all { |s|
+      ## FIXME not every gem can be initialized to a storetool
+      ##
+      ## FIXME this does not filter onto "latest version", but will
+      ## instead operate across all installed gems w/ an avaialble RI
+      ## documentation store
+      begin
+        gst = StoreTool.gem_storetool(s)
+        h[gst.path]=gst
+      rescue QueryError
+        ## nop
+      end
+    }
+    @gem_stores = h
+    ## FIXME develop an internal database onto the environment's stores
+    ## and populate the index treeview(s) for main app windows, from the same
   end
 
   def map_prefs_window()
-    ## TBD
+    unless @prefs_window ## FIXME unset when destroyed
+      w =  RIViewPrefsWindow.new(self)
+      @logger.debug("Using new prefs window #{w}")
+      @prefs_window = w
+    end
+    #@prefs_window.activate ## TBD this or "show" (??)
+    @logger.debug("Displaying prefs window #{w}")
+    @prefs_window.map
+    @prefs_window.show
   end
 
   def map_app_window_new()
-    w = AppWindow.new(self)
+    w = RIViewWindow.new(self)
+    log_debug("Adding window #{w} in #{Thread.current}")
     self.add_window(w)
+    log_debug("Presenting window #{w} in #{Thread.current}")
     w.present
   end
 end
+
+
+=begin debug
+
+NB
+~/.local/share/gem/ruby/3.0.0/gems/gobject-introspection-3.4.9/test/test-arg-info.rb
+
+gir = GObjectIntrospection::Repository.default
+
+#gir.require("GObject")
+
+gir.require("Gtk")
+#info = gir.find("GtkWidget","destroyed") ## FIXME fails. null typelib?
+
+gir.select { |obj| if ( obj.class == GObjectIntrospection::FunctionInfo )
+    obj.get_arg(0)
+  end
+}.length
+=> 1672
+
+
+# FIXME really problematic here - persistent segfault, needs full Q/A
+gir.select { |obj| if ( obj.class == GObjectIntrospection::FunctionInfo )
+    obj.get_arg(0).name
+  end
+}
+
+... but what are the args that would be required by the Ruby API onto
+gtk_widget_destroyed ??
+- can it even be called from this API??
+- or does it have simply an opaque interface here?
+
+=end

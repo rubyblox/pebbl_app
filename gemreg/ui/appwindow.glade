@@ -14,47 +14,71 @@
       </object>
     </child>
   </object>
-  <object class="GtkTextBuffer" id="RITextBuffer01">
-    <property name="tag-table">RITagTable01</property>
-  </object>
   <object class="GtkTreeStore" id="RITreeStore">
     <columns>
       <!-- column-name exp -->
       <column type="gboolean"/>
-      <!-- column-name Topic -->
-      <column type="gchar"/>
+      <!-- column-name topic -->
+      <column type="gchararray"/>
       <!-- column-name kind -->
-      <column type="gchar"/>
+      <column type="gchararray"/>
+      <!-- column-name fullname -->
+      <column type="gchararray"/>
+      <!-- column-name data -->
+      <column type="GObject"/>
     </columns>
   </object>
-  <template class="AppWindow" parent="GtkApplicationWindow">
+  <object class="GtkEntryCompletion" id="entrycompletion1">
+    <property name="model">RITreeStore</property>
+    <property name="text-column">3</property>
+  </object>
+  <template class="RIViewWindow" parent="GtkApplicationWindow">
     <property name="width-request">630</property>
     <property name="height-request">370</property>
     <property name="visible">True</property>
     <property name="can-focus">False</property>
+    <property name="hide-titlebar-when-maximized">True</property>
     <child>
       <object class="GtkBox" id="WindowLayoutBox">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
         <property name="orientation">vertical</property>
         <child>
-          <object class="GtkMenuBar" id="WindowMenuBar">
+          <object class="GtkMenuBar" id="menubar">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
             <child>
               <object class="GtkMenuItem" id="FileMenuItem">
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
+                <property name="label" translatable="yes">File</property>
                 <child type="submenu">
                   <object class="GtkMenu" id="FileMenu">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
+                    <child>
+                      <object class="GtkImageMenuItem">
+                        <property name="label">gtk-new</property>
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="action-name">win.new</property>
+                        <property name="use-underline">True</property>
+                        <property name="use-stock">True</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkSeparatorMenuItem">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                      </object>
+                    </child>
                     <child>
                       <object class="GtkImageMenuItem" id="MenuPrefs">
                         <property name="label">gtk-preferences</property>
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
                         <property name="tooltip-text" translatable="yes">RIView Configuration</property>
+                        <property name="action-name">win.prefs</property>
                         <property name="use-underline">True</property>
                         <property name="use-stock">True</property>
                       </object>
@@ -71,6 +95,17 @@
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
                         <property name="tooltip-text" translatable="yes">Close this window</property>
+                        <property name="action-name">win.close</property>
+                        <property name="use-underline">True</property>
+                        <property name="use-stock">True</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkImageMenuItem" id="MenuQuit">
+                        <property name="label">gtk-quit</property>
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="action-name">win.quit</property>
                         <property name="use-underline">True</property>
                         <property name="use-stock">True</property>
                       </object>
@@ -84,6 +119,7 @@
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <property name="right-justified">True</property>
+                <property name="label" translatable="yes">Help</property>
                 <child type="submenu">
                   <object class="GtkMenu">
                     <property name="visible">True</property>
@@ -122,13 +158,33 @@
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="model">RITreeStore</property>
+                    <property name="expander-column">ExpColumn</property>
                     <property name="search-column">0</property>
-                    <child internal-child="selection">
-                      <object class="GtkTreeSelection"/>
+                    <property name="enable-grid-lines">horizontal</property>
+                    <property name="tooltip-column">3</property>
+                    <child>
+                      <object class="GtkTreeViewColumn" id="ExpColumn"/>
                     </child>
                     <child>
-                      <object class="GtkTreeViewColumn">
+                      <object class="GtkTreeViewColumn" id="TopicColumn">
                         <property name="title" translatable="yes">Topic</property>
+                        <child>
+                          <object class="GtkCellRendererText" id="TopicRenderer"/>
+                          <attributes>
+                            <attribute name="text">1</attribute>
+                          </attributes>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkTreeViewColumn" id="KindColumn">
+                        <property name="title" translatable="yes">Kind</property>
+                        <child>
+                          <object class="GtkCellRendererText" id="KindRenderer"/>
+                          <attributes>
+                            <attribute name="text">2</attribute>
+                          </attributes>
+                        </child>
                       </object>
                     </child>
                   </object>
@@ -145,6 +201,7 @@
                     <property name="primary-icon-name">edit-find-symbolic</property>
                     <property name="primary-icon-activatable">False</property>
                     <property name="primary-icon-sensitive">False</property>
+                    <property name="completion">entrycompletion1</property>
                   </object>
                   <packing>
                     <property name="expand">False</property>
@@ -171,7 +228,6 @@
                     <property name="can-focus">True</property>
                     <property name="editable">False</property>
                     <property name="cursor-visible">False</property>
-                    <property name="buffer">RITextBuffer01</property>
                   </object>
                 </child>
                 <child type="tab">

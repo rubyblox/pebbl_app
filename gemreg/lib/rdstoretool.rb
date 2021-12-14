@@ -125,14 +125,21 @@ class StoreTool
 
   ## Retrieve a delgating GemStoreTool for this Ruby environment
   ##
-  ## @param name [String] the gem name
-  ## @param version [String] version qualifier for the gem
+  ## @param whence [String or Gem::Specification] the gem name,
+  ##  or a Gem Specification
+  ## @param version [String] version qualifier for the gem,
+  ##  used for the Gem Specification query if +whence+ is provided as a
+  ##  string
   ## @return [GemStoreTool]
-  def self.gem_storetool(name, version = "> 0.0")
-    ## FIXME this will always call find_by_name
-    spec = Gem::Specification::find_by_name(name, version)
+  def self.gem_storetool(whence, version = "> 0.0")
+    if whence.is_a?(Gem::Specification)
+      spec = whence
+    else
+      spec = Gem::Specification::find_by_name(whence, version)
+    end
+
     if @gem_storetools && (st = @gem_storetools[spec.full_name])
-        st
+      st
     else
       store = gem_store(spec)
       if store.source != spec.full_name
@@ -244,6 +251,14 @@ class StoreTool
   ## Retrieve a sequence of instance method names defined for a class
   ## under the RDoc Store of this delegating StoreTool
   ##
+  ## * Examples *
+  ##
+  ## +StoreTool.system_storetool.instance_methods_for("DateTime").last+
+  ## +=> "zone"
+  ##
+  ## +StoreTool.system_storetool.class_methods_for("Process::Sys").last+
+  ## +=> "setuid"+
+  ##
   ## @param name [String] the class' name
   ## @return [Array of String] instance method names
   def instance_methods_for(name)
@@ -262,6 +277,11 @@ class StoreTool
   ## Retrieve a sequence of class method names defined for a class
   ## under the RDoc Store of this delegating StoreTool
   ##
+  ## * Example *
+  ##
+  ## +StoreTool.system_storetool.class_methods_for("Abbrev")+
+  ## +=> ["abbrev"]+
+  ##
   ## @param name [String] the class' name
   ## @return [Array of String] class method names
   def class_methods_for(name)
@@ -269,6 +289,7 @@ class StoreTool
     ## StoreTool.gem_storetool('yard').class_methods_for('YARD::CLI::Command')
     ## => ["run"]
     methods = @store.class_methods
+    ## FIXME StoreTool.system_storetool.class_methods
     if methods.key?(name)
       methods[name]
     else
@@ -276,6 +297,13 @@ class StoreTool
       ## system installation
       raise QueryError.new("No class methods defined for #{name} in #{self.source}")
     end
+  end
+
+  def inspect()
+    store = self.store
+    return "#<#{self.class.name} " +
+      "(#{store.class} 0x#{store.__id__.to_s(16)}) " +
+      "0x#{self.__id__.to_s(16)} #{store.type.inspect} #{store.path}>"
   end
 end  ## StoreTool
 
