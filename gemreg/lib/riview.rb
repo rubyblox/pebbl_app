@@ -376,7 +376,7 @@ end
 ## @see ResourceTemplateBuilder
 ## @see FileTemplateBuilder
 module TemplateBuilder
-  def self.extended(extclass)
+  def self.included(extclass)
     extclass.extend GTypeExt
     extclass.extend UIBuilder
 
@@ -403,20 +403,19 @@ module TemplateBuilder
       self.bind_template_child_full(id, true, 0)
     end
 
-    ## NB this defines an instance method ui_internal in extclass
-    extclass.define_method(:ui_internal) { |id|
-        self.get_internal_child(self.class.builder, id)
-    }
-
   end
 
+  ## NB this defines an instance method ui_internal in the including class
+  def ui_internal(id)
+    self.get_internal_child(self.class.builder, id)
+  end
 
 end
 
 
 module ResourceTemplateBuilder
   def self.extended(extclass)
-    extclass.extend TemplateBuilder
+    extclass.include TemplateBuilder
 
     ## ensure that a resource bundle at the provided +path+ is
     ## registered at most once, for this class
@@ -490,7 +489,7 @@ end
 
 module FileTemplateBuilder
   def self.extended(extclass)
-    extclass.extend TemplateBuilder
+    extclass.include TemplateBuilder
 
     ## load this class' template as a file
     ##
