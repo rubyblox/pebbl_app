@@ -125,9 +125,9 @@ end
 ## @see *Logger*, providing an API for arbitrary message logging in Ruby
 ##
 module LogManager
-  def self.extended(extclass)
+  def self.extended(extender)
 
-    def extclass.logger=(logger)
+    def extender.logger=(logger)
       if @logger
         warn("@logger already bound to #{@logger} in #{self} " +
              "- ignoring #{logger}", uplevel: 0) unless @logger.eql?(logger)
@@ -137,11 +137,11 @@ module LogManager
       end
     end
 
-    def extclass.logger
+    def extender.logger
       @logger # || warn("No logger defined in class #{self}", uplevel: 0)
     end
 
-    def extclass.make_warning_proc(logger)
+    def extender.make_warning_proc(logger)
       lambda { |*data, uplevel: 0, category: nil|
         ## NB unlike with the standard Kernel.warn method ...
         ## - this proc will use a default uplevel = 0, as to ensure that some
@@ -186,39 +186,40 @@ module LogManager
       }
     end
 
-    def extclass.manage_warnings(kernlogger)
-      if kernlogger.respond_to?(:warn)
-        ## NB the logger used here may be inequivalent to self.logger
-        ##
-        ## This will not store the kernlogger for any later access.
-        ##
-        ## It's assumed that the logger object provided to this method
-        ## would be stored in the extending class.
-        ##
-        proc = self.make_warning_proc(kernlogger)
-        ## NB Kernel.method(:warn) should retrieve the same initial value,
-        ## even after the following call to Kernel.define_method
-        ##
-        ## FIXME for purpose of documentation, that should be tested
-        ## under an rspec definition for this module. Theoretically,
-        ## that behavior may change under any future release of Ruby,
-        ## and a different behavior may be implemented in any other Ruby
-        ## implementation.
-        ##
-        ## For purposes of this module's application, albeit,
-        ## that behavior does not denote a function requirement - i.e
-        ## whether Kernel.method(:warn) will return the same value
-        ## before and after manage_warnings is called, such that it
-        ## would in Ruby 3.0.0
-        ##
-        Kernel.define_method(:warn, &proc)
-        return proc
-      else
-        raise "object does not provide a #warn method: #{kernlogger}"
+    if extender.is_a?(Module)
+      def extender.manage_warnings(logger = self.logger)
+        ## NB it would be an error to call this for any class extension
+        proc = make_warning_proc(logger)
+        self.define_method(:warn, &proc)
+        Warning.extend(self)
       end
     end
   end
 end
+
+
+module LogModule
+  ## for Warning.extend(..) which will not accept a class as an arg
+  ##
+  ## e.g
+  ## LogModule.logger = Logger.new(STDERR, level: Logger::DEBUG, progname: "some_app")
+  ## LogModule.manage_warnings
+  ## warn "PING"
+  ##
+  ## ... albeit it seems that something in either the Logger or Warning
+  ## modules may be adding additional data to the message text, e.g
+  ## "<internal:warning>:51:in `warn': "
+  ##
+  ## NB however: In some contexts when 'warn' may be called, it would
+  ## not be valid to try to warn to a logger - e.g within signal trap blocks,
+  ## in which context any warning may then loop in trying to emit a warning
+  ## about the warning
+
+  extend(LogManager)
+
+end
+
+
 
 
 require_relative('storetool.rb')
@@ -837,37 +838,40 @@ end
 
 class GBuilderApp < Gtk::Application
 
-  extend(LoggerDelegate)
-  def_logger_delegate(:@logger)
-  attr_reader :logger
-  LOG_LEVEL_DEFAULT = Logger::DEBUG
+  extend(LoggerDelegate)  ## FIXME move to GApp
+  def_logger_delegate(:@logger)  ## FIXME move to GApp
+  attr_reader :logger  ## FIXME move to GApp
+  LOG_LEVEL_DEFAULT = Logger::DEBUG  ## FIXME move to GApp
 
   extend UIBuilder
 
-  extend LogManager
+  extend LogManager ## FIXME move to GApp
 
-  def initialize(name, logger: nil)
+
+  ## @param name [String] The application name (FIXME syntax check)
+  ##
+  ## @param logger [Logger | nil] *Logger* to use for Ruby logging in
+  ##   this application instance. If +nil+, a *Logger* will be initialized
+  ##   on +STDERR+, with a log level of +::LOG_LEVEL_DEFAULT+ and a
+  ##   program name equal to +name+
+  ##
+  ## @param flags [Integer | String | Symbol | Array<Integer | String | Symbol>]
+  ##  see ::get_app_flag_value for a description of the syntax and usage
+  ##  of this parameter
+  def initialize(name, logger: nil,
+                 flags: Gio::ApplicationFlags::FLAGS_NONE.to_i)
     # @state = :initialized
 
     ## NB @logger will be used for the LoggerDelegate extension,
-    ## providing instance-level access to the app/class logger
-    @logger = logger ? logger :
-      Logger.new(STDERR, level: LOG_LEVEL_DEFAULT, progname: name)
-
-    ## NB ensuring that the logger used to shadow Kernel.warn
-    ## will have a progname == "kernel", otherwise with the same
-    ## field values as the selected app/class logger
+    ## providing instance-level access to the logger with an API
+    ## similar to Logger, as wrapper functions onto the @logger itself
     ##
-    ## NB using a shallow copy - reusing any objects provided in the
-    ## logdev and formatter fields of the selected app logger
-    self.class.logger ||= @logger
-    if (@sys_logger.nil?)
-      sl = @logger.dup
-      sl.progname = "kernel"
-      @sys_logger = sl
-    end
-    self.class.manage_warnings(@sys_logger)
+    @logger = logger ? logger :
+      self.class.logger ||= Logger.new(STDERR, level: LOG_LEVEL_DEFAULT,
+                                       progname: name)
 
+    LogModule.logger ||= @logger
+    LogModule.manage_warnings
 
     super(name)
     ## ensure that a local Gtk::Builder is initialized for this
@@ -1033,3 +1037,7 @@ gtk_widget_destroyed ??
 - or does it have simply an opaque interface here?
 
 =end
+
+## Local Variables:
+## fill-column: 65
+# End:
