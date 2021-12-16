@@ -80,13 +80,24 @@ end
 ## Extension module providing internal storage for class-based logging
 ## and override of the method *Kernel.warn*
 ##
-## This module defines the following class methods, in an extending
-## class +c+:
+## This module defines the following methods, in an extending
+## module or class +c+:
 ##
 ## - *+c.logger=+*
 ## - *+c.logger+*
+##
+## For purposes of generally class-focused log management, the methods
+## +logger=+ and +logger+ will be defined in the extending class or
+## extending method, as to access a logger that would be stored within
+## the class definition. The class logger may or may not be equivalent
+## to the logger provided to +manage_warnings+
+##
+## In an extending module +c+ the following methods are defined
+## additionally:
 ## - *+c.make_warning_proc+*
 ## - *+c.manage_warnings+*
+## - *+c.with_system_warn+*_warnings+*
+## - *+c.use_logger+*, *+use_logger=+*
 ##
 ## The +manage_warnings+ method will define a method overriding the
 ## default *Kernel.warn* method, such that a top level call to +warn+
@@ -105,32 +116,62 @@ end
 ## +manage_warnings+ is called, then the overriding method will be used
 ## in +manage_warnings+
 ##
+## The method +with_system_warn+ accepts a block, such that the
+## dispatching logger will not be called within that block. This method
+## is provided as a utility towards ensuring that the dispatching logger
+## will not be called within any ection of code that would not permit
+## logging to an external logger, such as within a signal trap handler
+## defined after a call to +manage_warnings+
 ##
-## For purposes of class-focused log management, the class methods
-## +logger=+ and +logger+ may be used in the extending class, as to
-## access a logger that would be stored within the class definition. The
-## class logger may or may not be equivalent to the logger provided to
-## +manage_warnings+
+## The methods +use_logger+ and +use_logger=+ may be used as to
+## determine or to set the value of a state variable in the extending
+## module, such that the proc form returned by +make_warning_proc+ will
+## not use the provided logger when +use_logger+ returns a false
+## value. This +proc+ would provide the implementation of the +warn+
+## method implemented under +manage_warnings+
+##
+## * Known Limitations *
+##
+## In the behaviors of the call to +Warning.extend+, the method
+## +manage_warnings+ may in effect override the initial +Kernel.warn+
+## method, such that the initial +Kernel.warn+ method will not be called
+## from within +with_system_warn+. Some system +warn+ method will be
+## used for any +warn+ call within the block provided to
+## +with_system_warn+, but the +warn+ method in use within that block
+## may differ in its method signature and implementation, compared to
+## the initial +Kernel.warn+ method.
+##
+## While it is known that an external logger should not be used within
+## the block provided to a signal trap handler - thus towards a
+## rationale for the definition of +with_system_warn+ - this may not be
+## the only instance in which a block of code should be evaluated as to
+## not use an external logger.
 ##
 ## The logger provided to +manage_warnings+ will not be stored
-## internally. It's assumed that the logger provided to that method
-## would be stored within some value in the extending class.
+## internally, beyond how the logger is referenced within the proc
+## returned by +make_warning_proc+_. It's assumed that the logger
+## provided to +manage_warnings+ would be stored within some value
+## in the extending class.
 ##
 ## @see *GBuilderApp*, providing an example of this module's application,
-##      under instance-level integration with *LoggerDelegate*
+##  under instance-level integration with *LoggerDelegate* in a
+##  class
 ##
 ## @see *LoggerDelegate*, providing instance methods via method
-##      delegation, for logger access within application objects
+##  delegation, for logger access within application objects
 ##
 ## @see *Logger*, providing an API for arbitrary message logging in Ruby
 ##
+## @see *LogModule*, which provides an extension of this module via
+##  a module, such that may be suitable for extension onto the Ruby
+##  *Warning* module
 module LogManager
   def self.extended(extender)
 
     def extender.logger=(logger)
       if @logger
         warn("@logger already bound to #{@logger} in #{self} " +
-             "- ignoring #{logger}", uplevel: 0) unless @logger.eql?(logger)
+             "- ignoring #{logger.inspect}", uplevel: 0) unless @logger.eql?(logger)
         @logger
       else
         @logger = logger
@@ -138,64 +179,95 @@ module LogManager
     end
 
     def extender.logger
-      @logger # || warn("No logger defined in class #{self}", uplevel: 0)
-    end
-
-    def extender.make_warning_proc(logger)
-      lambda { |*data, uplevel: 0, category: nil|
-        ## NB unlike with the standard Kernel.warn method ...
-        ## - this proc will use a default uplevel = 0, as to ensure that some
-        ##   caller info will generally be presented in the warning message
-        ## - this proc will accept any warning category
-        ## - this proc's behaviors will not differ based on the warning category
-        ## - this proc will ensure that #to_s will be called directly on
-        ##   every provided message datum
-        unless ($VERBOSE.nil?)
-
-          nmsgs = data.length
-          nomsg = nmsgs.zero?
-
-          if category
-            catpfx = '[' + category.to_s + '] '
-          else
-            catpfx = ''
-          end
-
-          if uplevel
-            callerinfo = caller[uplevel]
-            if nomsg
-              firstmsg = catpfx + callerinfo
-            else
-              firstmsg = catpfx + callerinfo + ': '
-            end
-          else
-            firstmsg = catpfx
-          end
-
-          unless nomsg
-            firstmsg = firstmsg + data[0].to_s
-          end
-
-          logger.warn(firstmsg)
-
-          unless( nomsg || nmsgs == 1 )
-            data[1...nmsgs].each { |datum| logger.warn(catpfx + datum.to_s) }
-          end
-        end
-        return nil
-      }
+      @logger # || warn("No logger defined in #{self.class} #{self}", uplevel: 0)
     end
 
     if extender.is_a?(Module)
+
+      def extender.with_system_warn(&block)
+        initial_state = self.use_logger
+        begin
+          self.use_logger = false
+          block.call
+        ensure
+          self.use_logger = initial_state
+        end
+      end
+
+      def use_logger()
+        @use_logger
+      end
+
+      def use_logger=(p)
+        @use_logger = !!p
+      end
+
+      def extender.make_warning_proc(logger)
+        whence = self
+        lambda { |*data, uplevel: 0, category: nil, **restargs|
+          ## NB unlike with the standard Kernel.warn method ...
+          ## - this proc will use a default uplevel = 0, as to ensure that some
+          ##   caller info will generally be presented in the warning message
+          ## - this proc will accept any warning category
+          ## - this proc's behaviors will not differ based on the warning category
+          ## - this proc will ensure that #to_s will be called directly on
+          ##   every provided message datum
+          if whence.use_logger
+            ## NB during 'warn' this proc will be called in a scope where
+            ## self == the Warning module, not the module to which the
+            ## make_warning_proc method is applied in extension. Thus,
+            ## the providing module may be referenced here as 'whence'
+            nmsgs = data.length
+            nomsg = nmsgs.zero?
+
+            if category
+              catpfx = '[' + category.to_s + '] '
+            else
+              catpfx = ''
+            end
+
+            if uplevel
+              callerinfo = caller[uplevel]
+              if nomsg
+                firstmsg = catpfx + callerinfo
+              else
+                firstmsg = catpfx + callerinfo + ': '
+              end
+            else
+              firstmsg = catpfx
+            end
+
+            unless nomsg
+              firstmsg = firstmsg + data[0].to_s
+            end
+
+            whence.logger.warn(firstmsg)
+
+            unless( nomsg || nmsgs == 1 )
+              data[1...nmsgs].each { |datum|
+                whence.logger.warn(catpfx + datum.to_s)
+              }
+            end
+          else
+            ## NB The 'super' method accessed from here may not have the
+            ## same signature as the original Kernel.warn method, such
+            ## that would accept an 'uplevel' arg not vailable to the
+            ## 'super' method accessed from here
+            super(*data, category: category, **restargs)
+          end
+          return nil
+        }
+      end
+
       def extender.manage_warnings(logger = self.logger)
-        ## NB it would be an error to call this for any class extension
         proc = make_warning_proc(logger)
         self.define_method(:warn, &proc)
+        self.use_logger = true
         Warning.extend(self)
       end
-    end
-  end
-end
+    end # extender.is_a?(Module)
+  end # self.extended
+end # LogManager module
 
 
 module LogModule
@@ -847,6 +919,62 @@ class GBuilderApp < Gtk::Application
 
   extend LogManager ## FIXME move to GApp
 
+  # attr_reader :gtk_loop # see ...
+
+  ## utility method for procesing the +flags+ option under
+  ## *+GBuilderApp#initialize+*
+  ##
+  ## When applied to that +flags+ value, this method must return an
+  ## integer value, such that will be used in a call to
+  ## *+Gio::Application#set_flags+*, before the *GBuilderApp* is
+  ## registered to GTK. Provided with an appropriate +flags+ value, this
+  ## will be managed internally during *GBuilderApp* initialization
+  ##
+  ## *Examples*
+  ##
+  ##    GBuilderApp.get_app_flag_value('is_service') ==
+  ##       Gio::ApplicationFlags::IS_SERVICE.to_i => true
+  ##
+  ##   GBuilderApp.get_app_flag_value(:handles_open) ==
+  ##       Gio::ApplicationFlags::HANDLES_OPEN.to_i => true
+  ##
+  ##   GBuilderApp.get_app_flag_value([:is_service, :handles_open])
+  ##       => <Integer>
+
+  def self.get_app_flag_value(datum)  ## FIXME move to GApp
+    name, value = nil
+    case datum
+    when Array
+      value = 0
+      datum.each { |elt| value = (value | self.get_app_flag_value(elt)) }
+    when Integer
+      value = datum
+    when Gio::ApplicationFlags
+      value = datum.to_i
+    when String
+      ## NB except for FLAGS_NONE, the constants defined under this Gio
+      ## Ruby module do not use any special prefix
+      ## e.g
+      ##  "is_service" => Gio::ApplicationFlags::IS_SERVICE,
+      ##  :handles_open => Gio::ApplicationFlags::HANDLES_OPEN,
+      name = datum.upcase.to_sym
+    when Symbol
+      name = datum.upcase
+    when NilClass
+      value = Gio::ApplicationFlags::FLAGS_NONE.to_i
+    else
+      raise ArgumentError.new("Unkown Gio::ApplicationFlags specifier: #{datum.inspect}")
+    end
+    if !value
+      fl = Gio::ApplicationFlags.const_get(name)
+      if fl
+        value = fl.to_i
+      else
+        raise ArgumentError.new("Unknown Gio::ApplicationFlags specifier: #{datum.inspect}")
+      end
+    end
+    return value
+  end
 
   ## @param name [String] The application name (FIXME syntax check)
   ##
@@ -874,6 +1002,13 @@ class GBuilderApp < Gtk::Application
     LogModule.manage_warnings
 
     super(name)
+
+    fl_value = self.class.get_app_flag_value(flags)
+    fl_obj = Gio::ApplicationFlags.new(fl_value)
+    ## NB fl_obj would be a proxy object for an enum value,
+    ## and should not need to be unref'd
+    self.set_flags(fl_obj)
+
     ## ensure that a local Gtk::Builder is initialized for this
     ## application, via a class attr.
     ##
@@ -908,17 +1043,147 @@ class GBuilderApp < Gtk::Application
       ##   in the Ruby API. If it was defined as such, TBD side effects
       @logger.fatal("Unable to register #{self}")
     else
+      ## TBD storing main_thread - see also the GMain loop API via Ruby ...
+      @main_thread = Thread.current
       ## super(gtk_cmdline_args) # TBD
       @logger.debug("#{__method__} calling Gtk.main in #{Thread.current}")
       # @state = :run
-      Gtk.main()
+      begin
+        ## FIXME these Signal.trap calls DNW under #run_threaded
+        ## 1) an odd error is produced (see below)
+        ## 2) the thread exits an under "aborting" state
+        Signal.trap("TRAP") do
+          ## cf. devehlp @ GLib g_log_structured, G_BREAKPOINT documentation
+          ## => SIGTRAP (some architectures)
+          LogModule.with_system_warn {
+            ## NB ensuring that the logger won't be called during a
+            ## signal trap - the system would emit a warning then ...
+            ##   >> "log writing failed. can't be called from trap context"
+            ## ... such that would fail recursively, if the only warning
+            ## handler would be trying to dispatch to a logger
+            warn "Received SIGTRAP. Exiting in #{Thread.current.inspect}"
+            #Gtk.main_quit
+            exit(false)
+          }
+        end
+        Signal.trap("INT") do
+          LogModule.with_system_warn {
+            warn "Received SIGINT. Exiting in #{Thread.current.inspect}"
+            #Gtk.main_quit
+            exit(false)
+          }
+        end
+        Signal.trap("ABRT") do
+          LogModule.with_system_warn {
+            warn "Received SIGABRT. Exiting in #{Thread.current.inspect}"
+            #Gtk.main_quit
+            exit(false)
+          }
+        end
+
+        @logger.debug("In process #{Process.pid}")
+
+        ## NB this will display information about exeptions raised
+        ## within Ruby, including exceptions that are trapped
+        ## within some rescue form
+        ##
+        ## This is also reached from 'exit'
+        ##
+        ## This TracePoint is not reached for the peculiar
+        ## NoMethodError denoted below - that might be emitted from C
+        trace = TracePoint.new(:raise) do |pt|
+          ## FIXME if using this with a Ruby console, provide a way
+          ## to filter 'pt' as to ignore a 'pt' with any of the
+ ## following qualities:
+          ## - pt.raised_exxception class matching some class or module
+          ##   name, as itself or in c.ancestors
+          ##   - e.g ignore onto Doc::Store::MissingFileError,
+          ##     RubyLex::TerminateLineInput, ...
+          ## - pat.path matching some value
+          ##   - e.g ignore onto pt.path.match(/lib/rdoc/store.rb/)
+          warn("[debug] %s %s [%s] @ %s:%s " %
+               [pt.event, pt.raised_exception.inspect,
+                pt.raised_exception.message,
+                pt.path, pt.lineno])
+        end
+        trace.enable
+
+        Gtk.main()  ## FIXME move to GtkApp < GApp :: #main(args = nil)
+        ## vis a vis args, note e.g '--gapplication-app-id' in GLib's GApplication
+        ## and other args avl with GtkApplication
+        ## >> documentation (DocBook | YARD)
+        ## >> g.thinkum.space
+        ##
+        ## NB GRubyService < GConsoleService < GApp
+        ## TBD GShellService < GConsoleService
+
+
+        ## FIXME in this source file, store every return value from
+        ## signal_connect within an array of signal callback IDs.
+        ## On each element of that array, call signal_handler_disconnect(elt).
+        ## Call this array-walking method as a part of
+        ## unref/free/pre-finalization routines, during exit.
+      rescue => exc
+        ## FIXME does not trap Ruby errors raised under Gtk.main,
+        ## such that cause the application to exit without further
+        ## action
+
+        warn "Exception #{exc.class}: #{exc}"
+        ## ?? Exception NoMethodError: undefined method `message' for 8:Integer
+        ## ... and no backtrace. Where is that error arriving from?
+        ## ... when:
+        ##  1) app is ran via run_threaded
+        ##  2) SIGTRAP is sent to the Ruby process, externally, via kill(1)
+        ##  3) prefs window is created in the app (TRAP trap not reached during run_threaded)
+        ## ! Same happens when SIGINT is sent, when app is run via run_threaded
+        ##
+        ## Is the NoMethodError being produced by something in the C code for Ruby-GNOME?
+        ## (no backtrace, and what a generic error message)
+
+       exc.backtrace.each { |info| warn "[backtrace] " + info.to_s } if exc.backtrace
+        # @logger.error("%s caught %s under %s 0x%x : %s" %
+        #               [__method__, exc.class, Thread.current.class,
+        #                Thread.current.object_id, exc.message])
+        # if (bt = exc.backtrace)
+        #   n = 0
+        #   bt.each { |info|
+        #     @logger.error("[backtrace 0x%02x] %s" % [n, info])
+        #     n = n+1
+        #   }
+        # end
+      end
     end
     @logger.debug("#{__method__} returning in #{Thread.current}")
+    if Thread.current.status == "aborting"
+      ## NB This may be reached - on a Linux system - when
+      ## 1) the app is run via run_threaded
+      ## 2) SIGINT is sent to the ruby process, externally
+      ## 3) a dialogue window is created
+      ##
+      ## - note that the SIGINT handler was not reached under
+      ##   run_threaded, not until the dialogue window was created
+      ## - that may be due to some peculiarities about where the trap
+      ##   handler is defined, and how Gtk.main is run
+      ##
+      ## TBD whether this or the handler is ever reached under
+      ## run_threaded, on a BSD system
+      warn "Uncaught thread abort. Exiting"
+      Thread.current.backtrace_locations.each { |info|
+        warn "[backtrace] " + info.to_s
+      } if Thread.current.backtrace_locations
+      exit(false)
+    end
   end
 
-  def run_threaded()
+  def run_threaded()  ## FIXME move to GApp
+    ## FIXME this thread appears to no longer run asynchronously,
+    ## when launched under IRB
+    ##
+    ## The thread is returned to IRB and displayed as such,
+    ## but the next IRB propmpt/input line does not appear until after
+    ## the app has exited
     @logger.debug("#{__method__} from #{Thread.current}")
-    NamedThread.new("#{self.class.name} 0x#{self.__id__.to_s(16)}#run") {
+    NamedThread.new("%s#run @%x" % [self.class.name, self.object_id]) {
       run()
     }
   end
