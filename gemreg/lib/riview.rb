@@ -499,7 +499,7 @@ module ResourceTemplateBuilder
     def extclass.use_resource_bundle(path)
       ## NB storing the bundle in extclass, such that  _unregister and
       ## unref (??) can be called for the Resource bundle, during some
-      ## pre-exit/pre-gc cleanup method
+      ## pre-exit/pre-gc cleanup method, in any implementing class (FIXME)
       if @bundle
         warn "Bundle for #{@bundle_path} already registered for #{self}. Ignoring #{path}"
       else
@@ -605,14 +605,9 @@ class TreeBuilder
     @iterator = iterator
   end
 
-  def add_branch(*data, iterator: self.iterator, append_iterator: true)
+  def add_branch(*data, iterator: self.iterator)
     iterator.set_values(data)
-    ## ??
-    if append_iterator
-      return store.append(iterator)
-    else
-      return iterator
-    end
+    return iterator
   end
 
   def add_leaf(*data, iterator: self.iterator)
@@ -695,12 +690,10 @@ class RIViewWindow < Gtk::ApplicationWindow
     ## NB ~/.local/share/gem/ruby/3.0.0/gems/gtk3-3.4.9/sample/misc/treestore.rb
 
     store = ui_internal("RITreeStore")
-    #itersys = store.append(nil)
+    #itertop = store.append(nil)
 
-    empty = "".freeze
-
-    ## NB TreeBuilder tests
     builder = TreeBuilder.new(store)
+
     systore = application.system_store
     sysproxy = DataProxy.new(systore)
     sitestore = application.site_store
@@ -715,65 +708,50 @@ class RIViewWindow < Gtk::ApplicationWindow
     ## be reading for testing with iteration onto the site store -
     ## modules, classes, methods
 
-    itersys = builder.add_branch(true, "System", "Store", nil, sysproxy)
-    builder.add_branch(true, "Abbrev", "Module", "Abbrev", sysproxy,
-                       iterator: itersys, append_iterator: false)
-    builder.add_leaf(true, "abbrev", "Class Method", "Abbrev::abbrev", sysproxy, 
-                     iterator: itersys)
-    builder.add_leaf(true, "abbrev", "Instance Method", "Abbrev#abbrev", sysproxy, 
-                     iterator: itersys)
-
-    iternext = builder.add_leaf(true, "A", "B", "C", sysproxy)
-    builder.add_leaf(true, "D", "E", "F", sysproxy, iterator: iternext)
-
-    iternext = store.append(iternext)
-    builder.add_branch(true, "G", "H", "I", sysproxy,
-                       iterator: iternext, append_iterator: false)
-    builder.add_leaf(true, "J", "K", "G::J", sysproxy, iterator: iternext)
-
-
-    ## FIXME remove the 'exp' column from the tree store/model
-    ##
-    ## GTK handles the "folded state" internal to the UI,
-    ## independent of the data model
-
-    # itersys.set_values([true, "System", "RI Store"])
-    # iternext = store.append(itersys)
-    # iternext.set_values([true,"Abbrev", "Module", "Abbrev"])
+    builder.add_branch(true, "System", "Store", nil, sysproxy)
+    itersys = store.append(builder.iterator)
     ## NB RI has Abbrev.abbrev documented as both a class method and an
     ## instance method (defined under a module, in each and both)
     ##
     ## - Ruby does not show it under Abbrev.instance_methods()
     ##   but does show it under Abbrev.singleton_methods()
     ##
-    ## TreeTool.add_leaf(iterator, data) => iteratorRet == iterator
-    # store.append(iternext).
-    #   set_values([true,"abbrev","Class Method","Abbrev::abbrev"]) ## leaf node
-    # store.append(iternext). ## TBD Namespace#method syntax here
-    #   set_values([true,"abbrev","Instance Method","Abbrev#abbrev"]) ## leaf node
+    builder.add_branch(true, "Abbrev", "Module", "Abbrev", sysproxy,
+                       iterator: itersys)
+    builder.add_leaf(true, "abbrev", "Class Method", "Abbrev::abbrev", sysproxy, 
+                     iterator: itersys)
+    builder.add_leaf(true, "abbrev", "Instance Method", "Abbrev#abbrev", sysproxy, 
+                     iterator: itersys)
 
-    ## NB this needs lookahead for modules w/ submodules, etc
-    iternext = store.append(itersys)
-    iternext.set_values([true,"CGI", "Module", "CGI"])
-    ## FIXME store the providing StoreTool in the DataProxy instance -
-    ## usin one DataProxy for each StoreTool
-    store.append(iternext).set_values([true,"Escape","Module", "CGI::Escape",
-                                       ## FIXME need to test activation
-                                       ## handling + value retrieval here
-                                      DataProxy.new("miscdata")])
+    builder.add_leaf(true, "A", "B", "A", sysproxy)
+    builder.add_leaf(true, "C", "B", "C", sysproxy)
 
-    itersite = store.append(nil)
-    itersite.set_values([true, "Site", "RI Store"]) ## NB typically an empty RI store
-    #store.append(itersite).set_values([true,"C","D"])
+    iternext = store.append(builder.iterator)
+    builder.add_branch(true,"CGI", "Module", "CGI", iterator: iternext)
+    builder.add_leaf(true,"Escape","Module", "CGI::Escape",
+                     ## FIXME need to test activation handling
+                     ## + value retrieval here
+                     DataProxy.new("miscdata"),
+                    iterator: iternext)
 
-    iterhome = store.append(nil)
-    iterhome.set_values([true, "Home", "RI Store"]) ## NB typically an empty RI store
-    #store.append(iterhome).set_values([true,"E","F"])
-    #store.append(iterhome).set_values([true,"G","H"])
+    iternext = store.append(builder.iterator)
+    builder.add_branch(true, "D", "C", "D", sysproxy,
+                       iterator: iternext)
+    builder.add_leaf(true, "E", "C", "D::E", sysproxy,
+                     iterator: iternext)
+
+    # itersite = store.append(nil)
+    ## NB typically an empty RI store
+    builder.add_leaf(true, "Site", "RI Store", iterator: nil)
+
+    # iterhome = store.append(nil)
+    ## NB typically an empty RI store
+    builder.add_leaf(true, "Home", "RI Store", iterator: nil)
 
     itergems = store.append(nil)
-    itergems.set_values([true, "Gems", "RI Store"])
-    store.append(itergems).set_values([true, "B", "Test"])
+    builder.add_branch(true, "Gems", "RI Store", iterator: itergems)
+    builder.add_leaf(true, "B", "Test", iterator: itergems)
+
 
 
     ## FIXME the following do not show up
@@ -885,10 +863,8 @@ class RIViewPrefsWindow < Gtk::Dialog
     store = ui_internal("GemPathsListStore") ## is a Gtk::ListStore
     application.gem_stores.each { |path, st|
       spec = st.gem_spec
-      store.append.set_values(0 => spec.name,
-                              1 => spec.version.version,
-                              2 => path,
-                              3 => spec.full_name)
+      store.append.set_values([spec.name, spec.version.version, path,
+                               spec.full_name])
     }
 
     ## FIXME initialize entries for the font prefs page,
