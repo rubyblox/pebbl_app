@@ -77,45 +77,57 @@
 module FileResourceManager
   def self.extended(extclass)
 
-    ## FIXME __FILE__ may be quite other than an ideal basis for
-    ## any default values here. It probably produces the pathname
-    ## of this file rather than that of the source file for any
-    ## extending class
-
-    ## Except for ::expand_resource_path, these should probably
-    ## be redefined with define_method
-
+    ## * Remarks *
+    ##
+    ## @path will be expanded relative to Dir.pwd at the time
+    ## of the call.
+    ##
+    ## This will not provide any checking for the provided
+    ## pathname. The application may create the directory or
+    ## provide any pathname checking for the provided resource
+    ## path, in the application's own binding environment.
     def extclass.set_resource_root(path, nolock = false)
-      if (@@recource_root_locked && (path != @@resource_root))
-        warn "Cannot set a locked resource root path in %s: " +
-             "(ignored) %s" % [self, path.inspect]
+      if (defined?(@@resource_root_locked) &&
+          @@resource_root_locked  && (path != @@resource_root))
+        warn ("Cannot set a locked resource root path in %s: " +
+              "(ignored) %s") % [self, path.inspect]
+        return false
       else
-        @@resource_root=File.expand_path(path, File.dirname(__FILE__)).freeze
         @@resource_root_locked = !nolock
+        @@resource_root = File.expand_path(path)
       end
     end
 
     def extclass.resource_root()
-      ## NB this may set an effective default for the value of
-      ## @@resource_root. It would not lock that value, in such
-      ## instance.
+      ## NB In order to ensure that a pathname is returned for
+      ## this class method, this will dispatch to use any
+      ## provided block or else PWD if no resource root has been
+      ## set.
       ##
-      ## Thus, this will always return a pathname. Albeit,
-      ## the pathname returned for a call to this
-      ## method may differ after an initial call to
-      ## ::set_resource_root(...)
+      ## Albeit, the pathname returned for a call to this
+      ## method may then differ after an initial call to
+      ## ::set_resource_root(...). This should nonetheless
+      ## serve to prevent an error during class load,
+      ## as may occur if the method was to return nil.
       ##
-      @@resource_root ||= File.dirname(__FILE__).freeze
+      ## NB anything based on __FILE__ here would be evaluated
+      ## as using the source filename of this module, thus
+      ## there is this odd semantics for the default value.
+      if defined?(@@resource_root)
+        return @@resource_root
+      elsif block_given?
+        yield
+      else
+        return Dir.pwd
+      end
     end
 
     def extclass.expand_resource_path(name)
-      File.expand_path(name, self.class.resource_root)
+      File.expand_path(name, self.resource_root)
     end
 
   end ## extended
 end
-
-
 
 ## Local Variables:
 ## fill-column: 65
