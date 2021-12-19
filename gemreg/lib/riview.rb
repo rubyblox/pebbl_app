@@ -1038,22 +1038,22 @@ class GBuilderApp < Gtk::Application
             ## ... such that would fail recursively, if the only warning
             ## handler would be trying to dispatch to a logger
             warn "Received SIGTRAP. Exiting in #{Thread.current.inspect}"
-            #Gtk.main_quit
-            exit(false)
+            Gtk.main_quit
+            exit(SysExit::EX_SOFTWARE)
           }
         end
         Signal.trap("INT") do
           LogModule.with_system_warn {
             warn "Received SIGINT. Exiting in #{Thread.current.inspect}"
-            #Gtk.main_quit
-            exit(false)
+            Gtk.main_quit
+            exit(SysExit::EX_IOERR)
           }
         end
         Signal.trap("ABRT") do
           LogModule.with_system_warn {
             warn "Received SIGABRT. Exiting in #{Thread.current.inspect}"
-            #Gtk.main_quit
-            exit(false)
+            Gtk.main_quit
+            exit(SysExit::EX_PROTOCOL)
           }
         end
 
