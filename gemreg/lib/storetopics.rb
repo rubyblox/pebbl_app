@@ -113,7 +113,9 @@ module NamespaceTopic
   end
 
   def init_storage
-    @elements = {}
+    @elements ||= self.class::ELEMENT_KINDS.map { |kind|
+      [kind,{}]
+    }.to_h
   end
 
   def use_element(elt)
