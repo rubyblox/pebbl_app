@@ -1,8 +1,17 @@
-## project_tools.rb - utility methods (non-gem source file)
+## rspectool.rb - rspec utility methods
+
+BEGIN {
+  ## When loaded from a gem, this file will be autoloaded
+  ## from projectkit.rb.
+  ##
+  ## Ensure that the module is defined when loaded individually
+  require_relative('../projectkit')
+}
+
 
 require 'pathname'
 
-class RSpecTool
+class ProjectKit::RSpecTool
 
   RSPEC_LOCAL_SUFFIX=".rspec"
   RSPEC_PROJECT_SUFFIX=".rb"
@@ -25,8 +34,8 @@ class RSpecTool
 
     pid = Process.fork()
     if pid
-      pid, status = Process.waitpid2(pid)
-      return status.exitstatus
+      pid, st = Process.waitpid2(pid)
+      return st.exitstatus
     else
       begin
         Dir.chdir(dir)
@@ -41,12 +50,13 @@ class RSpecTool
 
   def self.find_project_root(whence = Dir.pwd)
     if File.exists?(whence)
+      ## NB File.directory? will dereference symlinks
       whence_dir_p = File.directory?(whence)
     else
       raise ArgumentError.new("File does not exist: #{File.expand_path(whence)}")
     end
     base = File.expand_path(whence_dir_p ? whence : File.dirname(whence))
-    fnflags = (File::FNM_DOTMATCH | File::FNM_SYSCASE | File::FNM_CASEFOLD)
+    fnflags = (File::FNM_DOTMATCH | File::FNM_CASEFOLD)
     path = nil
     catch(:found) {
       Dir.children(base).each { |chfile|
@@ -99,7 +109,7 @@ class RSpecTool
     if File.exists?(rspec_local)
       return rspec_local
     else
-      root = find_project_root(f) ## FIXME
+      root = find_project_root(f)
       return nil unless root
       lib_root = project_libdir(root)
       test_root = project_testdir(root)
@@ -136,9 +146,6 @@ class RSpecTool
       obj.disable_autorun!
       st = obj.run(use_args, stderr, stdout).to_i
       Kernel.exit(st)
-      ## TBD assuming no interverning errors (e.g in exit after
-      ## forking irb), test the process exit code, via the status
-      ## object that will be returned in the forking process
     }
     self.fchdir(dir, &fproc)
   end
