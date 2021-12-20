@@ -2,10 +2,10 @@
 
 require 'basedir.rb' # the library to test
 
-describe FileResourceManager do
+describe GAppKit::FileResourceManager do
   subject{
     class TestClass
-      extend FileResourceManager ## the module to test ...
+      extend GAppKit::FileResourceManager ## the module to test ...
     end
     TestClass
   }
@@ -26,7 +26,7 @@ describe FileResourceManager do
   end
 
   it "uses pwd for resource_root when unset (no block)" do
-    module_src = FileResourceManager.method(:extended).source_location
+    module_src = described_class.method(:extended).source_location
     module_path = module_src ? module_src[0] : nil
     expect(subject.resource_root).
       to be == Dir.pwd

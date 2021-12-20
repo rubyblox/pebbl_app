@@ -1,6 +1,13 @@
-## syexits.rb - cf. FreeBSD sysexits(3)
+## syexit.rb - cf. FreeBSD sysexits(3)
 
-module SysExit
+BEGIN {
+  ## When loaded from a gem, this file may be autoloaded
+
+  ## Ensure that the module is defined when loaded individually
+  require(__dir__ + ".rb")
+}
+
+module GAppKit::SysExit
   EX_OK = 0
 
   EX_USAGE	= 0x40

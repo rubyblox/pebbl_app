@@ -74,6 +74,8 @@
 ## application's recourse base directory - e.g user home
 ## directory - independent of this API.
 
+module GAppKit
+
 module FileResourceManager
   def self.extended(extclass)
 
@@ -128,6 +130,8 @@ module FileResourceManager
 
   end ## extended
 end
+
+end ## GAppKit module
 
 ## Local Variables:
 ## fill-column: 65

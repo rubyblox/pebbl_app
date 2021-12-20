@@ -1,8 +1,16 @@
 ## storetool.rb - utility classes for query onto RDoc::Store objects
 
+BEGIN {
+  ## When loaded from a gem, this file may be autoloaded
+
+  ## Ensure that the module is defined when loaded individually
+  require(__dir__ + ".rb")
+}
+
+
 require 'rdoc'
 
-## module <TBD> ...
+module RIKit
 
 class QueryError < RuntimeError
 end
@@ -374,37 +382,7 @@ class GemStoreTool < StoreTool
   end
 end
 
-
-class RITool
-  ## NB orphaned beside latest StoreTool, GemStoreTool development
-
-  def self.driver
-    @driver ||= RDoc::RI::Driver.new()
-  end
-
-  ## prototype - delegating method ono RDoc::RI::Driver#display_exprts
-  def self.display_exprs(*exprs)
-    ## NB any of exprs may be a regular expression
-    driver.display_exprs(exprs.map { |exp| exp.to_s })
-  end
-
-  ## prototype - delegating method onto RDoc::RI::Driver#list_known_classes
-  def self.display_classes(*exprs)
-    ## NB can be called with an empty *exprs seq
-    ##
-    ## any of exprs may be a regular expression
-    ## e.g display_classes("Psych::.*")
-    ## or simply: display_classes("Psych")
-    ##
-    ## NB see [driver.rb]#list_known_classes
-    driver.list_known_classes(exprs.map { |exp| exp.to_s })
-  end
-
-  ## FIXME now update the previous classes to provide an API onto RDoc's
-  ## marshaled *.ri files, suitable for usage in a user interface
-  ## application e.g an ri browser w/ IRB/Pry/... REPL
-
-end
+end ## RIKit module
 
 =begin TBD - parsing an rdoc cdesc file with Marshal.load & subsq
 

@@ -28,9 +28,16 @@ test with
   <!--         alias="ui/riview.ui" -->
   <!--         >ui/riview.glade</file> -->
   <!-- </gresource> -->
-  <gresource prefix="/space/thinkum/RIView">
+  <gresource prefix="/space/thinkum/riview">
     <file preprocess="xml-stripblanks" compressed="true"
-          alias="ui/riview.ui"
-          >ui/template_test.glade</file>
+          alias="ui/appwindow.ui"
+          >ui/appwindow.glade</file>
+    <file preprocess="xml-stripblanks" compressed="true"
+          >ui/docview.ui</file>
+    <file preprocess="xml-stripblanks" compressed="true"
+          >ui/prefs.ui</file>
+    <!-- <file preprocess="xml-stripblanks" compressed="true" -->
+    <!--       alias="gtk/menus.ui" -->
+    <!--       >ui/menus.ui</file> -->
   </gresource>
 </gresources>

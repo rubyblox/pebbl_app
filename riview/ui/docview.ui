@@ -2,8 +2,7 @@
 <!-- Generated with glade 3.38.2 -->
 <interface>
   <requires lib="gtk+" version="3.24"/>
-  <object class="GtkTextBuffer" id="RIDocBuffer"/>
-  <template class="RIDocView" parent="GtkTextView">
+  <template class="RIDocView" parent="GtkScrolledWindow">
     <property name="visible">True</property>
     <property name="can-focus">True</property>
     <property name="editable">False</property>

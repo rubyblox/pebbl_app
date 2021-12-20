@@ -32,7 +32,7 @@
     <property name="model">RITreeStore</property>
     <property name="text-column">3</property>
   </object>
-  <template class="RIViewWindow" parent="GtkApplicationWindow">
+  <template class="RIViewAppWindow" parent="GtkApplicationWindow">
     <property name="width-request">630</property>
     <property name="height-request">370</property>
     <property name="visible">True</property>
@@ -168,6 +168,7 @@
                     <child>
                       <object class="GtkTreeViewColumn" id="TopicColumn">
                         <property name="title" translatable="yes">Topic</property>
+                        <property name="expand">True</property>
                         <child>
                           <object class="GtkCellRendererText" id="TopicRenderer"/>
                           <attributes>

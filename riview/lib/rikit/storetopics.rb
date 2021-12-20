@@ -1,5 +1,13 @@
-## storetopics.rb
+## storetopics.rb - topical database API for RI doc objects
 
+BEGIN {
+  ## When loaded from a gem, this file may be autoloaded
+
+  ## Ensure that the module is defined when loaded individually
+  require(__dir__ + ".rb")
+}
+
+module RIKit
 
 module TopicRegistryClass
   def self.extended(extclass)
@@ -346,102 +354,8 @@ class ConstantTopic < NamedTopic
   register_to(RITopicRegistry)
 end
 
+end ## RIKit module
 
-=begin TBD
-##
-##
-class BaseFrob
-  def initialize
-      puts "In BaseFrob"
-  end
-end
-
-module Frob
-  def self.extended(extclass)
-    def extclass.initialize
-      ## not reached
-      puts "In Frob A"
-    end
-  end
-
-  def init
-    puts "In Frob.init"
-  end
-
-  def self.init2 ## this
-    puts "In Frob.init2"
-  end
-
-
-  def self.initialize ## this works too [X]
-    puts "In Frob.self.initialize (#{self.class})" ## self.class => module
-  end
-
-  protected ## DNW. Ruby still defines initialize as a private method (lame)
-  def initialize
-    puts "In Frob B"
-  end
-end
-
-class NextFrob < BaseFrob
-  extend Frob
-  def initialize
-    super
-    puts "In NextFrob, after super"
-  end
-end
-
-
-class OtherFrob < BaseFrob
-  extend Frob
-  ## does not ever reach the initialize method defined in Frob/extended
-  ## or that defined in Frob
-end
-
-
-class LastFrob < BaseFrob
-  extend Frob
-  def initialize
-    ## initialize is defined as a private method always, cannot call from here
-    # Frob.initialize
-
-    # Frob.init ## DNW (TBD why not)
-    # Frob::init ## Also DNW ...
-    Frob.init2 ## [X]
-    Frob.initialize ## NB in this method, self.class = Module
-    super
-  end
-  ## does not ever reach the initialize method defined in Frob/extended
-  ## or that defined in Frob
-end
-
-module IncFrob
-  def initialize
-    puts "In IncFrob @ #{self.class}" ## reached
-  end
-
-  def self.included(inclass)
-    def inclass.initialize
-      ## not reached from FrobX#initialize
-      ## is reachable as FrobX.initialize
-      puts "In IncFrob.initialize @ #{self} (#{self.class})"
-    end
-
-    def inclass.mtest
-      puts "in mtest"
-    end
-  end
-end
-
-class FrobX < BaseFrob
-  include IncFrob
-  ## NB
-  ## FrobX.new.is_a?(IncFrob) => true
-  ##   while
-  ## NextFrob.new.is_a?(Frob) => false
-end
-
-##
-##
-=end
-
+# Local Variables:
+# fill-column: 65
+# End:
