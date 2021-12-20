@@ -1,10 +1,6 @@
 ## ioproc.rb
 
-
-=begin rdoc
-<b>IOProc - Ruby language extensions for I/O with external processes</b>
-=end
-module IOProc
+module IOProc ## FIXME renaming to IOKit
 end
 
 
@@ -90,86 +86,128 @@ Subsequent output:
 
 =end
 class IOProc::OutProc
+  ## Run a command with *Process.spawn*, calling a provided proc
+  ## on each line of standard output and/or standard error stream
+  ## text.
+  ##
+  ## This method returns the numeric process exit code of the
+  ## spawned process. If this value is non-zero, it may be
+  ## commonly assumed that the process exited with error.
+  ##
+  ## @param cmd [String|Array of String] External command. This
+  ##  parameter  uses the same syntax as the +command+ parameter
+  ##  for *Process::spawn*
+  ##
+  ## @param read_out [Proc|nil] If non-nil, a functional form to
+  ##  call for each line of text on the <em>standard output</em>
+  ##  stream. If provided, +options+ must not include an +:out+
+  ##  option
+  ##
+  ## @param read_err [Proc|nil] If non-nil, a functional form to
+  ##  call for each line of text on the <em>standard error</em>
+  ##  stream. If provided, +options+ must not include an +:err+
+  ##  option
+  ##
+  ## @param encoding [Encoding|array] an Encoding value to use
+  ##  for the external encoding in each *IO.pipe* call, or an
+  ##  array of [external, internal] encoding values for each
+  ##  call
+  ##
+  ## @param options additional options for the call to
+  ##  *Process::spawn*
+  ##
+  ## @see Process::spawn
+  def self.run(*cmd, read_out: nil,
+               read_err: nil,
+               encoding: Encoding.default_external,
+               timeout: nil, **options)
 
-  ## @param cmd [string|array] External command. This parameter
-  ##  uses the same syntax as the +command+ parameter for
-  ##  **Process::spawn**
-  ## @param read_out [lambda|Proc|nil] If true, functional form to call
-  ##  for each line of text on the process <em>standard output</em>
-  ##  stream
-  ## @param read_err [lambda|Proc|nil] If true, functional form to call
-  ##  for each line of text on the process <em>standard error</em>
-  ##  stream
-  ## @param options [nil|Hash] If true, a Hash value providing optional
-  ##  configuration for **Process::spawn**
-  ## @see https://www.rubydoc.info/stdlib/core/Process.spawn Process::spawn
-  def self.run(*cmd, read_out: nil , read_err: nil, options: nil)
+    ## TBD implementing run_async + (poll fd ...) (use timeout)
+    ## - needs usage case
+
+    if encoding.is_a?(Array)
+      ## here, the value of the encoding option should be
+      ## an array of [external, internal] encoding values
+      use_enc = encoding
+    else
+      use_enc = [encoding]
+    end
 
     if read_out
-      out_read, out_write = IO.pipe
-    elsif options && options.include?(:out)
-      ## i.e do not set :out
+       if options.include?(:out)
+         raise ArgumentError.new("Both :out and :read_out provided")
+       else
+         out_read, out_write = IO.pipe(*use_enc)
+       end
+    elsif options.include?(:out)
+      ## NB will not set :out here
+      out_read = false
       out_write = false
     else
+      ## no output stream used for the spawn call
+      out_read = false
       out_write = :close
     end
 
     if read_err
-      err_read, err_write = IO.pipe
-    elsif options && options.include?(:err)
-      ## i.e do not set :err
+       if options.include?(:err)
+         raise ArgumentError.new("Both :err and :read_err provided")
+       else
+         err_read, err_write = IO.pipe(*use_enc)
+       end
+    elsif options.include?(:err)
+      ## NB will not set :err here
+      err_read = false
       err_write = false
     else
+      ## no error stream used for the spawn call
+      err_read = false
       err_write = :close
     end
 
-    options || ( options = {} )
+    options.include?(:in) || ( options[:in] = :close )
 
-    options.include?(:in) && options[:in] = :close
-
+    ## set out, err options if none provided
     out_write && ( options[:out] = out_write )
     err_write && ( options[:err] = err_write )
 
+    st = nil
+
     ## spawn the process and wait for the
     ## process to exit
-    subpid = Process.spawn(*cmd, options)
-    subpid, status = Process.wait2(subpid)
+    Timeout.timeout(timeout, Timeout::Error,
+                    "Process timed out @ #{timeout} seconds: #{cmd.inspect}") {
+      pid = Process.spawn(*cmd, options)
+      pid, st = Process.wait2(pid)
+    }
 
-    read_out && ( out = IO.new(out_read.to_i, "r") )
-    read_err && ( err = IO.new(err_read.to_i, "r") )
-
-    ## IF if these aren't closed before the read,
-    ## the read would block indefinitely
-    read_out && out_write.close
-    read_err && err_write.close
-
-    read_out &&
-      out.each_line do |txt|
+    if read_out ## the form to call on each stdout line
+      out_write.close ## close before pipe read
+      out_write = nil ## prevent later close
+      out_read.each_line do |txt|
         read_out.call(txt)
       end
+      out_read.close
+      out_read = nil
+    end
 
-    read_err &&
-      err.each_line do |txt|
+    if read_err ## the form to call on each stderr line
+      err_write.close ## close before pipe read
+      err_write = nil ## prevent later close
+      err_read.each_line do |txt|
         read_err.call(txt)
       end
+      err_read.close
+      err_read = nil
+    end
 
-    return status.exitstatus
+    return st.exitstatus
 
   ensure
-
-    ## NB fails (EBADF) during close
-    # out.closed? || out.close
-    # err.closed? || err.close
-
-    if read_out
-      out_write.close
-      out_read.close
-    end
-
-    if read_err
-      err_write.close
-      err_read.close
-    end
+    out_read && out_read.close
+    out_write && out_write.close
+    err_read && err_read.close
+    err_write && err_write.close
   end
 end
 
@@ -182,7 +220,11 @@ end
 out = lambda { |txt| puts "Out: " + txt }
 err = lambda { |txt| puts "Err: " + txt }
 
-puts IOProc::OutProc.run("ls -d /etc /nonexistent",
+st = IOProc::OutProc.run("ls -d /etc /nonexistent",
      read_out: out, read_err: err)
 
 =end
+
+# Local Variables:
+# fill-column: 65
+# End:
