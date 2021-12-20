@@ -478,11 +478,63 @@ module TemplateBuilder
 
   end
 
-  ## NB this defines an instance method ui_internal in the including class
   def ui_internal(id)
+    ## NB this definition provides an instance method ui_internal
+    ## in the including class
+    ##
+    ## Notes - type inheritance with mixin modules used via include
+    ## or extend, in Ruby
+    ##
+    ## - 'include' affects the type of instances of the including class
+    ## - 'extend' affects the type of the including class
+    ##
+    ## Given:
+    ##
+    ##   app = RIViewApp.new; app.run_threaded
+    ##   rw = RIViewWindow.new(app)
+    ##
+    ##   rw.is_a?(TemplateBuilder) => true
+    ##
+    ##   rw.class.is_a?(FileTemplateBuilder) => true
+    ##
+    ##   rw.is_a?(UIBuilder) => false
+    ##   rw.class.is_a?(UIBuilder) => true
+    ##
+    ## Usage notes:
+    ## - 'extend' modules can define instance methods in the including
+    ##    class, using define_method with a locally defined proc,
+    ##    generally outside of the 'self.extended' section of the module
+    ##
+    ##    - that proc can be provided as a lambda proc if initialized
+    ##      for storage in a variable e.g block = lambda {...}, then
+    ##      provided to define_method as e.g &block
+    ##    - or it can be defined as a block that does not check
+    ##      arguments and does not have the return semantics of a lambda
+    ##      proc
+    ##
+    ## - 'include' modules can define instance methods in the including
+    ##    class, using 'def'
+    ##
+    ## - 'extend' may generally be useful for mixin modules to add class
+    ##   methods to a class. It can be used to add instance modules to a
+    ##   class, using such as the define_method approach denoted above
+    ##
+    ## - 'include' may generally be useful for mixin modules to add
+    ##   instance  methods to a class. It may also be used to add class
+    ##   methods, in the 'self.included' section of the include module
+    ##
+    ## - Considering that 'include' supports both class method and
+    ##   instance method definition with 'def' in the defining module --
+    ##   as whether in the mixin module's self.included section e.g 'def
+    ##   extclass.method_name' or respectively, not in the self.included
+    ##   section - 'include' may appear to be more generally useful for
+    ##   applications. Regardless, considering how 'extend' affects the
+    ##   type of a class - notwithstanding the type of the instances of
+    ##   the class - this feature in itself may bear some consideration,
+    ##   towards applications of 'extend' with modules
+    ##
     self.get_internal_child(self.class.builder, id)
   end
-
 end
 
 
@@ -538,7 +590,7 @@ module ResourceTemplateBuilder
     ## valid resource path onto the resource bundle initialized to this
     ## class
     ##
-    ## This method is used by GTK
+    ## This method is used by Gtk support in Ruby-GNOME
     ##
     ## @see ::use_resource_bundle
     ## @see ::use_template
@@ -566,7 +618,7 @@ module FileTemplateBuilder
 
     ## load this class' template as a file
     ##
-    ## This method is used by GTK
+    ## This method is used by Gtk support in Ruby-GNOME
     ##
     ## @see ::use_template
     def extclass.init
@@ -657,6 +709,8 @@ class RIViewWindow < Gtk::ApplicationWindow
 
     @logger = application.logger
 
+    ## NB init_template will be called under Gtk::Widget#initialize_post
+
     set_window_action("new") {
       @logger.debug("Action 'new' in #{self} (#{Thread.current})")
       application.map_app_window_new
@@ -679,7 +733,7 @@ class RIViewWindow < Gtk::ApplicationWindow
     }
 
     self.signal_connect("destroy") {
-      @logger.debug("Signal 'destory' in #{self} (#{Thread.current})")
+      @logger.debug("Signal 'destroy' in #{self} (#{Thread.current})")
       closeAct.activate
     }
 
@@ -718,9 +772,9 @@ class RIViewWindow < Gtk::ApplicationWindow
     ##
     builder.add_branch(true, "Abbrev", "Module", "Abbrev", sysproxy,
                        iterator: itersys)
-    builder.add_leaf(true, "abbrev", "Class Method", "Abbrev::abbrev", sysproxy, 
+    builder.add_leaf(true, "abbrev", "Class Method", "Abbrev::abbrev", sysproxy,
                      iterator: itersys)
-    builder.add_leaf(true, "abbrev", "Instance Method", "Abbrev#abbrev", sysproxy, 
+    builder.add_leaf(true, "abbrev", "Instance Method", "Abbrev#abbrev", sysproxy,
                      iterator: itersys)
 
     builder.add_leaf(true, "A", "B", "A", sysproxy)
@@ -785,6 +839,8 @@ class RIViewWindow < Gtk::ApplicationWindow
 end
 
 
+require_relative 'sysexits'
+
 class RIDocView < Gtk::TextView
   extend FileTemplateBuilder
   ## FIXME only one template-based class per UI file...?
@@ -820,7 +876,6 @@ application
   configured for its visual qualities under application preferences
 =end
 end
-
 
 
 class RIViewPrefsWindow < Gtk::Dialog
