@@ -40,10 +40,11 @@ class RSpecTool
   end
 
   def self.find_project_root(whence = Dir.pwd)
-    ## NB this recognizes only a single-character File::SEPARATOR
-    whence_dir_p = File.exists?(whence) ? File.directory?(whence) :
-                     ((whence.length.eql?(0)) ? true :
-                        (whence[-1] == File::SEPARATOR))
+    if File.exists?(whence)
+      whence_dir_p = File.directory?(whence)
+    else
+      raise ArgumentError.new("File does not exist: #{File.expand_path(whence)}")
+    end
     base = File.expand_path(whence_dir_p ? whence : File.dirname(whence))
     fnflags = (File::FNM_DOTMATCH | File::FNM_SYSCASE | File::FNM_CASEFOLD)
     path = nil
