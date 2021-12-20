@@ -1,7 +1,12 @@
 ## ioproc.rb
 
-module IOProc ## FIXME renaming to IOKit
-end
+BEGIN {
+  ## When loaded from a gem, this file will be autoloaded
+  ## from iokit.rb.
+  ##
+  ## Ensure that the module is defined when loaded individually
+  require_relative('iokit')
+}
 
 
 =begin rdoc
@@ -39,7 +44,7 @@ of the external command:
     out_fn = lambda { |txt| puts "Out: " + txt }
     err_fn = lambda { |txt| puts "Err: " + txt }
 
-    puts IOProc::OutProc.run(
+    puts IOKit::OutProc.run(
         "ls -d /etc /nonexistent",
         read_out: out_fn, read_err: err_fn
     )
@@ -85,7 +90,7 @@ Subsequent output:
   <b>su(1)</b>
 
 =end
-class IOProc::OutProc
+class IOKit::OutProc
   ## Run a command with *Process.spawn*, calling a provided proc
   ## on each line of standard output and/or standard error stream
   ## text.
@@ -220,7 +225,7 @@ end
 out = lambda { |txt| puts "Out: " + txt }
 err = lambda { |txt| puts "Err: " + txt }
 
-st = IOProc::OutProc.run("ls -d /etc /nonexistent",
+st = IOKit::OutProc.run("ls -d /etc /nonexistent",
      read_out: out, read_err: err)
 
 =end

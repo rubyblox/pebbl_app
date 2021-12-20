@@ -9,8 +9,8 @@ class CmdFailed < RuntimeError
   attr_reader :exit_code ## unsigned integer
   attr_reader :error_text ## string or nil
   attr_reader :output ## nil or array or ... (FIXME limited onto SimpleDataCmd::run call/return syntax)
-  
-  def initialize(cmd,exit_code,error_text,output = nil, 
+
+  def initialize(cmd,exit_code,error_text,output = nil,
                  message = "Shell command failed (#{exit_code}): #{cmd} => [#{error_text}]")
     super(message)
     @cmd = cmd
@@ -20,7 +20,7 @@ class CmdFailed < RuntimeError
   end
 end
 
-class SimpleDataCmd < IOProc::OutProc
+class SimpleDataCmd < IOKit::OutProc
 
     def self.parse_stdout_form(whence)
       lambda { |line| whence.append line.split }
@@ -33,8 +33,8 @@ class SimpleDataCmd < IOProc::OutProc
     def self.run(*cmd, ignore_errors: false, ignore_output: false, options: nil)
       out_data = ignore_output ? nil : []
       err_data = ignore_errors ? nil : []
- 
-      exit_code = IOProc::OutProc.run(*cmd, 
+
+      exit_code = IOKit::OutProc.run(*cmd,
                                       read_out: ignore_output ? nil : self.parse_stdout_form(out_data),
                                       read_err: ignore_errors ? nil : self.parse_stderr_form(err_data),
                                       options: options)
@@ -56,7 +56,7 @@ class SimpleDataCmd < IOProc::OutProc
       end
 
     end
-    
+
 end
 
 =begin
@@ -87,7 +87,7 @@ data = SimpleDataCmd.run([["ls" "ls] "-d" "/etc"])
 =end
 
 
-class FrobCmd < IOProc::OutProc
+class FrobCmd < IOKit::OutProc
   def self.runsudo(cmd)
     run "/bin/TBD"
   end
