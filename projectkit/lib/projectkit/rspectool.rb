@@ -1,17 +1,18 @@
 ## rspectool.rb - rspec utility methods
 
 BEGIN {
-  ## When loaded from a gem, this file will be autoloaded
-  ## from projectkit.rb.
-  ##
+  ## When loaded from a gem, this file may be autoloaded
+
   ## Ensure that the module is defined when loaded individually
-  require_relative('../projectkit')
+  require(__dir__ + ".rb")
 }
 
 
 require 'pathname'
 
 class ProjectKit::RSpecTool
+
+  ## FIXME reimplement how the following constants are used
 
   RSPEC_LOCAL_SUFFIX=".rspec"
   RSPEC_PROJECT_SUFFIX=".rb"
@@ -21,13 +22,15 @@ class ProjectKit::RSpecTool
 
   RSPEC_DEFAULT_ARGS=%w(--no-color)
 
-  def self.fchdir(dir, *block_args, &block)
+  def self.fork_in(dir, *block_args, &block)
     ## NB this of course requires a usable fork() implementation on
     ## the host
     ##
     ## NB the block may call 'exit' before either of the
     ## handlers, below, would be reached
     ##
+    ## FIXME how to fork_in & exec w/o reusing spawn here, per se?
+    ## - see IOProc::OutProc / IOKit::OutProc
     unless (has_block = block_given?)
       warn("No block provided to #{self}.#{__method__}", uplevel: 1)
     end
@@ -136,6 +139,16 @@ class ProjectKit::RSpecTool
     paths = tests.map { |f| project_libdir(f) }.sort.uniq
     use_args = args.dup.concat(tests)
 
+    ## FIXME this 'fork' approach may not be tremendously
+    ## effective. If a library was already required in the
+    ## calling Ruby environment and has been edited since last
+    ## require, the updated version will not be loaded for the
+    ## internal rspec checks.
+    ##
+    ## TBD can use fork_in => exec
+    ## - ensure at_exit functions are called before the exec
+    ## - this will prevent any internal modifications to the
+    ##   environment runnming rspec from within Ruby
 
     fproc = lambda {
       $LOAD_PATH.concat(paths)
@@ -147,14 +160,18 @@ class ProjectKit::RSpecTool
       st = obj.run(use_args, stderr, stdout).to_i
       Kernel.exit(st)
     }
-    self.fchdir(dir, &fproc)
+    ## NB if using absolute pathnames, it should not be per se
+    ## necessary to chdir under the (IRB/Ruby/...) process running
+    ## rspec. Probably safer to run it from the project root dir,
+    ## regardless.
+    self.fork_in(dir, &fproc)
   end
 end
 
 =begin TBD
 
 e.g
-RSpecTool.run("..",%w[test/basedir.rb])
+RSpecTool.run("..",%w[test/basedir.rb]) ## FIXME file moved
 
 =end
 
