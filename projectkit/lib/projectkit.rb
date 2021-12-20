@@ -1,10 +1,10 @@
 ## projectkit.rb - baseline module definition and autoloads
 
 module ProjectKit
-  SOURCEDIR=File.join(__dir__, self.name.downcase)
+  SOURCEDIR=File.join(__dir__, self.name.downcase).freeze
 
-  VERSION=File.expand_path("projectkit_version.inc", SOURCEDIR).
-            split("\n").grep(/^[[:space:]]*[^#]/).first
+  VERSION=File.read(File.join(SOURCEDIR, self.name.downcase + "_version.inc")).
+                      split("\n").grep(/^[[:space:]]*[^#]/).first.freeze
 
   AUTOLOAD_CLASSES=%w(RSpecTool)
 
@@ -12,3 +12,7 @@ module ProjectKit
     autoload(name, File.expand_path(name.downcase + ".rb", SOURCEDIR))
   }
 end
+
+# Local Variables:
+# fill-column: 65
+# End:
