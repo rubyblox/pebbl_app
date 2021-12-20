@@ -5,7 +5,7 @@ BEGIN {
   ## from iokit.rb.
   ##
   ## Ensure that the module is defined when loaded individually
-  require_relative('iokit')
+  require_relative('../iokit')
 }
 
 
@@ -210,9 +210,9 @@ class IOKit::OutProc
 
   ensure
     out_read && out_read.close
-    out_write && out_write.close
+    out_write if out_write.is_a?(IO)
     err_read && err_read.close
-    err_write && err_write.close
+    err_write.close if err_write.is_a?(IO)
   end
 end
 
