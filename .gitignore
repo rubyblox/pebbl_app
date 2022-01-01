@@ -6,3 +6,7 @@
 *.log
 .*.done
 *.shout
+*.bin
+.yardoc/
+pkg/
+doc/
