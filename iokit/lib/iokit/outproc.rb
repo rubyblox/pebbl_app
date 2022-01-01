@@ -1,11 +1,10 @@
 ## ioproc.rb
 
 BEGIN {
-  ## When loaded from a gem, this file will be autoloaded
-  ## from iokit.rb.
-  ##
+  ## When loaded from a gem, this file may be autoloaded
+
   ## Ensure that the module is defined when loaded individually
-  require_relative('../iokit')
+  require(__dir__ + ".rb")
 }
 
 
