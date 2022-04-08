@@ -85,7 +85,7 @@ end
 
 ## Description of a Struct instance and transitively,
 ## a Struct class, from serialized data
-class StructInstanceDesc < StructDesc
+class StructInstanceDesc < StructDesc ## UNUSED
   ## FIXME revise this API to use only StructDesc,
   ## for representation of Struct class information
   ## external to the Psych Nodes API
@@ -152,16 +152,30 @@ class StructMapping < Psych::Nodes::Mapping
   def initialize(anchor = nil, tag = nil,
                  implicit = true, style = BLOCK,
                  builder = nil)
+
+    ## TBD @ API testing
+    # if ! tag
+    #   raise "Cannot create a #{self.class} with no tag"
+    # end
+    #
+    # if ( s_name = StructDesc.name_from_tag(tag) )
+    #   if ! s_name
+    #     raise "Cannot create a #{self.class} for an anonymous struct, in tag #{tag}"
+    #   else
+    #     ## TBD optional transformation on the struct class name, here
+    #     ## - such as via options on #{builder}
+    #     o      end
+    # end
+
+
     ## FIXME for back-reference to existing struct/instance descs,
     ## need to store the active tree builder here,
     ## e.g via an additional arg 'builder'
     @builder = builder
 
     if ( s_name = StructDesc.name_from_tag(tag) )
-      ## FISXME test for the s_name = false case,
-      ## per StructDesc.name_from_tag
-      ## && TBD YAML encoding for an anonymous struct
-      desc = StructInstanceDesc.new(s_name)
+      desc = ( builder.struct_desc_find(name) ||
+               StructeDesc.new(s_name))
       @struct_desc = desc
     end
     super(anchor,tag,implicit,style)
@@ -170,11 +184,6 @@ class StructMapping < Psych::Nodes::Mapping
   def push_field(name)
     ## FIXME err if @struct_desc is nil ...
     @last_field = @struct_desc.add_field(name)
-  end
-
-  def push_field_value(value)
-    ## FIXME err if @struct_desc is nil ...
-    @struct_desc.add_field_value(@last_field, value)
   end
 
   def finalize()
@@ -189,72 +198,9 @@ end
 ## lib/psych/visitors/yaml_tree.rb
 ##
 
-## general-purpose extension onto *Psych::TreeBuilder*
-##
-## see also
-## - psych:lib/psych/tree_builder.rb
-class ExtTreeBuilder < Psych::TreeBuilder
 
 
-  attr_reader :anchor_map ## Hash
-
-  def initialize()
-    super()
-    @anchor_map = {}
-  end
-
-  def set_anchor(anchor, obj)
-    ## NB the 'alias(anchor)' method in
-    ## psych:lib/psych/tree_builder.rb
-    ## does not perform any substitution
-    ##
-    ## NB alias/anchor substitution in Psych
-    ## may not be performed until e.g #to_ruby
-    ##    in psych:lib/psych/nodes/node.rb
-    ## which calls Visitors::ToRuby.create
-    ##    cf. psych:lib/psych/visitors/to_ruby.rb
-    ##
-    ## In this extended API, alias/anchor substitution
-    ## would need to be performed during *#mk_structs
-    ## and/or in overriding
-    ##   Psych::Visitors::ToRuby#visit_Psych_Nodes_Mapping
-    anchor_map[anchor] = obj
-  end
-
-  def start_mapping(anchor, tag, implicit, style)
-    ret = super()
-    if anchor
-      this = @last
-      set_anchor(anchor, this)
-    end
-    return ret
-  end
-
-  def start_sequence(anchor, tag, implicit, style)
-    ret = super()
-    if anchor
-      this = @last
-      set_anchor(anchor, this)
-    end
-    return ret
-  end
-
-  def scalar(value, anchor, tag, plain, quoted, style)
-    ret = super()
-    if anchor
-      this = @last.children.last
-      set_anchor(anchor, this)
-    end
-    return ret
-  end
-
-end
-
-
-
-
-
-class StructTreeBuilder < ExtTreeBuilder
+class StructTreeBuilder < Psych::TreeBuilder
   ## < .. Psych::Handlers::DocumentStream ??
   ## ^ NB &block' in initialize
 
@@ -283,10 +229,14 @@ class StructTreeBuilder < ExtTreeBuilder
 
 
   def start_mapping(anchor, tag, implicit, style)
+    ## TBD using StructDesc here
+    ##
+    ## TBD soring an @active_struct during mapping,
+    ## 
+
     ## NB if tag matches "!ruby/struct:",
-    ## create a new StructDesc for the name
-    ## provided in the tag value i.e after
-    ## the delimiting colon
+    ## create a new StructMapping for the name
+    ## of the struct type provided in the tag
     ##
     ## - FIXME must account for nonexistent modules,
     ##  per the provided name from a struct record
@@ -303,10 +253,6 @@ class StructTreeBuilder < ExtTreeBuilder
       self.send(:set_start_location,mapping)
       @last.children << mapping
       self.send(:push,mapping)
-      ## FIXME while this branch skips the call
-      ## to the superclass method, any non-false
-      ## 'anchor' alias will have to be handled
-      ## here
     else
       super
     end
@@ -328,16 +274,14 @@ class StructTreeBuilder < ExtTreeBuilder
       super
   end
 
-  def scalar (value, anchor, tag, plain, quoted, style)
+  def scalar(value, anchor, tag, plain, quoted, style)
       if @last.instance_of?(StructMapping)
         if @field_read
-          ## FIXME missed if @field_read is true
-          ## but #scalar is not called, e.g if the
-          ## field value is not itself a scalar
-          @last.push_field_value(value)
+          ## FIXME need to do similar for start_sequence
+          ## and also in some branch of start_mapping
           @field_read=nil
         else
-          @field_read = @last.push_field(value) ## name, here
+          @field_read = @last.push_field(value) ## field name, here
         end
       else
         super

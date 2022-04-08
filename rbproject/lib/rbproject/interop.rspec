@@ -303,13 +303,13 @@ end
 describe FieldBroker::FieldBroker do
   subject { described_class.new(A, B) }
   before {
-    subject.add_bridge(:sl_a, FieldBroker::Bridge::FieldBridge,
+    subject.add_bridge(:sl_a, kind: :scalar,
                        external_name: :sl_b)
-    subject.add_bridge(:sl_c, FieldBroker::Bridge::VarFieldBridge,
+    subject.add_bridge(:sl_c, ## kind: default
                        external_name: :sl_d)
-    subject.add_bridge(:sl_e, FieldBroker::Bridge::Seq::VarFieldBridge,
+    subject.add_bridge(:sl_e, kind: :seq,
                        external_name: :sl_f)
-    subject.add_bridge(:sl_g, FieldBroker::Bridge::Map::VarFieldBridge,
+    subject.add_bridge(:sl_g, kind: :map,
                        external_name: :sl_h)
   }
   let(:seq_a) { [1,2,3] }
@@ -351,17 +351,13 @@ end
 describe FieldBroker::HFieldBroker do
   subject { described_class.new(A) }
   before {
-    subject.add_bridge(:sl_a,
-                       FieldBroker::Bridge::FieldHBridge,
+    subject.add_bridge(:sl_a, kind: :scalar,
                        external_name: :sl_b)
-    subject.add_bridge(:sl_c,
-                       FieldBroker::Bridge::VarFieldHBridge,
+    subject.add_bridge(:sl_c, ## kind: default
                        external_name: :sl_d)
-    subject.add_bridge(:sl_e,
-                       FieldBroker::Bridge::Seq::VarFieldHBridge,
+    subject.add_bridge(:sl_e, kind: :seq,
                        external_name: :sl_f)
-    subject.add_bridge(:sl_g,
-                       FieldBroker::Bridge::Map::VarFieldHBridge,
+    subject.add_bridge(:sl_g, kind: :map,
                        external_name: :sl_h)
   }
   let(:seq_a) { [1,2,3] }
@@ -401,7 +397,6 @@ describe FieldBroker::HFieldBroker do
 
   it "fails for unknown hash fields on import (no block)" do
     obj_b[:sl_z]="Z"
-    extra_data={}
     expect {
       subject.import_mapped(obj_b,obj_a)
     }.to raise_error(FieldBroker::FieldBridgeNotFound)

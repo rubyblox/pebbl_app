@@ -123,6 +123,11 @@ application in a *FieldBroker*:
   - FieldBroker::Bridge::Map::FieldHBridge
   - FieldBroker::Bridge::Map::VarFieldHBridge
 
+
+See also
+* FieldBroker [Class]
+* HFieldBroker [Class]
+
 ## Examples
 
 (TBD)
@@ -167,7 +172,7 @@ class UnboundField < FieldError
   end
 end
 
-## common class for field router and field bridge classes
+## common class for field broker and field bridge classes
 class ClassBridge
   attr_reader :internal_class
   attr_reader :external_class
@@ -181,6 +186,7 @@ end
 
 ## trivial mapping class for object interoperability
 class FieldBroker < ClassBridge
+
   attr_reader :field_map
   attr_reader :ext_field_map
 
@@ -195,29 +201,63 @@ class FieldBroker < ClassBridge
     end
   end
 
-  ## @param field [Symbol] field name for the bridge instance
-  ## @param bridge_class [Class] class for the bridge instance
-  ## @param args [any] initialization arguments for the bridge
-  ## instance
+
+  ## Determine a field bridge class to use, per configuration
+  ## denoted in +args+
   ##
-  ## FIXME needs test
-  def add_bridge(field, bridge_class, **args)
-    ## TBD this could be provided for a more succinct syntax,
-    ## not requiring a class name - dispatchintg on
-    ## A) when the FieldBroker itself is e.g
-    ##    a FieldBroker or an HFieldBroker =>
-    ##    => only the *HBridge classes would apply
-    ## B) if an instance variable is directly provided
-    ##     e.g with :instance_var <name>
-    ##    or indirectly implied e.g with :instance_var true
-    ##    => only the Var* classes would apply
-    ## C) If a :kind parameter is provided onto
-    ##    [:scalar,:seq,:map] then a class from the
-    ##    respective namespace can be selected
-    inst = bridge_class.new(field, @internal_class, @external_class, **args)
+  ## In addition to any initialization arguments for the bridge
+  ## class instance, +args+ may contain any of the following
+  ## keywords:
+  ##
+  ## * +bridge_class:+  If provided, will be used as the bridge
+  ## class
+  ##
+  ## If no +bridge_class+ is provided, the value returned will
+  ## depend generally on the +kind+ to the call, as well as the
+  ## existence of any non-nil +:instance_var+ keyword in +args+
+  ##
+  ## @param kind [:scalar or :seq or :map] kind of value for
+  ## access in the field bridge
+  ## @param args [any] see previous
+  ##
+  ## @see #add_bridge
+  def bridge_class_for_args(kind: :scalar, **args)
+    ## NB see also FieldHBroker#bridge_class_for_args
+    return use_class = args[:bridge_class] if use_class
+    if args[:instance_var]
+      var = true
+    else
+      var = false
+    end
+
+    case kind
+    when :scalar
+      var ? Bridge::VarFieldBridge : Bridge::FieldBridge
+    when :seq
+      var ? Bridge::Seq::VarFieldBridge : Bridge::Seq::FieldBridge
+    when :map
+      var ? Bridge::Map::VarFieldBridge : Bridge::Map::FieldBridge
+    else
+      msg = 'Unable to determine field bridge class - '
+      if kind
+        msg.concat("kind #{kind} not recognized")
+      else
+        msg.concat( "no :bridge_class or :kind provided")
+      raise msg
+      end
+   end
+  end
+
+  def add_bridge(field, **args)
+    bridge_class = bridge_class_for_args(**args)
+    initargs = args.dup
+    ## remove args used singularly in bridge_class_for_args
+    initargs.delete(:bridge_class)
+    initargs.delete(:kind)
+    inst = bridge_class.new(field, @internal_class, @external_class,
+                            **initargs)
     @field_map[field]=inst
-    ext_name=args[:external_name]
-    @ext_field_map[ext_name]=inst
+    @ext_field_map[inst.external_name]=inst
     return inst
   end
 
@@ -226,7 +266,7 @@ class FieldBroker < ClassBridge
   ##
   ## If a block is provided in the call, the block will be
   ## invoked with +self+ and the provided +field+, as when no
-  ## FieldBridge can be found for the provided field name.
+  ## fieldbridge can be found for the provided field name.
   ##
   ## @param field [Symbol] field name
   ## @param default [any] value to return, if no matching field
@@ -236,6 +276,7 @@ class FieldBroker < ClassBridge
     if field_map.key?(name)
       return field_map[name]
     else
+      ## FIXME just yield field
       yield(self, field) if block_given?
       return default
     end
@@ -248,11 +289,16 @@ class FieldBroker < ClassBridge
   ## If a block is provided in the call, the block will be
   ## invoked with +self+ and the provided +field+, as when no
   ## FieldBridge can be found for the provided external field
-  ## name.
+  ## name. Applications may provide any default field mapping
+  ## behavior, in any such procedural block.
   ##
   ## @param ext_field [Symbol] field name
   ## @param default [any] value to return, if no matching field
   ##  bridge can be found in this instance
+  ##
+  ## @note If any two or more field bridges are defined for any
+  ## single external field, in this field broker, this method
+  ## will return only the first field bridge defined.
   def find_bridge_external(ext_field, default=false)
     name = ext_field.to_sym
     if ext_field_map.key?(name)
@@ -314,10 +360,57 @@ class FieldBroker < ClassBridge
       bridge.export(int_inst, ext_inst)
     end
   end
+
+
+  def map_fields(&block)
+    @field_map.each { |field, bridge|
+      block.yield(bridge)
+    }
+  end
 end
 
 
+## *FieldBroker* type for interoperabvility with external object
+## systems using hash-like field maps
+##
+## @see Psych
 class HFieldBroker < FieldBroker
+
+  ## Implementation of the FieldBroker#bridge_class_for_args
+  ## method for this FieldBroker class
+  ##
+  ## This method operates generally similar to
+  ## FieldBroker#bridge_class_for_args except in returning
+  ## a range of classes for interoperability onto hash-like
+  ## external field maps
+  ##
+  ## @see #add_bridge
+  def bridge_class_for_args(kind: :scalar, **args)
+    ## NB see also FieldBroker#bridge_class_for_args
+    return use_class = args[:bridge_class] if use_class
+    if args[:instance_var]
+      var = true
+    else
+      var = false
+    end
+
+    case kind
+    when :scalar
+      var ? Bridge::VarFieldHBridge : Bridge::FieldHBridge
+    when :seq
+      var ? Bridge::Seq::VarFieldHBridge : Bridge::Seq::FieldHBridge
+    when :map
+      var ? Bridge::Map::VarFieldHBridge : Bridge::Map::FieldHBridge
+    else
+      msg = 'Unable to determine field bridge class - '
+      if kind
+        msg.concat("kind #{kind} not recognized")
+      else
+        msg.concat( "no :bridge_class or :kind provided")
+      raise msg
+      end
+   end
+  end
 
 
   def initialize(internal_class, external_class = Hash)
@@ -490,19 +583,16 @@ module VarFieldBridgeMixin
     extclass.attr_reader :instance_var
 
     def initialize(name, internal_class, external_class,
-                   # external_name: name,
-                   instance_var: ("@" + name.to_s).to_sym,
-                   #external_getter: external_name,
-                   #external_setter: true,
+                   instance_var: true,
                    **restargs)
+      ## NB assumption: external_name in restargs
+      ## will be handled in a superclass
       args = restargs.dup
       args[:internal_getter] ||= nil
       args[:internal_setter] ||= nil
-      # args[:external_name] = external_name
-      #external_getter && ( args[:external_getter]=external_getter )
-      #external_setter && ( args[:external_setter]=external_setter )
       super(name, internal_class, external_class, **args)
-      @instance_var = instance_var
+      @instance_var = instance_var == true ?
+        ("@" + name.to_s).to_sym : instance_var
     end
   end
 
@@ -575,10 +665,20 @@ module FieldHBridgeMixin
     external_inst.key?(self.name_for_export())
   end
 
+  def add_external(external_inst, value)
+    ## FIXME this is somehow being reached from the ::Map add_external
+    if value_ext?(external_inst)
+      super
+    else
+      init_external(external_inst, value)
+    end
+  end
+
   def set_external(external_inst, value)
     name = self.name_for_export()
     external_inst[name]=value
   end
+  alias :init_external :set_external ## FIXME needs override in enum subclasses
 
   def get_external(external_inst, default=false)
     name = self.name_for_export()
@@ -611,13 +711,14 @@ module VarFieldHBridgeMixin
 
     def initialize(name, internal_class,
                    external_class = Hash,
-                   instance_var: ("@" + name.to_s).to_sym,
+                   instance_var: true,
                    **restargs)
       args = restargs.dup
       args[:external_setter] ||= nil
       args[:external_getter] ||= nil
       super(name, internal_class, external_class, **args)
-      @instance_var = instance_var
+      @instance_var = instance_var == true ?
+        ("@" + name.to_s).to_sym : instance_var
     end
 
   end ## self.included
@@ -655,6 +756,7 @@ class EnumFieldBridge < FieldBridge
   ## bridge, as the internal value for this field bridge
   ##
   ## @see #export_enum
+  ## @fixme not well supported, and presently untested
   def import_enum(external_inst, internal_inst)
     v = get_external(external_inst).dup
     set_internal(internal_inst, v)
@@ -664,6 +766,7 @@ class EnumFieldBridge < FieldBridge
   ## bridge, as the external value for this field bridge
   ##
   ## @see #import_enum
+  ## @fixme not well supported, and presently untested
   def export_enum(internal_inst, external_inst)
     v = get_internal(internal_inst).dup
     set_external(external_inst, v)
@@ -689,12 +792,22 @@ module Seq ## FieldBroker::Bridge::Seq
 ##  for fields using a generally hash-like storage
 class FieldBridge < EnumFieldBridge
 
+  def init_internal(internal_inst, element)
+    set_internal(internal_inst,[element])
+  end
+
   ## add an element to the internal value for this field bridge
   ##
   ## @see #import_value
   ## @see #import_enum
   def add_internal(internal_inst, value)
-    get_internal(internal_inst).push(value)
+    ## FIXME value checking for the result of get_internal
+    ## as when it retuns false for an unbound field ...
+    if value_in?(internal_inst)
+      get_internal(internal_inst).push(value)
+    else
+      init_internal(internal_inst,value)
+    end
   end
 
   ## add an element to the external value for this field bridge
@@ -702,6 +815,7 @@ class FieldBridge < EnumFieldBridge
   ## @see #export_each
   ## @see #export_enum
   def add_external(external_inst, value)
+    ## FIXME cannot push a value to an unbound external.
     get_external(external_inst).push(value)
   end
 
@@ -714,8 +828,12 @@ class FieldBridge < EnumFieldBridge
     ## importing each element
     ##
     ## FIXME use this under hash subclasses
-    value.each do |elt|
-      add_internal(internal_inst, elt)
+    if value_in?(internal_inst)
+      value.each do |elt|
+        add_internal(internal_inst, elt)
+      end
+    else
+      set_internal(internal_inst,value.dup)
     end
   end
 
@@ -726,6 +844,8 @@ class FieldBridge < EnumFieldBridge
   ## @see #import_enum
   def import_each(external_inst, internal_inst)
     get_external(external_inst).each do |elt|
+      ## FIXME not functionally distinct to #import_value
+      ## FIXME may not be clearly consistent onto other classes
       add_internal(internal_inst, elt)
     end
   end
@@ -752,18 +872,32 @@ end
 
 class FieldHBridge < FieldBridge
   include FieldHBridgeMixin
+
+  ## initialize the external field with a sequence of a single
+  ## element, provided as +value+
+  def init_external(external_inst, value)
+    set_external(external_inst,[value])
+  end
+
+  def add_external(external_inst, value)
+    if value_ext?(external_inst)
+      ## FIXME value_ext? is only defined in FieldHBridgeMixin
+      ## wehere it is fairly straightforward to implement
+      ## and entails no assumptions about external classes
+      super
+    else
+      init_external(external_inst, value)
+    end
+  end
 end
 
 class VarFieldHBridge < FieldHBridge
   include VarFieldHBridgeMixin
 end
 
-
 end ## Module FieldBroker::Bridge::Seq
 
-
-
-module Map
+module Map ## FieldBroker::Bridge::Map
 
 ## *FieldBridge* type for fields utilizing a Hash-like value for
 ## internal and external field storage
@@ -781,13 +915,22 @@ module Map
 ##  for fields using a generally array-like storage
 class FieldBridge < EnumFieldBridge
 
+  def init_internal(internal_inst, key, value)
+    set_internal(internal_inst,{key => value})
+  end
+
+
   ## add a key, value pair to the internal value for this field
   ## bridge
   ##
   ## @see #import_value
   ## @see #import_enum
   def add_internal(internal_inst, key, value)
-    get_internal(internal_inst)[key] = value
+    if value_in?(internal_inst)
+      get_internal(internal_inst)[key] = value
+    else
+      init_internal(internal_inst, key, value)
+    end
   end
 
   ## add a key, value pair to the extternal value for this field
@@ -808,8 +951,12 @@ class FieldBridge < EnumFieldBridge
     ## importing each key, value pair
     ##
     ## FIXME use this under hash subclasses
-    value.each do |k, v|
-      add_internal(internal_inst, k, v)
+    if value_in?(internal_inst)
+      value.each do |k, v|
+        add_internal(internal_inst, k, v)
+      end
+    else
+      set_internal(internal_inst, value.dup)
     end
   end
 
@@ -844,6 +991,24 @@ end
 
 class FieldHBridge < FieldBridge
   include FieldHBridgeMixin
+
+  def init_external(external_inst, key, value)
+    set_external(external_inst,{key => value})
+  end
+
+  def add_external(external_inst, key, value)
+    if value_ext?(external_inst)
+      ## FIXME value_ext? is only defined in FieldHBridgeMixin
+      ## wehere it is straightforward to implement
+      ## and entails no assumptions about external classes
+
+      # super ## * FIXME * this is dispatching to the wrong superclass method
+      ## FIXME this should not have to be implemented directly here:
+      get_external(external_inst)[key] = value
+    else
+      init_external(external_inst, key, value)
+    end
+  end
 end
 
 class VarFieldHBridge < FieldHBridge
@@ -855,8 +1020,6 @@ end ## module FieldBroker::Bridge::Map
 end  ## module FieldBroker::Bridge
 
 end ## module FieldBroker
-## FIXME
-
 
 # Local Variables:
 # fill-column: 65

@@ -126,6 +126,7 @@ class MarshalBroker
 end
 
 class YAMLMarshalBroker < MarshalBroker
+  ## FIXME obsolete prototype
 
   ## NB selective encoding/decoding for YAML serialization
   ## of a single Ruby class - selective in that this does
@@ -156,7 +157,9 @@ class YAMLMarshalBroker < MarshalBroker
     ##
     ## TBD is there way to initialize a YAML + options
     ## object?
-    ## - TBD use Psych
+    ## - TBD use Psych ...
+    ## - Test ruby struct encoding
+    ##   - nothing too expansive for project file interchange ...
     YAML.dump(val, dest)
   end
 

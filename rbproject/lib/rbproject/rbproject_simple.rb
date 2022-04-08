@@ -32,41 +32,51 @@ class RbProject < Proj
   ##   onto the field description to which each external mapping is bound
   GEMSPEC_FIELDS = [:name, :version, :license,
                     :summary, :description,
-                    [:authors, :authors, :seq],
-                    [:require_paths, :require_paths, :seq],
-                    [:lib_files, :all_files, :seq],
-                    [:test_files, :all_files, :seq],
-                    [:doc_files, :all_files, :seq],
-                    [:development_depends,
-                     :add_development_dependency,
-                     :mapping],
-                    [:runtime_depends,
-                     :add_runtime_dependency,
-                     :mapping]
+                    [:authors, :authors],
+                    [:require_paths, :require_paths],
+                    [:lib_files, :all_files],
+                    [:test_files, :all_files],
+                    [:doc_files, :all_files],
+                    [:development_depends, :add_development_dependency],
+                    [:runtime_depends, :add_runtime_dependency]
                    ]
 
 
   extend CollectionAttrs
-  attr_seq :development_depends
-  attr_seq :runtime_depends
+  attr_seq(:development_depends,
+           add_name: :add_development_depends_qualified)
+  attr_seq(:runtime_depends,
+           add_name: :add_runtime_depends_qualified)
 
   def self.project(filename,**loadopts)
     self.load_yaml_file(filename, **loadopts)
   end
 
-  def self.add_seq(value, whence)
+  def self.join_seq!(value, external)
     if value
-      if whence
-        whence.concat(value)
+      if external
+        external.concat(value)
       else
         value
       end
     else
-      whence
+      external
     end
   end
 
+  def add_development_depends(name, version=nil)
+    version ||= true
+    add_development_depends_qualified(name, version)
+  end
+
+  def add_runtime_depends(name, version=nil)
+    version ||= true
+    add_runtime_depends_qualified(name, version)
+  end
+
+
   def gemspec()
+    ## FIXME use field mapping, self.class => Gem::Specification
     if ! @gemspec
       @gemspec = Gem::Specification.new do |s|
         ## FIXME redefine this as an iterator on some sequence for
@@ -78,8 +88,8 @@ class RbProject < Proj
         description && ( s.description = description )
         license && ( s.license = license )
         all_files = lib_files
-        test_files && ( all_files = self.add_seq(test_files,all_files) )
-        doc_files && ( all_files = self.add_seq(doc_files, all_files ))
+        test_files && ( all_files = self.join_seq!(test_files,all_files) )
+        doc_files && ( all_files = self.join_seq!(doc_files, all_files ))
         s.files = all_files
 
         if metadata
@@ -94,6 +104,9 @@ class RbProject < Proj
     return @gemspec
   end
 
+  ## FIXME also provide methods onto
+  ## Rake::RDocTask
+  ## ... rspec && rake ...
 
   def gem_package_task(spec = gemspec)
     ## TBD no memoization here

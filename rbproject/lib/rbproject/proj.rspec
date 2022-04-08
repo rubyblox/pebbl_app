@@ -153,7 +153,7 @@ metadata:
       out_ios.pos = 0
       other.load_yaml_stream(out_ios)
 
-      described_class::SERIALIZE_FIELDS.each do |fieldspec|
+      described_class::YAML_FIELDS.each do |fieldspec|
         ## ensure each field in the subject is equivalent to
         ## that field in the other object
         field_name= fieldspec.is_a?(Array) ? fieldspec[0] : fieldspec
@@ -183,10 +183,47 @@ metadata:
     }
     it_should_behave_like "Proj YAML read/write/read"
   end
-
-
-
 end
+
+describe AppIO do
+## TBD module as subject
+  before {
+    class TestApp
+      include AppIO
+    end
+  }
+
+  context "::bom_option_string!" do
+    it "returns the mode mofified with the :io_bom option" do
+      opts = {:io_bom => "UTF-8", :other_opt => false}
+      expect(TestApp::bom_option_string!("rw",opts,nil)).
+        to be == "rw:BOM|UTF-8"
+    end
+
+    it "returns the mode uncchanged when no :io_bom is provided" do
+      opts = {:other_opt => false}
+      expect(TestApp::bom_option_string!("rw",opts,nil)).
+        to be == "rw"
+    end
+  end ## ::bom_option_string context
+
+  context "::io_options!" do
+    it "filters IO constructor options" do
+      TestApp::IO_OPTION_FLAGS.each do |flag|
+        not_flag =( "not_" + flag.to_s).to_sym
+        opts = {flag => false, not_flag => true}
+        out = TestApp::io_options!(opts)
+        expect(opts.length).to be == 1
+        expect(opts[flag]).to be nil
+        expect(opts[not_flag]).to be true
+        expect(out.length).to be == 1
+        expect(out[flag]).to be false
+        expect(out[not_flag]).to be nil
+      end
+    end
+  end ## ::io_options! context
+
+end ## AppIO extension module
 
 # Local Variables:
 # fill-column: 65

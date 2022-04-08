@@ -4,11 +4,6 @@
 
 In this source file, at this revision:
 
-- FieldDesc, with implementation classes
-  ScalarFieldDesc, SequenceFieldDesc,
-  MappingFieldDesc
-  - FIXME move into module Config - see configfile.rb
-
 - YAMLScalarExt and YAMLIncludeFile classes
   - FIXME move into module Config::YAML - see configfile.rb
 
@@ -32,15 +27,6 @@ In this source file, at this revision:
 FIXME All definitions excepting 'Proj' should be moved into
 indindividual { gem, file } locations
 
-FIXME an additional mixin module could be defined in an
-extension onto the CollectionAttrs module, such that the
-new extension would also operate to provide for field
-desc init, pursuant to any procedures for limting field
-serialization onto YAML && generic YAML 'mapping' encoding
-for application data interchange. This may be developed
-after the *FieldDesc* API design would be in any first
-major revision.
-
 =end
 
 =begin Some notes onto psych
@@ -62,272 +48,6 @@ major revision.
 =end
 
 require('psych')
-
-module FieldMap
-  ## assumption: Any class including this class would be a direct
-  ## or indirect subclass of FieldDesc
-  attr_reader :external_class
-  attr_reader :external_name
-
-  def initialize(in_class, name, external_class, external_name)
-    super(in_class, name)
-    @external_class = external_class
-    @xternal_name = external_name
-  end
-
-  def send_value(external_instance, **values)
-    external_instance.call(external_name, **values)
-  end
-end
-
-
-## _ad hoc_ field description for Ruby classes
-##
-## Used in *Proj* under serialization to YAML
-class FieldDesc
-
-  ## the name of the class for which this *FieldDesc*
-  ## was created
-  ##
-  ## @return [Class] the class
-  attr_reader :in_class
-
-  ## the generalized field name for this *FieldDesc*
-  ##
-  ## @return [Symbol] the generalized field name
-  attr_reader :name
-
-  ## the name of the instance variable for this
-  ## *FieldDesc*
-  ##
-  ## @return [Symbol] the instance variable name
-  attr_reader :instance_var
-
-  ## a symbol describing the type of the FieldDesc,
-  ## for purpose of control flow dispatching, or
-  ## +nil+ if no type has declared
-  attr_reader :type
-
-
-  ## create a +FieldDesc+ for the generalized field +name+ in the
-  ## class +in_class+.
-  ##
-  ## As well as binding the values for the *#in_class* and *#name*
-  ## reader methods, this constructor will also initialize a
-  ## value for the *#instance_var* reader method/
-  ##
-  ## @param in_class [Class] the class containing the named field
-  ## @name [String or Symbol] the generalized name of the field.
-  ##  This name, when prefixed with +'@'+ will be used as an
-  ##  instance variable name for acessing the generalized field
-  ##  under instances of the denoted class
-  ##
-  ## @see #value_in?
-  ## @see #get_value
-  ## @see #set_value
-  def initialize(in_class, name)
-    @in_class = in_class
-    @name = name.to_sym
-    @instance_var = ( '@' + name.to_s ).to_sym
-  end
-
-
-  ## return true, if the *#instance_var* is defined as an
-  ## intstance variable in +instance+
-  ##
-  ## @see #instance_var
-  def value_in?(instance)
-    instance.instance_variable_defined?(@instance_var)
-  end
-
-
-  ## if the *#instance_var* is initialized to a value
-  ## in +instance+, return that value, else return +default+
-  ##
-  ## @see #instance_var
-  def get_value(instance, default=false)
-    if value_in?(instance)
-      instance.instance_variable_get(@instance_var)
-    else
-      return default
-    end
-  end
-
-  ## set the *#instance_var* to the provided +value+
-  ## in a specified +instance+
-  ##
-  ## @see #instance_var
-  def set_value(instance, value)
-    instance.instance_variable_set(@instance_var,value)
-  end
-  alias :init_field :set_value
-end
-
-
-class ScalarFieldDesc < FieldDesc
-
-  def initialize(in_class, name)
-    super
-    @type = :scalar
-  end
-end
-
-class ScalarFieldMap < ScalarFieldDesc
-  extend FieldMap
-
-  def export(internal_instance, external_instance)
-    if value_in?(internal_instance)
-      if block_given?
-        yield lambda {|val| send_value(external_instance,val)}
-      else
-          value = get_value(internal_instance)
-          send_value(external_instance, value)
-      end
-    end
-  end
-end
-
-## superclass for *FieldDesc* types representative of
-## enumerable field values
-##
-## @see SequenceFieldDesc
-## @see MappingFieldDesc
-class EnumerableFieldDesc < FieldDesc
-end
-
-## class for *FieldDesc* types representative of
-## generally Array-like field values
-class SequenceFieldDesc < EnumerableFieldDesc
-
-  def initialize(in_class, name)
-    super(in_class, name)
-    @type = :sequence
-  end
-
-  ## store a value uniquely in the field of the instance
-  def add_value(instance, value)
-    if value_in?(instance)
-      seq = get_value(instance)
-      found = seq.find { |elt| elt == value }
-      if found
-        return seq
-      else
-        seq.push(value)
-      end
-    else
-      set_value(instance,[value])
-    end
-  end
-  alias :init_field :add_value
-
-  # def remove_value(instance, value)
-  # end
-end
-
-
-class SequenceFieldMap < SequenceFieldDesc
-  extend FieldMap
-
-  def export(internal_instance, external_instance)
-    if value_in?(internal_instance)
-      if block_given?
-        yield lambda { |elt| send_value(external_instance, elt) }
-      else
-        get_value(internal_instance).each do |elt|
-          send_value(external_instance, elt)
-        end
-      end
-    end
-  end
-end
-
-
-## class for *FieldDesc* types representative of
-## generally Hash-like field values
-##
-## @see Proj#load_yaml_field
-## @see Proj#load_yaml_stream
-class MappingFieldDesc < EnumerableFieldDesc
-  def initialize(in_class, name)
-    super
-    @type = :mapping
-  end
-
-  ## store each pair of key, value bindings from
-  ## a provided hash +map+
-  ##
-  ## @param instance [any] an object of the type
-  ##  denoted in the *#in_class* field of this
-  ##  *FieldDesc*
-  ##
-  ## @param map [Hash] a set of key, value bindings
-  ##  to store in the corresponding field of the
-  ##  instance
-  ##
-  ## @see #store_value
-  def store_values(instance, map)
-    map.each do |k,v|
-      store_value(instance, k, v)
-    end
-  end
-  alias :init_field :store_values
-
-  ## store a single key, value binding
-  ##
-  ## @param instance [any] an object of the type
-  ##  denoted in the *#in_class* field of this
-  ##  *FieldDesc*
-  ##
-  ## @param key [any]
-  ##
-  ## @param value [any]
-  ##
-  ## @see #store_values
-  def store_value(instance, key, value)
-    if value_in?(instance)
-      h = instance.instance_variable_get(@instance_var)
-      h[key]=value
-    else
-      set_value(instance,{key => value})
-    end
-  end
-
-  # def remove_key(instance, key)
-  # end
-end
-
-class MappingFieldMap < MappingFieldDesc
-  extend FieldMap
-
-  def export(internal_instance, external_instance)
-    ## FIXME ...
-
-    if value_in?(internal_instance)
-      if block_given?
-        ## assumption: The calling method will access and
-        ## transform the internal field data for the instance
-        ##
-        ## The lambda yielded to the block in the calling method
-        ## should be called with each key, value pair to send
-        ## to the external instance
-        ##
-        ## NB usage case - implementation for the metadata field
-        ## mapping from an RbProject onto gemspec metdatada
-        yield lambda { |k,v| send_value(external_instance, k, v) }
-      else
-        ## NB usage case for external mapping to
-        ## Gem::Specification instance methods
-        ## #add_development_dependency and
-        ## #add_runtime_dependency from each
-        ## of RbProject fields :development_depends
-        ## and :runtime_depends
-        value = get_value(internal_instance)
-        value.each { |k,v| send_value(external_instance, k, v) }
-      end
-    end
-  end
-end
-
 
 
 # class ObjectFieldDesc < MappingFieldDesc
@@ -377,6 +97,7 @@ module YAMLExt
       )
       ## extclass
       Psych.load_tags[use_tag] = class_name
+      #Psych.load_tags[use_tag] = self.name.to_sym # ??
       Psych.dump_tags[self] = use_tag
       return use_tag
     end
@@ -597,18 +318,6 @@ module CollectionAttrs
       get_name ||= use_name.to_sym
       set_name ||= (use_name + '=').to_sym
 
-      # if defined?(APP)
-      #   APP.log_debug(
-      #     "In #{__method__}: inst_var #{inst_var}"
-      #   )
-      #   APP.log_debug(
-      #     "In #{__method__}: add_name #{add_name} rem_name #{rem_name}"
-      #   )
-      #   APP.log_debug(
-      #     "In #{__method__}: get_name #{get_name} set_name #{set_name}"
-      #     )
-      # end
-
       define_method(add_name) { |value|
         if instance_variable_defined?(inst_var) &&
             ( stored = instance_variable_get(inst_var) )
@@ -631,6 +340,10 @@ module CollectionAttrs
       define_method(set_name) {|value|
         instance_variable_set(inst_var, value) }
 
+      if block_given?
+        yield [inst_var,add_name,rem_name,get_name,set_name]
+      end
+      return field
     end ## def attr_seq
 
 
@@ -656,26 +369,17 @@ module CollectionAttrs
     #
     # @see extclass.attr_seq Define accessor methods for asn
     #  Array-like field
-    def extclass.attr_map(field, add_name: nil, rem_name: nil,
+    def extclass.attr_map(field, trim_plural: true,
+                          add_name: nil, rem_name: nil,
                           get_name: nil, set_name: nil)
       use_name = field.to_s
       inst_var = ('@' + use_name).to_sym
-      add_name ||= ('set_' + use_name).to_sym
-      rem_name ||= ('remove_' + use_name).to_sym
+      verb_sfx = ( trim_plural && use_name[-1] == "s" ) ?
+        use_name[...-1] : use_name
+      add_name ||= ('set_' + verb_sfx).to_sym
+      rem_name ||= ('remove_' + verb_sfx).to_sym
       get_name ||= use_name.to_sym
-      set_name ||= (use_name + '_map=').to_sym
-
-      # if defined?(APP)
-      #   APP.log_debug(
-      #     "In #{__method__}: inst_var #{inst_var}"
-      #   )
-      #   APP.log_debug(
-      #     "In #{__method__}: add_name #{add_name} rem_name #{rem_name}"
-      #   )
-      #   APP.log_debug(
-      #     "In #{__method__}: get_name #{get_name} set_name #{set_name}"
-      #     )
-      # end
+      set_name ||= (use_name + '=').to_sym
 
       ## NB this o.set_thing(key,value) semantics
       ## may be less than ideal for a hash field
@@ -712,18 +416,19 @@ module CollectionAttrs
       define_method(set_name) {|value|
         instance_variable_set(inst_var, value) }
 
-    end ## def attr_seq
-
-  end ## def self.extended(extclass)
-
+      if block_given?
+        yield [inst_var,add_name,rem_name,get_name,set_name]
+      end
+      return field
+    end ## attr_seq
+  end ## self.extended(extclass)
 end ## module CollectionAttrs
-
 
 require('logger')
 require('forwardable')
 
-## mixin module for adding *log_*+ delegate
-## methods to a class
+## mixin module for adding *log_*+ delegate methods to a class
+## FIXME now duplicated in ~/wk/rbdevtools/gemreg/lib/riview.rb
 module LoggerDelegate
 
   def self.extended(extclass)
@@ -749,6 +454,108 @@ module LoggerDelegate
     end ## def_logger_delegate block
   end ## self.extended block
 end ## LoggerDelegate module
+
+
+module AppIO
+
+  ## IO options list for +::io_options!+
+  ##
+  ## @see ::io_options!
+  ## @see IO::new
+  IO_OPTION_FLAGS = [:mode, :flags,
+                     :external_ecodiing,
+                     :internal_encoding,
+                     :encoding, :tetmode,
+                     :binmode, :autoclose]
+
+
+  ## TBD providing extended loadopts for file encoding
+  ## (internal, external) and Unicode BOM options
+  ## cf. Encoding docs - Encoding::find
+  ##
+  ## Here: supporting an :io_bom option
+  ##
+  ## TBD docs on the BOM option
+  ##
+  ## option io_bom:
+  ##   UTF-8|UTF-16LE|UTF-16BE|UTF-32LE|UTF-32BE(upper/lowercase)
+  ##
+  ## NB UTF-16* implies file_mode: :binary which is used here
+  ## by default
+  ##
+  ## TBD UTF-32* probably also
+  ##
+  ## NB test files used in ruby-src:spec/ruby/language/source_encoding_spec.rb
+  ##
+  ## NB MODE_SETENC_BY_BOM
+  ##    in ruby-src:io.c
+  ##
+  ## NB ri docs for IO::new
+
+
+  def self.included(extclass)
+
+    ## @PARAM MODE [String] mode as in +File::open+, absent of
+    ##   any BOM of encoding strings
+    ## @param options [Hash] will be dstructively modified if :io_bom
+    ##   is provided in +options+, such as to remove the argument
+    ##   name and value
+    ##
+    ## @see ::io_options!
+    def extclass.bom_option_string!(mode, options, default = "UTF-8")
+      ## FIXME needs documentation
+
+      use_mode = mode.to_s
+      if options.key?(:io_bom)
+        if use_bom = options[:io_bom]
+          opts_str="#{use_mode}:BOM|#{use_bom.to_s}"
+        else
+          ## i.e io_bom: false | io_bom: nil
+          opts_str = use_mode
+        end
+        options.delete(:io_bom)
+      elsif default
+        opts_str = "#{use_mode}:BOM|#{default}"
+      else
+        opts_str = use_mode
+      end
+      return opts_str
+    end
+
+
+    ## process the provided *opts* map for any key, value pairs
+    ## with a key denoted in +IO_OPTION_FLAGS+. For each matching
+    ## key, delete the key, value pair from +opts+ and add the
+    ## options pair to the return value. For any options provided
+    ## in +defaults+, add those options to the return value if no
+    ## matching key is provided in *opts*. Returns the
+    ## constructed IO options map
+    ##
+    ## This method may destructively modify the options map
+    ## +opts+, in filtering options to produce the return value.
+    ##
+    ## @param opts [Hash]
+    ## @param defaults
+    ## @return [Hash]
+    ## @see IO::new
+    ## @see ::bom_option_string!
+    def extclass.io_options!(opts,**defaults)
+      use_options={}
+      IO_OPTION_FLAGS.each do |flag|
+        if opts.key?(flag)
+          use_options[flag]=opts[flag]
+          opts.delete(flag)
+        end
+      end
+      defaults.each do |arg,argv|
+        if ! use_options.key?(arg)
+          use_options[arg]=argv
+        end
+      end
+      return use_options
+    end
+  end
+end
 
 ##
 ## naive Application class
@@ -786,8 +593,8 @@ class Application
     end
     @logger = use_logger
   end
-
 end
+
 
 =begin TBD
 BEGIN {
@@ -803,6 +610,9 @@ BEGIN {
 }
 =end
 
+
+require_relative('interop')
+
 ##
 ## Project class
 ##
@@ -811,6 +621,8 @@ BEGIN {
 ##  such that may serve to limit the portability of either
 ##  set of API forms.
 class Proj
+
+  include AppIO ## FIXME move to an AppData class
 
   ## FIXME the following should be expanded into some normal
   ## documentation
@@ -869,6 +681,88 @@ class Proj
   ## #visit_BasicObject, and #dump_coder instance methods onto
   ## Psych::Visitors::YAMLTree as in
   ## psych:lib/psych/visitors/yaml_tree.rb
+  ##
+  ## This mapping may be configured e.g
+  ##  Psych.load_tags[<class>] = <tag>
+  ##
+  ## ... after which, the provided <tag> will be used
+  ## when serializing any instance of the denoted <class>
+  ##
+  ## Additional notes:
+  ##
+  ## - When the mapped class is redefined, each converse
+  ##   tags/class mapping value should generally be stored
+  ##   newly, for the mapped tag
+  ##
+  ## - Towards extension: This class/tag mapping behavior may
+  ##   be used for supporting YAML deserialization of instances
+  ##   of classes defined in langauges other than Ruby, or for
+  ##   general YAML interchange.
+  ##
+  ## TBD as to how it may map into any of Psych's json support
+  ##
+  ## TBD how to ensure, under a Proj#init_with method, that
+  ## any non-serializing instance variables will not be
+  ## encoded in the YAML serialization stream
+  ##
+  ## TBD further annotations/notes/docs as to how to implement
+  ## an :init_with method, e.g onto the ... thing ... passed
+  ## to the method such as from Psych::Visitors::ToRuby#deserialize
+  ##
+  ## - NB broad similarity to the :encode_with semantics under
+  ##   Psych::Visitors::YAMLTree#accept ... singularly onto
+  ##   #dump_coder and subsq. #emit_coder
+  ##   ... moreover only under calls to YamlTree#accept
+  ##       ... e.g for Struct object members ...
+  ##       ... or Range limits
+  ##       ... or each Hash key, value
+  ##       ... or Set key, value (value generally 'true' ??)
+  ##       ... or other Enumerator elements (each)
+  ##       ... or TBD onto BasicObject under YAMLTree (Ruby-marshalable objects)
+  ##       ... or TBD instance variables of "array subclasses" and sometimes
+  ##           also individual elements of the instance (??)
+  ##       ... or TBD onto a "hash subclass" (FIXME test with the Options API)
+  ##       ... or for serializing a ruby exception ... #accept on
+  ##           the exception message and the exception backtrace
+  ##   ... and in #dump_coder (note also, Coder instance usage as
+  ##       dentoed below, for deserialization - a Coder is not a
+  ##       Psych Node, but may represent a value in some ways
+  ##       parallel to the AST-relevant nature of a Psych Node)
+  ##
+  ## - The arg to the :init_with method will be an instance of
+  ##   Psych::Coder initialized with the bound tag,
+  ##   and subsequently ...
+  ##   - for a scalar node under ToRuby#deserialize: The 'value'
+  ##     of the scalar node stored under the <<coder.scalar>>
+  ##     field, and thus with a Coder@type = :scalar
+  ##   - For a sequence node: a <<coder.seq>> field containing the
+  ##     original children.map of the sequence node
+  ##     ... subsq Coder@type = :seq
+  ##   - For a mapping node mapped with such as Psych.load_tags
+  ##     ... TBD :init_with under ToRuby#revive &&
+  ##         ToRuby#revive_hash ... hash key, value mapping from the latter
+  ##     ... there with a <coder.map>> field containing
+  ##         (see below)
+  ##      ... subsq Coder@type = :map
+  ##   - Otherwise for a mapping node (not dispatched per load_tags)
+  ##      - for each, with subsq Coder@type = :map
+  ##      - onto a struct tag:
+  ##        TBD how it's mapped from ToRuby#init_with
+  ##      - onto a string deserialized as a mapping
+  ##        TBD at #init_with there (initializing a string and
+  ##        remapped instance variable encoding
+  ##      - onto a deserialized Ruby exception
+  ##        TBD at #init_with there (initializing a hash table?)
+  ##      - onto an object serialized with a tag '!ruby/marshalble:...'
+  ##        TBD ... and a #revive_hash call. (See also
+  ##        :mashal_load under this branch in ToRuby)
+  ##    - ToRuby#init_with is also called in ToRuby#revive
+  ##    - ToRuby#init_with itself will call any :init_with method
+  ##      of the object provided as the first arg to ToRuby#init_with,
+  ##      passing a 'Coder' instance then initialized with the
+  ##      tag of the third arg to ToRuby#init_with, subsq
+  ##      with the value of the second arg to ToRuby#init_with
+  ##      stored under the <<coder.map>> field
 
 
   def self.load_yaml_file(filename, **loadopts)
@@ -916,84 +810,83 @@ class Proj
   ## https://guides.rubygems.org/specification-reference/
 
   ## field descriptions for serializable fields of this class
+  ## for interop onto Hash key,values pairs and other instances
+  ## of this class - supporting scalar, sequence i.e array, and
+  ## mapping i.e hash type field values
   ##
-  ## @see ::mk_fdescs
-  ## @see ::fdesc_init
-  SERIALIZE_FIELDS = [:name, :version, :homepage,
-                      :summary, :description, :license,
-                      [:require_paths, :sequence],
-                      [:lib_files, :sequence],
-                      [:test_files, :sequence],
-                      [:doc_files, :sequence],
-                      [:authors, :sequence],
-                      [:metadata, :mapping]]
+  ## @see ::yaml_field_broker
+  YAML_FIELDS = [:name, :version, :homepage,
+                 :summary, :description, :license,
+                 [:require_paths, :seq],
+                 [:lib_files, :seq],
+                 [:test_files, :seq],
+                 [:doc_files, :seq],
+                 [:authors, :seq],
+                 [:metadata, :map]]
 
-  ## FIXME provide a similar mapping,, GEMSPEC_FIELEDS
-  ## under RbProject
 
-  ## for an element in +SERIALIZE_FIELDS+, initialize a
-  ## *FieldDesc* instance corresponding to the field
-  ## described in that element
-  ##
-  ## @param datum [Symbol or Array] a field description
-  ##
-  ## @return an initialized instance of some subclass of
-  ##  *FieldDesc*, as determined per the syntax of the provied
-  ## *datum*
-  ##
-  ## @see SERIALIZEE_FIELDS
-  ## @see ::mk_fdescs
-  def self.fdesc_init(datum)
-    if (datum.is_a?(Array))
-      name = datum[0]
-      typ  = datum[1]
-
-      case typ
-      when :sequence
-        SequenceFieldDesc.new(self,name)
-      when :mapping
-        MappingFieldDesc.new(self,name)
- else
-        raise "Unsupported FieldDesc type #{typ} in #{datum}"
-      end
+  def self.yaml_field_broker()
+    if @yaml_field_broker &&
+        ( @yaml_field_broker.internal_class.eql?(self.class) )
+      @yaml_field_broker
     else
-      ScalarFieldDesc.new(self, datum)
-    end
-  end
-
-  ## Create an array of *FieldDesc* objects from
-  ## *SERIALIZE_FIELDS+, as representing serializable fields of
-  ## this class. The value will be stored for memoization in
-  ## +@class_fdescs+, for later retrieval after the first call to
-  ## this method.
-  ##
-  ## @return an array of *FieldDesc* objects
-  ##
-  ## @see ScalarFieldDesc
-  ## @see SequenceFieldDesc
-  ## @see MappingFieldDesc
-  ##
-  ## @fixme should return a Hash mapped onto generalized filed
-  ##  names, such that would represent mapping key names under
-  ##  YAML encoding
-  def self.mk_fdescs()
-    ## FIXME this should use a map with each
-    ## key being the generalized field name
-    ## for each fdesc value, with subsq methods
-    ##  self.find_fdesc; self.each_fdesc
-    @class_fdescs ||= self::SERIALIZE_FIELDS.map do |field|
-      self.fdesc_init(field)
+      fieldbroker = FieldBroker::HFieldBroker.new(self)
+      YAML_FIELDS.each { |elt|
+        if elt.is_a?(Array)
+          name = elt[0]
+          kind = elt[1]
+        else
+          name = elt
+          kind = :scalar
+        end
+        fieldbroker.add_bridge(name, kind: kind,
+                               external_name: name.to_s,
+                               instance_var: true)
+      }
+      @yaml_field_broker = fieldbroker
     end
   end
 
   attr_reader :app
 
-  def initialize(app: Application.new("Proj MAIN"))
-    ## FIXME make delegate methods for logging onto app ... logger
-    ## .. FIXME logiging unused except for debug ...
+
+  def initialize(app: Application.new(self.to_s[2...-1]))
+    ## TBD delegate methods for logging onto app.logger
+    ## .. FIXME logging unused except for debug ...
+    ##
+    ## NB @app cannot be assumed to have been initialized for
+    ## any objects created originally in Psych.load
     @app = app
   end
 
+  ## configure a YAML tag to use for encoding this instance
+  ##
+  ## If +value+ is the value +true+, then the class' value of
+  ## +::YAML_TAG+ will be used as the encoding tag
+  ##
+  ## If +value+ is false, no encoding tag will be used. This is
+  ## the default behavior for +Proj+, as it ensures that any
+  ## +Proj+ configuration data will be encoded to a generalized
+  ##YAML mapping
+  ##
+  ## If +value+ is any other value, that value will be used as
+  ## the YAML encoding tag for this instance. For purpose of
+  ## deserialization, a siimlar tag should be used under
+  ## +Psych.load_tags+ e.g
+  ##     Psych.load_tags[custom_tag]=custom_class.name
+  ## Thus, +Psych.load+ may be able to create an object of the
+  ## appropriate class, when processing the subsequent YAML
+  ## encoding stream under +Psych::Visitors::ToRuby+.
+  ##
+  ## @param value [boolean or String] value to use in configuring
+  ##  any YAML encoding tag for this instance
+  ##
+  ## @see #encode_with
+  ## @see #init_with
+  ## @see Psych.dump_tags
+  ## @see Psych.load_tags
+  ## @see ::YAML_TAG
+  ## @see ::init_yaml_tag(...)
   def encode_with_tag=(value)
     case value
         when true
@@ -1003,7 +896,8 @@ class Proj
         else
           ## NB this branch may not be very well supported,
           ## insofar as for reading tagged YAML without further
-          ## configuration onto the Psych API
+          ## configuration onto the Psych API,
+          ## e.g per Psych.load_tags and #init_with
           use_value = value
     end
     @encode_with_tag = use_value
@@ -1092,21 +986,14 @@ class Proj
     (coder.type == :map) ||
       raise("Unsupported coder type #{coder.type} in #{coder}")
 
-    fdescs = self.class::mk_fdescs()
 
-    @fields_from_conf ||= []
+    fbroker = self.class.yaml_field_broker()
+
+    @fields_from_conf ||= [] ## FIXME w/ field broker interop
     opts = {:symbolize_names => true,
             :aliases => true}
     coder.map.each do |k,v|
-      ## NB may not be reached here, loading tagged YAML data
-      ## into an otherwise unininitialized instance
-      # app && app.log_debug("In #{self.class}##{__method__}: initializing #{self} with #{k} => #{v}")
-      $LOGGER &&
-        $LOGGER.debug("In #{self.class}##{__method__}: initializing #{self} with #{k} => #{v}")
-      ## will be reached, even absent of a configured logger:
-      # STDERR.puts "DEBUG #{self} #{k} => #{v}" if !app
-      ## dispatch
-      load_yaml_field(k.to_sym, v, fdescs, **opts)
+      load_yaml_field(k.to_sym, v, fbroker, **opts)
     end
 
   end
@@ -1123,6 +1010,9 @@ class Proj
     ## initialize the coder@map, per each bound
     ## insrtance variable
 
+    ## FIXME special case of HFieldBroker.export_... here
+    ## - TBD HConfFieldBroker.export_conf
+
     if (coder.type != :map)
       raise "Unsupported coder type: #{coder.type} for #{coder} in #{__method__}"
     else
@@ -1133,9 +1023,34 @@ class Proj
     ## FIXME the following is not well documented. This may be
     ## of use singularly for Proj mapping onto/from YAML text
 
-    fdescs = self.class::mk_fdescs()
+    fbroker = self.class.yaml_field_broker()
+
+    ## FIXME this @fields_from_conf approach may serve
+    ## two main purposes:
+    ## 1) Ensure that any configuration file is written
+    ##    with fields in an order generally matching
+    ##    that in which the fields were read from the file
+    ## 2) Ensure that any include directives are maintained
+    ##    as across the representation in @fields_from_conf
+    ##
+    ## Limitations
+    ## - This does not provide any support for appending or
+    ##   otherwise editing configuration history, outside
+    ##   of the parsing of any single configuration file
+    ## - This does not presently provide deduplication
+    ##   in the configuration history
+
 
     if @fields_from_conf
+      ## ** FIXME ** This section needs cleanup
+      ## & configuration history API development
+      ## @ configuration history "roll out"
+      ## ... or anything more innocuous in terms
+
+      wrote_fields = []
+      wrote_extra_conf = []
+
+      ## initialize the coder.map from configuration history
       top_src_file = nil
       @fields_from_conf.each { |field|
         ## FIXME move this into a separate method
@@ -1145,13 +1060,48 @@ class Proj
         ## configuration events from included files (FIXME this
         ## part needs further refinement)
         conf_name = field[0]
+        ## NB the following represents an intrinsic mapping
+        ## from @fields_from_conf elements onto
+        ## a Psych::Coder.map hash, as for purpose of
+        ## encoding from an initial configuration
+        ## to an external YAML stream
+        ##
+        ## FIXME each branch of the following could
+        ## be handled with a separate block, in a
+        ## mapping from some @fields_from_conf token
+        ## e.g :include, :extra_conf_data, or a Proj
+        ## field name, onto some external method as
+        ## to an effect of storing the identity and
+        ## value of the configured field (or include)
+        ## into the map of the coder
+        ##
+        ## ... i.e onto a field bridge x conf hitory API?
         case conf_name
         when :include
+          ## FIXME skip if :merge_config is false
+          ## ... from whence however (??)
+          ## coder.tag would be the only value that can be
+          ## effectively passed through from Psych.dump
+          ## to encode_with, excepting any values stored
+          ## as instance variables in self, e.g
+          ##
+          ## so, ConfigFile#merge_config ?
+          ## onto a self.config field
+
+          ## ... TBD yielding fields_from_conf data,
+          ## and the coder map, to a block provided
+          ## such as like the following, in some
+          ## branch-specific method for a mapping
+          ## from the :include @fields_from_conf
+          ## element onto the Psych::coder (for output to YAML)
           include_file= field[1]
           src_file= field[2]
           if (top_src_file.nil? ||
               (top_src_file == src_file))
-            ## store only includes from top_src_file
+            ## store in map only if included from top_src_file
+            ##
+            ## FIXME this does not suport re-serialization of
+            ## included files
             k = YAMLScalarExt.new("include")
             v = YAMLIncludeFile.new(include_file)
             map[k] = v
@@ -1163,37 +1113,71 @@ class Proj
           src_file = field[2]
           if (top_src_file.nil? ||
               (top_src_file == src_file))
-            ## store only data from top_src_file
-            k = field[1].to_s
+            ## NB storing only data from top_src_file
+            k = field[1]
             v = @extra_conf_data[k]
             map[k.to_s] = v
             top_src_file ||= src_file
+            wrote_extra_conf.push(k)
           end
         else
-          ## use field descs
+          ## using the field broker
+          ##
+          ## TBD see also ./confhist.rb
           src_file = field[1]
           if (top_src_file.nil? ||
               (top_src_file == src_file))
-            fdesc = fdescs.find { |f| f.name == conf_name}
-            v = fdesc.get_value(self)
-            map[conf_name.to_s]=v
-            top_src_file ||= src_file
+            bridge = fbroker.find_bridge(conf_name) do
+              |broker,field|
+              ## NB - this would represent a disparity
+              ## between @fields_from_conf and YAML_FIELDS
+              ## if a directive (here, a field name) apepars
+              ## in @fields_fromo_conf that is not in YAML_FIELDS
+              ## and is not an :extra_conf_data or :include
+              ## directive
+              raise "Not a serializable field: #{field}"
+            end
+
+            if (bridge.value_in?(self)
+                !wrote_fields.find{ |f| f == conf_name})
+              wrote_fields.push(conf_name)
+              bridge.export(self, map)
+              ## NB each of these branches serves to ensure
+              ## that the first src_file read will be used
+              ## as the top_src_file - it's a hack, absent
+              ## of any normative configuration history API
+              top_src_file ||= src_file
+            end
           end
         end
       }
-      ## FIXME now store each initialized var under <fdescs>
-      ## that was not configured under @fields_for_conf
+      ## now store each initialized, serializable field that was
+      ## not configured under @fields_for_conf
+      ##
+      ## FIXME this would write data processed from any
+      ## include files
+      ##
+      # fbroker.field_map.each do |field, bridge|
+      #   wrote_fields.find{ |f| f == field } ||
+      #     bridge.export(self, map)
+      # end
+
+      ## lastly, write any unwritten extra_conf_data
+      ##
+      ## FIXME this would write any extra_conf_data that was
+      ## picked up from an include file
+      # @extra_conf_data.each do |k,v|
+      #   wrote_extra_conf.find{|name| name == k} ||
+      #     map[k] = v
+      #   wrote_extra_conf.push[k]
+      # end
+
     else
       ## FIXME API does not yet suport adding configuration 'include'
       ## directives if not somehow recorded in @fields_from_conf
-      fdescs.each { |fdesc|
-       if fdesc.value_in?(self)
-         k = fdesc.name
-         v = fdesc.get_value(self)
-         map[k.to_s]=v
-       end
-      }
+      fbroker.export_mapped(self, map)
     end
+    return coder
   end
 
 
@@ -1205,7 +1189,7 @@ class Proj
   ## for sequence-type and mapping-type fields, this method
   ## may append values to the field denoted by +name+
   ##
-  def load_yaml_field(name, value, field_descs, **loadopts)
+  def load_yaml_field(name, value, fbroker, **loadopts)
 
     if ( source_file = loadopts[:filename] )
       source_file = File.expand_path(source_file)
@@ -1224,49 +1208,18 @@ class Proj
       opts[:filename] = abs ## FIXME store the yfile path as provided
       self.load_yaml_file(abs,**opts)
     else
-
-      fdesc = field_descs.find  {
-        |f| f.name == name
-      }
-
-      if fdesc
-        @fields_from_conf.push [name, source_file]
-        case fdesc.type
-        when :scalar
-          fdesc.set_value(self,value)
-        when :sequence
-          if value.is_a?(Array)
-            value.each do |v|
-              fdesc.add_value(self,v)
-            end
-          else
-            ## NB probably not reached from the
-            ## YAML deserialization
-            fdesc.add_value(self,value)
-          end
-        when :mapping
-          ## NB 'value' here will be a hash table
-          ## from the YAML deserialization
-          fdesc.store_values(self,value)
-        else
-          raise "Unsupported FieldDesc type: #{fdesc.type} in #{fdesc}"
-        end
-      elsif (name == :extra_conf_data)
-        ## assumption: the value represents a hash table, such
-        ## that would have been encoded as a YAML mapping
-        value.each do |extra_name, extra_value|
-          @fields_from_conf.push [:extra_conf_data, extra_name, source_file]
-          self.set_extra_conf_data(extra_name,extra_value)
-        end
-      else
-        ## unkonwn top level { name => value } pair
-        ## will be stored in extra_conf_data
-        @fields_from_conf.push [:extra_conf_data, name, source_file]
-        self.set_extra_conf_data(name,value)
+      catch(:imported) do
+        fbridge = fbroker.find_bridge(name) {
+          @fields_from_conf.push([:extra_conf_data, name, source_file])
+          self.set_extra_conf_data(name, value)
+          throw :imported
+        }
+        @fields_from_conf.push([name, source_file])
+        fbridge.import_value(self,value)
       end
+      return value
     end
   end
-
   ##
   ## initialize this *Proj* using YAML data in the provided
   ## stream
@@ -1308,11 +1261,7 @@ class Proj
     ## reinitializing the instance from configuration files
     @fields_from_conf ||= []
 
-    ## fdescs array - used internally for importing values from
-    ## a mapped hash under Psych into this instance, alternately
-    ## for importing field values from any new Proj object
-    ## initialized from a tagged encoding, under Psych.safe_load
-    fdescs = self.class::mk_fdescs()
+    fbroker = self.class.yaml_field_broker()
 
     ## FIXME a required parameter, when using safe_load
     ## - needs local paramterization, e.g under further
@@ -1322,44 +1271,45 @@ class Proj
 
     out = Psych.safe_load(io, **opts)
 
-      case out.class.name
-      when Hash.name
+      case out.class.__id__
+      when Hash.__id__
         ## Psych has parsed a generalized YAML mapping
         out.each do
           ## initialize this instance per { key => value } pairs in the
-          ## data deserialized from the top-level mapping
-          ##
-          ## Assumptions:
-          ## - the value of <name> is a string or symbol
-          ##   (probably a symbol)
-          ## - the value of <value> is an Array, Hash,
-          ##   or scalar value
+          ## data deserialized from the top-level mapping read from 'io'
           |name, value|
-                 load_yaml_field(name.to_sym, value, fdescs, **opts)
+                 load_yaml_field(name.to_sym, value, fbroker, **opts)
         end
 
-      when NilClass.name
-        raise "safe_load failed (no output - end of file?) in #{self.class}##{__method__} for stream #{io}"
+      when NilClass.__id__
+        raise "safe_load failed (no value) \
+in #{self.class}##{__method__} for stream #{io}"
       else
         if ! out.is_a?(Proj)
-          raise "unexpected output from safe_load in #{self.class}##{__method__}: #{out}"
+          raise "unexpected value from safe_load \
+in #{self.class}##{__method__}: Not a Proj: #{out}"
         else
           ## NB here: out != self
           ##
           ## i.e 'out' was probably deserialized from a tagged
-          ## YAML mapping for any arbitrary instance of this class
+          ## YAML mapping for any arbitrary instance of this
+          ## class
           ##
           ## The following will proceess serializable fields from
-          ## the new object 'out', for mapping into the object 'self'
-          fdescs.each do |fdesc|
-            if fdesc.value_in?(out)
-              ## NB dispatching each 'out' enumerable
-              ## field per each element, via the following
-              load_yaml_field(fdesc.name,fdesc.get_value(out), fdescs, **opts)
+          ## the new object 'out', for mapping into the object
+          ## 'self'
+          fbroker.map_fields do |bridge|
+            if bridge.value_in?(out)
+              load_yaml_field(bridge.name,
+                              bridge.get_internal(out),
+                              fbroker, **opts)
             end
+            ## FIXME also parse for extra_conf_data from 'out'
           end
+          ## TBD logger storage
           $LOGGER &&
-            $LOGGER.log_warn("In #{self.class}##{__method__} for #{self}: Discarding ephemeral instance #{out}")
+            $LOGGER.log_warn("In #{self.class}##{__method__} for #{self}: \
+Discarding ephemeral instance #{out}")
           return self
         end
       end
@@ -1373,9 +1323,12 @@ class Proj
   ##  variables before loading the YAML stream
   ##
   def load_yaml_file(filename, **loadopts)
-    ## FIXME provide an extended loadopt for file encoding
-    f = File.open(filename, "rb:BOM|UTF-8")
+    ## FIXME :io_bom option/support needs documentation
+    ## similarly, the args pass-through to File.open
     opts = loadopts.dup
+    mode_str = self::bom_option_string!("rb", opts)
+    open_opts = self::io_options!(opts)
+    f = File.open(filename, mode_str, **open_opts)
     opts[:filename] = filename
     self.load_yaml_stream(f,**opts)
     ensure
@@ -1393,24 +1346,33 @@ class Proj
   end
 
   ##
-  ## encode this *Proj* in YAML syntax at a file of the specified
+  ## encode this *Proj* in YAML syntax, in a file of the specified
   ## pathname
   ##
+  ## @param pathname [String]
+  ## @param dumpargs
   def write_yaml_file(pathname, **dumpargs)
     ##
     ## FIXME store the original file pathname, during ::load_yaml_file
     ##
     ## & Write to that file by default, here
     ##
-    ## implies: Project Workspace
+    ## - may imply: Project Workspace (??)
+    ## - needs usage cases - modification of Proj data after load
+    ##   + re-write to original & included files
     ##
 
-    ## FIXME if @fields_from_conf is non-nil and non-empty
-    ## then iterate across the same,
-    ## else ... TBD/FIXME using SERIALIZE_FIELDS
-
-    f = File.open(pathname, "wb:BOM|UTF-8")
-    write_yaml_stream(f, **dumpargs)
+    ## FIXME :io_bom option/support needs documentation
+    ##
+    ## FIXME parse other loadopts for pass through to File.open
+    ## cf IO.new RI docs
+    opts = dumpargs.dup
+    ## FIXME :io_bom option/support needs documentation
+    ## similarly, the args pass-through to File.open
+    mode_str = self::bom_option_string!("wb", opts)
+    open_opts = self::io_options!(opts)
+    f = File.open(pathname, mode_str,**open_opts)
+    write_yaml_stream(f, **opts)
     f.flush
     return f
     ensure
@@ -1418,7 +1380,14 @@ class Proj
   end
 
 
-  # def write_gemfile(dest)
+  ## TBD using a special environment during load (??)
+  ## but capturing some return value, namely a gemspec
+  ## object
+  ##
+  # def write_gemspec(dest)
+  # end
+  #
+  # def load_gemspec(dest)
   # end
 
 end
@@ -1454,6 +1423,13 @@ $FROB_S01 = $FROB_P1.write_yaml_stream(IOST)
 IOST.pos=0
 
 $FROB_P3 = Psych.load_stream(IOST, symbolize_names: true)
+
+
+# NB more on Ruby iterators : it#each_slice
+
+[1,2,3,4].each_slice(2) {
+  |a,b| puts a.to_s + ": " + b.to_s
+}
 
 =end
 
