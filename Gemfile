@@ -70,10 +70,10 @@ source 'https://rubygems.org'
 
 # stdlib = %w(net/http zlib time)
 
-app_gems=	%w(nokogiri gpgme)
-dev_gems=	%w(rbs)
+runtime_gems=	%w(nokogiri gpgme)
+tool_gems=	%w(rbs)
 
-RbLib::BundleTool.def_gems(app_gems)
+RbLib::BundleTool.def_gems(runtime_gems)
 group :development, :optional => true do
-  RbLib::BundleTool.def_gems(dev_gems)
+  RbLib::BundleTool.def_gems(tool_gems)
 end
