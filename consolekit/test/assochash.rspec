@@ -1,0 +1,54 @@
+## assochash.rspec
+
+require('./assochash') ## the library being tested
+
+describe AssocHash::AssocHash do
+  let(:unknown) { ("unknown-" + rand.to_s[2..]).to_sym }
+  let(:unknown_proc) {
+    lambda { |h,k| return unknown }
+  }
+  let(:key_to_s) {
+    lambda { |obj| obj.to_s }
+  }
+
+  ##
+  ## Tests for AssocHash initialization
+  ##
+
+  it "accepts a symbol default" do
+    ah = AssocHash::AssocHash.new(key_to_s, default: unknown)
+    expect(ah.table.default).to be == unknown
+    expect(ah[:UNKNOWN]).to be  == unknown
+  end
+
+  it "accepts a proc default" do
+    ah = AssocHash::AssocHash.new(key_to_s, default: unknown_proc)
+    expect(ah.table.default_proc).to be == unknown_proc
+    expect(ah[:UNKNOWN]).to be  == unknown
+  end
+
+  ## FIXME test to ensure consistency of behaviors when no default is provided
+  ## in the constructor for AssocHash - needs an "expect exception KeyNotFoundError" 
+  ## ... expect(frob).to err ??
+
+  it "exposes a provided key proc" do
+      ah = AssocHash::AssocHash.new(key_to_s)
+      expect(ah.key_proc.call(:A)).to be == "A"
+      expect(ah.key(:A)).to be == "A"
+  end
+
+
+  ## NB the rest of the tests for AssocHash (FIXME) were implemented
+  ## initially, in effect, in ./option.rspec. This *.rspec was in fact
+  ## added after that other file. That was pursuant of some modest API 
+  ## updates, insoafar as for the Hash 'default' handling in AssocHash
+  ## and the extension of the same in the OptionMap impl
+
+end
+
+
+# Local Variables:
+# mode: enh-ruby
+# End:
+
+
