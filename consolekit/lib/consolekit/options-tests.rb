@@ -1,6 +1,6 @@
 ## options-test.rb - simple tests for options.rb
 
-require('./options')
+require('consolekit/options') ## the library to test
 
 
 om = OptionMap.new({:a => 1, :b => true })

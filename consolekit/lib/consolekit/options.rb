@@ -5,7 +5,7 @@ module OptionMap
 end
 
 ## TBD YARD tries to add docs to this require call (??)
-require('./assochash')
+require_relative('./assochash')
 
 
 ## *Option* base class.
