@@ -1,7 +1,7 @@
 ## rbloader project definition		-*- yaml -*-
 name: rbloader
 version: 0.0.1
-include: defaults.yprj
+include: ../defaults.yprj
 summary: Load Ruby source files, reload when updated
 description: RbLoader provides a 'load!' method with
   an interface generally similar to 'Kernel#require'.

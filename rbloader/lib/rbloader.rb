@@ -19,11 +19,11 @@ module Utils ## FIXME move to the rbloader gem
 
   ## Utility class for *RbLoader::load!*
   class FileInfo
-    attr_reader :path
+    attr_reader :pathname
     attr_accessor :mtime
 
-    def initialize(path, mtime = File.mtime(path))
-      @path = path
+    def initialize(pathname, mtime = File.mtime(pathname))
+      @pathname = pathname
       @mtime = mtime
     end
   end
@@ -226,9 +226,9 @@ module Utils ## FIXME move to the rbloader gem
       newer = true
 
       LOAD_HIST.any? do |finfo|
-        if (finfo.path == path)
+        if (finfo.pathname == path)
           found = finfo
-          newer = mtime_f > finfo.mtime
+          newer = ( mtime_f > finfo.mtime )
           break
         end
       end
