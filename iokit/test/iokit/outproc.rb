@@ -9,7 +9,7 @@ describe IOKit::OutProc do
     echo_cmd = %w{echo true}
     str = ""
     parse_out = lambda { |line| str = line }
-    st_exit = IOKit::OutProc.run(*echo_cmd, read_out: parse_out)
+    st_exit = described_class.run(*echo_cmd, read_out: parse_out)
     expect(st_exit).to be == 0
     expect(str.length). to be >= 4
     expect(str[0...4]).to be == "true"
