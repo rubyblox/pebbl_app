@@ -1,0 +1,7 @@
+*~
+*#
+.#*
+*.log
+*.bak
+Gemfile.lock
+/vendor/bundle
