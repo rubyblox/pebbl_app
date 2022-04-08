@@ -201,8 +201,8 @@ class StoreTool
   def classes(expr = nil)
     ## NB while there's also the delegate #all_classes method,
     ## it may not appear to be in common use
-    classes = @store.ancestors.keys
-    return expr ? classes.grep(expr) : classes
+    c = @store.ancestors.keys
+    return expr ? c.grep(expr) : c
   end
 
   ## Retrieve the list of module names for the RDoc Store in this
@@ -218,10 +218,25 @@ class StoreTool
   def modules(expr = nil)
     ## NB there's also the delegate #all_modules method,
     ## though it may not appear to be in common use
-    classes = @store.ancestors.keys
-    namespaces = @store.module_names
-    modules = namespaces.difference(classes)
-    return expr ? modules.grep(expr) : modules
+    c = @store.ancestors.keys
+    ns = @store.module_names
+    m = ns.difference(c)
+    return expr ? m.grep(expr) : m
+  end
+
+
+  ## NB @store.load_all => not a short call, but it populates a lot of
+  ## store fields, such that would be uninitialized from the store data bootstrap
+  ##
+  ## e.g after load_all
+  ## st.store.instance_variable_get(:@text_files_hash)
+  ## => not an empty value
+  ##
+  ## NB @store.load_cache
+  ## - is called by load_all
+
+  def pages
+    @store.cache[:pages]
   end
 
   ## Retrieve a sequence of cdesc files provided under the RDoc Store of
@@ -308,10 +323,8 @@ class StoreTool
   end
 
   def inspect()
-    store = self.store
-    return "#<#{self.class.name} " +
-      "(#{store.class} 0x#{store.__id__.to_s(16)}) " +
-      "0x#{self.__id__.to_s(16)} #{store.type.inspect} #{store.path}>"
+    st = self.store
+    "#<%s (%s %s 0x%x) 0x%x>" % [self.class, st.class, st.friendly_path, st.object_id, self.object_id]
   end
 end  ## StoreTool
 
@@ -423,3 +436,4 @@ obj.method_list[10].singleton
 => false ## i.e an instance method
 
 =end
+

@@ -14,12 +14,12 @@ module RIView
   RESOURCE_ROOT=File.expand_path("..", __dir__)
 
   VERSION=File.read(File.join(SOURCEDIR, self.name.downcase + "_version.inc")).
-            split("\n").grep(/^[[:space:]]*[^#]/).first.freeze
+            split("\n").grep(/^[[:space:]]*[^#]/).first.strip.freeze
 
   AUTOLOAD_MAP={
-    "riview_ui" => %w(RIViewApp RIViewWindow TreeBuilder),
+    "riview_app" => %w(RIViewApp RIViewWindow TreeBuilder),
     "dataproxy" => %w(DataProxy),
-  }
+  }.freeze
 
   AUTOLOAD_MAP.each { |file, names|
     path = File.join(SOURCEDIR, file + ".rb")

@@ -4,7 +4,7 @@ module RIKit
   SOURCEDIR=File.join(__dir__, self.name.downcase).freeze
 
   VERSION=File.read(File.join(SOURCEDIR, self.name.downcase + "_version.inc")).
-            split("\n").grep(/^[[:space:]]*[^#]/).first.freeze
+            split("\n").grep(/^[[:space:]]*[^#]/).first.strip.freeze
 
   AUTOLOAD_MAP={
     "storetool" => %w(QueryError StoreTool
@@ -12,7 +12,7 @@ module RIKit
     "storetopics" => %w(TopicRegistryClass TopicRegistrantClass TopicRegistry
                         Topic NamedTopic NamespaceTopic RITopicRegistry
                         ModuleTopic ClassTopic MethodTopic ConstantTopic)
-  }
+  }.freeze
 
   AUTOLOAD_MAP.each { |file, names|
     path = File.join(SOURCEDIR, file + ".rb")

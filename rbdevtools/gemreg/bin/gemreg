@@ -2,6 +2,26 @@
 
 ## gemreg(1)
 
+## Design Docs
+## - Concept: Gem Storage Context
+##   'ruby' storage context: Gems stored for this Ruby version
+##   'host' storage context: Gems stored on the host system,
+##          independent of this Ruby version (??)
+##          e.g under RbConfig::CONFIG[<param>] for <param> in
+##          * sitedir *
+##        and if version specific:
+##          sitelibdir (i.e sitedir + ruby version)
+##          sitearchdir (i.e sitedir + ruby version + gcc/ruby arch)
+##
+##   'user' storage context: Gems stored under a user filesystem,
+##          typically under user homedir, independent of this
+##          Ruby version (??)
+##   'project' storage context: Gems stored under a project filesystem,
+##          e.g in interop with bundler(1) (TBD bundler & ruby versions)
+##   ... however much of this goes out the window, proceeding away from
+##   the veritable hay stack of a Ruby implementation
+##
+
 ## TBD
 ##
 ## * cmds that can be used from package managers, e.g alpm-hooks(5)

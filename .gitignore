@@ -4,4 +4,4 @@
 *.bak
 *.log
 Gemfile.lock
-
+vendor

@@ -182,8 +182,12 @@ class AppWindow < Gtk::ApplicationWindow
     builder.add_leaf(true, "B", "Test", iterator: itergems)
 
 
+    ## FIXME remove the 'exp' column from the tree store/model
+    ##
+    ## GTK handles the "folded state" internal to the UI,
+    ## independent of the data model
 
-    @topic_store = store
+     @topic_store = store
 
     @pageview = ui_internal("RIPageView")
 
@@ -191,14 +195,7 @@ class AppWindow < Gtk::ApplicationWindow
       @win_actions.values
     ))
 
-    ## NB @ ActionMap, SimpleActionMap API in Ruby GTK support
-    ## ~/.local/share/gem/ruby/3.0.0/gems/gio2-3.4.9/test/test-action-map.rb
-    ##
-    ## NB defined as modules:
-    ## ~/.local/share/gem/ruby/3.0.0/gems/gio2-3.4.9/lib/gio2/action.rb
-    ## ~/.local/share/gem/ruby/3.0.0/gems/gio2-3.4.9/lib/gio2/action-map.rb
-    ##
-    ## FIXME no Ruby impl for GIO's GPropertyAction - needs impl or similar
+    ## TBD using Gio::PropertyAction
   end
 
   def unmap()
@@ -322,9 +319,11 @@ class RIViewApp < GAppKit::GBuilderApp
     self.signal_connect("startup") {
       ## forms to run subsq. of successful register()
       ##
-      ## NB this will be activated by register() only once per process.
+      # this will be activated by register() only once per process.
       self.map_app_window_new
     }
+    ## FIXME revise this and the TreeBuilder usage in ::RIView::AppWindow
+    ## onto RIKit::RITopicRegistry
     @system_store=RIKit::StoreTool.system_storetool
     @site_store=RIKit::StoreTool.site_storetool
     @home_store=RIKit::StoreTool.home_storetool
@@ -336,8 +335,8 @@ class RIViewApp < GAppKit::GBuilderApp
       ## instead operate across all installed gems w/ an avaialble RI
       ## documentation store
       begin
-        gst = RIKit::StoreTool.gem_storetool(s)
-        h[gst.path]=gst
+        st = RIKit::StoreTool.gem_storetool(s)
+        h[st.path]=st
       rescue RIKit::QueryError
         ## nop
       end
@@ -348,6 +347,9 @@ class RIViewApp < GAppKit::GBuilderApp
   end
 
   def map_prefs_window()
+    #raise "Error test"
+    ## ^ uncaught from within Gtk.main, despite every effort otherwise
+    ##   => app exits (FIXME)
     unless @prefs_window ## FIXME unset when destroyed
       w = PrefsWindow.new(self)
       @logger.debug("Using new prefs window #{w}")
@@ -400,6 +402,74 @@ gir.select { |obj| if ( obj.class == GObjectIntrospection::FunctionInfo )
 gtk_widget_destroyed ??
 - can it even be called from this API??
 - or does it have simply an opaque interface here?
+
+=end
+
+=begin TBD
+
+also problematic
+
+irb(main):075:0> GLib::Log.log("Frob",GLib::Log::LEVEL_ERROR,"frob")
+
+(irb:33315): Frob-ERROR **: 13:17:37.431: frob
+
+Trace/breakpoint trap (core dumped)
+
+-----
+
+similarly problematic
+
+irb(main):001:0> require 'gtk3'
+=> true
+irb(main):002:0> GLib::Log.always_fatal=0
+=> 0
+irb(main):003:0> GLib::Log.log("Frob",GLib::Log::LEVEL_ERROR,"Frob")
+
+(process:36589): Frob-ERROR **: 13:21:32.340: Frob
+Trace/breakpoint trap (core dumped)
+
+----
+similarly
+
+irb(main):001:0> require 'gtk3'; DM="Frob"
+=> true
+irb(main):002:0> GLib::Log::set_fatal_mask(DM,0)
+=> 5G
+irb(main):003:0> GLib::Log.log(DM,GLib::Log::LEVEL_ERROR,"Frob")
+
+(process:36765): Frob-ERROR **: 14:08:01.120: Frob
+Trace/breakpoint trap (core dumped)
+
+-----
+albeit, from the devehlp for g_log calls: "G_LOG_LEVEL_ERROR is always fatal"
+
+So, ...
+
+irb(main):003:0> GLib::Log::set_fatal_mask(DM,GLib::Log::LEVEL_CRITICAL)
+=> 5
+irb(main):004:0> GLib::Log.log(DM,GLib::Log::LEVEL_CRITICAL,"Frob")
+
+(process:36797): Frob-CRITICAL **: 14:12:03.362: Frob
+Trace/breakpoint trap (core dumped)
+
+... is that really how it's supposed to exit now?
+
+TBD: Produce a list of log domains used through the Ruby GTK code, at
+some known release - and how to reference those as constants
+
+----
+
+TBD: Patching the src to provide support for log handling w/ GTK in Ruby
+
+... it doesn't provide any way to map a function into the log
+handling. This only sets a log level mask:
+
+      GLib::Log.set_handler(domain, mask)
+
+... looking at
+~/.local/share/gem/ruby/3.0.0/gems/glib2-3.4.9/lib/glib2.rb
+
+and at g_log_set_writer_func() in devhelp => call exactly once in each GTK app process
 
 =end
 

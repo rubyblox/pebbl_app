@@ -13,7 +13,8 @@ module GemReg
   class GemDataError < RuntimeError
     attr_reader :name
     def initialize(name: nil,
-                   message: "Gem Data Error#{" in #{name}" if name}")
+                   message:
+                     ("Gem Data Error" + ( name ? " in #{name}" : "")))
       super(message)
       @name = name
     end
@@ -21,17 +22,19 @@ module GemReg
 
   class GemQueryError < GemDataError
     def initialize(name: nil,
-                   message: "Gem Query Error#{" in #{name}" if name}")
-      super(message, name: name)
+                   message:
+                     ("Gem Query Error" + ( name ? " in #{name}" : "")))
+      super(name: name, message: message)
     end
   end
 
   class GemSyntaxError < GemDataError
     attr_reader :pathname
     def initialize(name: nil,
-                   message: "Gem Syntax Error#{" in #{name}" if name}",
+                   message:
+                     ("Gem Syntax Error" + ( name ? " in #{name}" : "")),
                    pathname: nil)
-      super(message, name: name)
+      super(name: name, message: message)
       @pathname = pathname
     end
   end
@@ -331,6 +334,48 @@ did not return a Gem Specification: #{last}",
       else
         raise FileNotFound.new(fullspec, "No gemspec found \
 for name #{name} under #{gempath}")
+      end
+    end
+
+    ## Return the set of library files for a Gem Specification object,
+    ## such that each library file is accessible under one or more of
+    ## the require paths for the object.
+    ##
+    ## This method will normally return an array of absolute pathnames.
+    ##
+    ## If the *loaded_from* attribute of the Spec is +nil+, this method
+    ## will return the array of +spec.files+ without duplication or
+    ## modification. In such a case, the return value may represent an
+    ## array of relative pathnames. FIXME this method should probably err,
+    ## under such case.
+    def self.spec_lib_files(spec)
+      ##
+      ## NB used in the latest ./gemdocs.rb
+      ##
+      if (from = spec.loaded_from)
+        specdir = File.dirname(from)
+      end
+      files=spec.files
+      ## NB assumption: all files in the 'files' list are
+      ## relative pathnames, whose base pathname is provided
+      ## in the spec.loaded_from path
+      if specdir.nil?
+        ## no base directory for the pathnames
+        ## FIXME/TBD could warn() here - loaded_from would have been nil
+        return files
+      else
+        ## NB using expand_path here, this should serve to ensure that
+        ## any relative pathname elements e.g a directory name "."
+        ## will be interpolated in the pathnames, before any filenames
+        ## will be tested for a glob match
+        req_globs=spec.require_paths.map { |p|
+          glob = File.join(p, "*")
+          File.expand_path(glob, specdir)
+        }
+        return files.filter_map { |f|
+          abs = File.expand_path(f, specdir)
+          abs if req_globs.find { |g| File.fnmatch(g, abs) }
+          }
       end
     end
   end

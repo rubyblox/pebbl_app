@@ -46,27 +46,38 @@ end
 
 class TopicRegistry
   extend TopicRegistryClass
-  ## FIXME ...
-  ## - one registry for each StoreTool
-  ## - TBD global registry, when a name may be defined under multiple providers
 
-  #   def addTopic(topic,provider) ... # most useful for a PageTopic, TBD recursive handling for API topics
+  def convert_ns_topic(kind, orig)
+    newc = kind_class(kind)
+    ## NB this assumes that the copy_as call will in effect
+    ## copy any members list for the original topic
+    newtopic = orig.copy_as(newc)
+    ns = orig.namespace
+    ns.use_ns_element(newtopic)
+    return newtopic
+  end
 end
 
 
 class Topic
-  ## TBD
-  # attr_reader :path
-  def initialize()
+  attr_reader :namespace
+  def initialize(in_namespace)
+    @namespace = in_namespace
+  end
+
+  def kind
+    self.class.kind
   end
 end
 
 class NamedTopic < Topic
+
   attr_reader :name
   attr_accessor :full_name
   attr_accessor :namespace ## nil if name is a top-level name
-  def initialize (name)
-    super()
+
+  def initialize (in_namespace, name)
+    super(in_namespace)
     @name = name
     ## FIXME initialize rest, at some point
   end
@@ -76,14 +87,43 @@ class NamedTopic < Topic
   end
 end
 
-## NB
-## ["ABC","C","Z","PDQ","DEFG"].sort{ |a,b| al = a.length; bl = b.length; if al == bl; 0; elsif al < bl; -1; else 1; end }
-##
-## TBD names already stored under RDoc::Store
 
-module NamespaceTopic
+module TransferrableTopic
   def self.included(inclass)
-    inclass.attr_reader :elements
+    def transferrable_fields(dst_kind)
+      ## FIXME implement
+    end
+
+    def add_transferrable_field(name, dst_kind)
+      ## FIXME implement
+    end
+
+    def copy_field(which, inst, dst)
+      ## FIXME TBD
+    end
+
+    def copy_as(dst_kind, instance)
+      ## NB The behaviors are unspecified if the class of the
+      ##    instance is not eql to this class
+
+      ## FIXME needs class storage for transferrable fields
+      ## onto A) fields via instance variables, or B) fields via accessors
+      ## preferring "B"
+
+      dst = self.kind_class(dst_kind).allocate
+
+      transferrable_fields(dst_kind).each { |f|
+        copy_field(f, instance, dst)
+      }
+      return dst
+    end
+  end
+end
+
+module TypedTopic
+  def self.included(inclass)
+    include TransferrableTopic
+    attr_reader :type_members ## e.g constants, methods
 
     ## NB searching for constants will require parsing all existing RI
     ## files installed under a new pathname or updated since some
@@ -91,72 +131,136 @@ module NamespaceTopic
     ##
     ## see e.g class_document_constants
     ## in ~/.local/share/gem/ruby/3.0.0/gems/rdoc-6.3.3/lib/rdoc/ri/driver.rb
-
-
-    ## FIXME define ...
-    ## storetool .. attr_reader :topics
-    ## @topics = {} ## key = topic kind, value = TBD (TopicStore)
-    ## storetool .. load_topic
-    ## storetool .. map_topics(recurse = nil)
-    def inclass.ensure_containing_namespace(name, store)
-      if name.is_a? Array
-        parts = name
-      else
-        parts = name.split('::') ## self.NAMESPACE_SEPARATOR
-      end
-      if parts.length > 1
-        store.find_topic_for(self.NAMESPACE_KIND, parts[...-1])
-      else
-        return nil
-      end
-    end
-  end
-
-  def initialize(fullname)
-    ## TBD initialize in a module (FIXME unused for RITopicRegistry)
-    super(fullname)
-    init_storage
-    ## N/A no store ...
-    #@namespace = self.class.ensure_containing_namespace(fullname, store)
   end
 
   def init_storage
-    @elements ||= self.class::ELEMENT_KINDS.map { |kind|
-      [kind,{}]
-    }.to_h
+    ## FIXME cannot call 'super' across modules per se @ storage kinds
+    ##
+    ## TBD can call a method metaobject ...  in Ruby ...
+    @type_members = {}
   end
 
-  def use_element(elt)
+  def type_names
+    ## e.g constant, method names
+    @type_members && @type_members.keys
+  end
+
+  def type_members
+    ## e.g constant, method topics
+    @type_members && @type_members.values
+  end
+
+  def use_type_element(elt)
+    ## FIXME differentiate (in constants and API)
+    ## - NS_ELEMENT_KINDS/NS_KINDS e.g (:module => :module, :class), (:class => :class)
+    ## - TYPE_ELEMENT_KINDS/TYPE_KINDS in NamedElement e.g :method, :constant for any
     elt_kind = elt.class::TOPIC_KIND
-    if self.class::ELEMENT_KINDS.member?(elt_kind) &&
-       elt.class::NAMESPACE_KINDS.member?(self.class::TOPIC_KIND)
-      name = elt.name
-      if (elt_hash = @elements[elt_kind])
-        elt_hash[name] = elt
+    if self.class::TYPE_ELEMENT_KINDS.member?(elt_kind) &&
+       elt.class::TYPE_KINDS.member?(self.class::TOPIC_KIND)
+      if @type_members.nil?
+        @type_members = { elt.name => elt}
       else
-        @elements[elt_kind] = { name => elt }
+        @type_members[elt.name] = elt
       end
+      elt.type = self
     else
       raise "Element with topic kind #{elt.class::TOPIC_KIND} not valid in #{self}: #{elt}"
     end
   end
 
-  def find_element(kind, name)
-    elt_hash = @elements[kind]
-    if elt_hash
-      # TBD name as string or [string+]
-      if name.is_a?(String)
-        elt_hash[name]
+  def find_ns_element(name)
+    find_table_element(@ns_members, name.to_s)
+  end
+
+end
+
+
+module NamespaceTopic
+  def self.included(inclass)
+    include TransferrableTopic
+    attr_reader :ns_members ## e.g modules, classes
+  end
+
+  def init_storage
+    ## FIXME cannot call 'super' across modules per se @ storage kinds
+    ##
+    ## TBD can call a method metaobject ...  in Ruby ...
+   @ns_members = {}
+  end
+
+  def ns_names
+    ## e.g module, class names
+    @ns_members && @ns_members.keys
+  end
+
+  def ns_members
+    ## e.g module, class topics
+    @ns_members && @ns_members.values
+  end
+
+
+  def use_ns_element(elt)
+    ## FIXME differentiate (in constants and API)
+    ## - NS_ELEMENT_KINDS/NS_KINDS e.g (:module => :module, :class), (:class => :class)
+    ## - TYPE_ELEMENT_KINDS/TYPE_KINDS in NamedElement e.g :method, :constant for any
+    elt_kind = elt.class::TOPIC_KIND
+    if self.class::NS_ELEMENT_KINDS.member?(elt_kind) &&
+       elt.class::NS_KINDS.member?(self.class::TOPIC_KIND)
+      ## FIXME TBD implementing :name for PageTopic elements, which have no "name" per se
+      if @ns_members.nil?
+        @ns_members = { elt.name => elt}
       else
-        ## FIXME
-        raise "Unsupported: %s#%s(%p, %p)" % [self.class, __method__, kind, name]
+        @ns_members[elt.name] = elt
       end
+      elt.namespace = self
+      ## elt.full_name = ... # TBD name init in use_ns_element
+    else
+      raise "Element with topic kind #{elt.class::TOPIC_KIND} not valid in #{self}: #{elt}"
+    end
+  end
+
+  def find_ns_element(name)
+    find_table_element(@ns_members, name.to_s)
+  end
+
+  ## FIXME define the following in an included module (TBD API types vis. storage)
+  protected
+
+  def find_table_element(table, name)
+    ## NB 'name' should be of the same type as keys in 'table' here
+    if @table.nil?
+      return false
+    elsif @table.key?(name)
+      @table[name]
     else
       return false
     end
   end
+
 end
 
+
+module TypedNamespaceTopic
+  def self.included(inclass)
+    include NamespaceTopic
+    include TypedTopic
+  end
+
+  @@ns_init_storage = NamespaceTopic.instance_method(:init_storage)
+  @@typed_init_storage = TypedTopic.instance_method(:init_storage)
+
+  def init_storage
+    ## FIXME cannot call 'super' across modules per se @ storage kinds
+    ##
+    ## TBD can call a method metaobject ...  in Ruby ...
+    ##
+    ## TBD defining this method via define_method in 'included'
+    ## such that this method then cannot be called on the
+    ## defining module
+    @@ns_init_storage.bind_call(self)
+    @@typed_init_storage.bind_call(self)
+  end
+end
 
 class RITopicRegistry < TopicRegistry
   ## NB this implementation does not need to be optimized
@@ -165,38 +269,37 @@ class RITopicRegistry < TopicRegistry
 
   NAMESPACE_SEPARATOR = "::".freeze
 
-  ## NB ELEMENT_KINDS will be locally modified during use_kind
-  ELEMENT_KINDS=[]
+  ## NB NS_ELEMENT_KINDS will be locally modified during use_kind
+  NS_ELEMENT_KINDS=[]
   TOPIC_KIND=:REGISTRY
 
   attr_reader :module_topics, :class_topics
 
   def self.use_kind(kind, c)
     super(kind, c)
-    unless ELEMENT_KINDS.member?(kind)
-      ELEMENT_KINDS.push(kind)
+    unless NS_ELEMENT_KINDS.member?(kind)
+      NS_ELEMENT_KINDS.push(kind)
     end
     return kind
   end
 
   def initialize()
-    @module_topics = {}
-    @class_topics = {}
-    @constant_topics = {}
+    super()
+    init_storage()
     @page_topics = {}
-    @elements = {module: @module_topics,
-                 class: @class_topics,
-                 constant: @constant_topics,
-                 page: @page_topics}
   end
 
   def inspect
-    "#<%s 0x%x (%d modules, %d classes, %d constants, %d pages)>" % [
-      self.class, self.object_id, @module_topics.length,
-      @class_topics.length, @constant_topics.length,
-      @page_topics.length
+    "#<%s 0x%x (%d namespace members, %d pages)>" % [
+      self.class, self.object_id, @ns_members.length, @page_topics.length
       ]
   end
+
+  def tree_error(message)
+    ## NB this can be overridden in a subclass, if for purpose of debug
+    warn message
+  end
+
 
   def full_name
     ## NB if not "nil", it would be pulled into the namespace
@@ -214,12 +317,32 @@ class RITopicRegistry < TopicRegistry
   end
 
   def register_module(name, parent = self)
+    ## FIXME update to use a single topic tree for named program objects,
+    ## not separate trees for each topic kind in the same
+    ## ... in #use_ns_element
     kind = :module
+    # STDERR.puts "register #{name} in #{self}"
+
+    if (name.length > 2) && (name[0...2] == "::")
+      ## FIXME ensure parent is a topic registry here
+      unless parent.is_a?(TopicRegistry)
+        tree_error "Registering toplevel module #{name} in non-toplevel namespace #{parent}"
+      end
+      name = name[2..]
+    end
+
     name.split(NAMESPACE_SEPARATOR).each { |elt|
-      nextopic = parent.find_element(kind, elt)
-      unless nextopic
+      # STDERR.puts "find #{elt} in #{parent.inspect}"
+      nextopic = parent.find_ns_element(elt)
+      if nextopic
+        unless nextopic.kind.eql?(:module)
+          tree_error "Converting #{nextopic} to :module kind (was #{nextopic.kind})"
+          nextopic = self.convert_ns_topic(:module, nextopic)
+        end
+      else
+        ## FIXME move the following into NamespaceTopic#use_ns_element
         c = self.class.kind_class(kind)
-        nextopic = c.new(elt)
+        nextopic = c.new(self, elt)
         parent_name = parent.full_name
         if parent_name
           nextopic.full_name = parent.full_name + NAMESPACE_SEPARATOR + elt
@@ -227,15 +350,13 @@ class RITopicRegistry < TopicRegistry
           nextopic.full_name = elt
         end
         nextopic.namespace = parent
-        parent.use_element(nextopic)
+        parent.use_ns_element(nextopic)
       end
       parent = nextopic
     }
     parent.full_name ||= name
     return parent
   end
-
-  ## FIXME these classes all need useful #inspect methods
 
   def register_class(name, parent = nil)
     elts = name.split(NAMESPACE_SEPARATOR)
@@ -277,13 +398,15 @@ end
 
 
 class PageTopic < Topic
+  ## TBD shared API for PageTopic and CDesc parsing
+  ## - NB CDesc sections - "Constants", etc
   TOPIC_KIND = :page
-  NAMESPACE_KINDS = [:REGISTRY] ## or :page TBD ..
+  NS_KINDS = [:REGISTRY] ## or :page TBD ..
 
   extend TopicRegistrantClass
   register_to(RITopicRegistry)
-  def initialize (path)
-    super()
+  def initialize (registry, path)
+    super(registry)
     @path = path
   end
 end
@@ -291,8 +414,10 @@ end
 
 class ModuleTopic < NamedTopic
   TOPIC_KIND = :module
-  NAMESPACE_KINDS = [:module, :REGISTRY].freeze
-  ELEMENT_KINDS = [:class, :module, :constant, :method].freeze
+  NS_KINDS = [:module, :REGISTRY].freeze
+  NS_ELEMENT_KINDS = [:class, :module, :constant, :method].freeze
+
+  NAMESPACE_SEPARATOR = RITopicRegistry::NAMESPACE_SEPARATOR
 
   extend TopicRegistrantClass
   register_to(RITopicRegistry)
@@ -313,12 +438,18 @@ class ModuleTopic < NamedTopic
   ##
 
   include NamespaceTopic
+
 end
 
 class ClassTopic < NamedTopic
   TOPIC_KIND = :class
-  NAMESPACE_KINDS = [:module, :class, :REGISTRY].freeze
-  ELEMENT_KINDS = [:method, :constant, :class].freeze
+
+  NS_KINDS = [:module, :class, :REGISTRY].freeze
+  NS_ELEMENT_KINDS = [:class].freeze
+
+  TYPE_ELEMENT_KINDS = [:method, :constant].freeze
+
+  NAMESPACE_SEPARATOR = ModuleTopic::NAMESPACE_SEPARATOR
 
   extend TopicRegistrantClass
   register_to(RITopicRegistry)
@@ -328,9 +459,11 @@ class ClassTopic < NamedTopic
   include NamespaceTopic
 end
 
+
 class MethodTopic < NamedTopic
   TOPIC_KIND = :method
-  NAMESPACE_KINDS = [:class, :module].freeze
+  NS_KINDS = [:class, :module].freeze
+  TYPE_KINDS = NS_KINDS
 
   ## NB name tokenization would be slightly less trivial, here
   ## in either of the singleton or instance method topic classes,
@@ -344,11 +477,27 @@ class MethodTopic < NamedTopic
   register_to(RITopicRegistry)
 
   ## FIXME: extend for separate class/singleton and instance method topics
+  ## or implement a :scope field (:singleton|:instance)
 end
+
+
+class InstanceMethodTopic < MethodTopic
+  ## FIXME implement
+  NAMESPACE_SEPARATOR = "#".freeze
+end
+
+class SingletonMethodTopic < MethodTopic
+  ## FIXME implement
+  NAMESPACE_SEPARATOR = ".".freeze
+end
+
 
 class ConstantTopic < NamedTopic
   TOPIC_KIND = :constant
-  NAMESPACE_KINDS = [:class, :module, :REGISTRY].freeze
+  NS_KINDS = [:class, :module, :REGISTRY].freeze
+  TYPE_KINDS = [:class, :module].freeze
+
+  NAMESPACE_SEPARATOR = ModuleTopic::NAMESPACE_SEPARATOR
 
   extend TopicRegistrantClass
   register_to(RITopicRegistry)

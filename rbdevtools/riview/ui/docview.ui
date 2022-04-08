@@ -5,8 +5,16 @@
   <template class="RIDocView" parent="GtkScrolledWindow">
     <property name="visible">True</property>
     <property name="can-focus">True</property>
-    <property name="editable">False</property>
-    <property name="cursor-visible">False</property>
-    <property name="buffer">RIDocBuffer</property>
+    <property name="shadow-type">in</property>
+    <child>
+      <object class="GtkTextView" id="DocTextView">
+        <property name="visible">True</property>
+        <property name="can-focus">True</property>
+        <property name="editable">False</property>
+        <property name="cursor-visible">False</property>
+        <property name="accepts-tab">False</property>
+        <property name="input-hints">GTK_INPUT_HINT_NO_SPELLCHECK | GTK_INPUT_HINT_NO_EMOJI | GTK_INPUT_HINT_NONE</property>
+      </object>
+    </child>
   </template>
 </interface>

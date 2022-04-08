@@ -91,8 +91,8 @@ module FileResourceManager
     def extclass.set_resource_root(path, nolock = false)
       if (defined?(@@resource_root_locked) &&
           @@resource_root_locked  && (path != @@resource_root))
-        warn ("Cannot set a locked resource root path in %s: " +
-              "(ignored) %s") % [self, path.inspect]
+        warn("Cannot set a locked resource root path in %s: (ignored) %s" %
+              [self, path.inspect]) if $DEBUG
         return false
       else
         @@resource_root_locked = !nolock

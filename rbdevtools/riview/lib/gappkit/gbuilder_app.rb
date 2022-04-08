@@ -10,16 +10,24 @@ BEGIN {
 require 'logger'
 require 'gtk3'
 
-class GAppKit::GBuilderApp < Gtk::Application
+module GAppKit
 
-  extend(GAppKit::LoggerDelegate)  ## FIXME move to GApp
+#class GApp < GLib::Application
+## FIXME define in gapp.rb
+#
+
+
+#class GBuilderApp
+class GBuilderApp < Gtk::Application
+
+  extend(LoggerDelegate)  ## FIXME move to GApp
   def_logger_delegate(:@logger)  ## FIXME move to GApp
   attr_reader :logger  ## FIXME move to GApp
   LOG_LEVEL_DEFAULT = Logger::DEBUG  ## FIXME move to GApp
 
-  extend(GAppKit::UIBuilder)
+  extend(UIBuilder)
 
-  extend(GAppKit::LogManager) ## FIXME move to GApp
+  extend(LogManager) ## FIXME move to GApp
 
   # attr_reader :gtk_loop # see ...
 
@@ -101,11 +109,12 @@ class GAppKit::GBuilderApp < Gtk::Application
                                        progname: name)
 
     ## TBD
-    # GAppKit::LogModule.logger ||= @logger
-    # GAppKit::LogModule.manage_warnings
+    # LogModule.logger ||= @logger
+    # LogModule.manage_warnings
 
     super(name)
 
+    ## FIXME move to GApp
     fl_value = self.class.get_app_flag_value(flags)
     fl_obj = Gio::ApplicationFlags.new(fl_value)
     ## NB fl_obj would be a proxy object for an enum value,
@@ -160,34 +169,34 @@ class GAppKit::GBuilderApp < Gtk::Application
       @logger.debug("#{__method__} calling Gtk.main in #{Thread.current}")
       # @state = :run
       begin
-        ## FIXME these Signal.trap calls DNW under #run_threaded
-        ## 1) an odd error is produced (see below)
-        ## 2) the thread exits an under "aborting" state
-        Signal.trap("TRAP") do
+        @sigtrap_trap_previous = Signal.trap("TRAP") do
           ## cf. devehlp @ GLib g_log_structured, G_BREAKPOINT documentation
           ## => SIGTRAP (some architectures)
           LogModule.with_system_warn {
             ## NB ensuring that the logger won't be called during a
-            ## signal trap - the system would emit a warning then ...
+            ## signal trap - the system could emit a warning then ...
             ##   >> "log writing failed. can't be called from trap context"
-            ## ... such that would fail recursively, if the only warning
+            ## ... such that may fail recursively, if the only warning
             ## handler would be trying to dispatch to a logger
             warn "Received SIGTRAP. Exiting in #{Thread.current.inspect}"
             Gtk.main_quit
-            exit(GAppKit::SysExit::EX_SOFTWARE)
+            trap("TRAP",sigtrap_trap_previous)
+            exit(SysExit::EX_SOFTWARE)
           }
         end
-        Signal.trap("INT") do
+        sigtrap_int_previous = Signal.trap("INT") do
           LogModule.with_system_warn {
             warn "Received SIGINT. Exiting in #{Thread.current.inspect}"
             Gtk.main_quit
-            exit(GAppKit::SysExit::EX_IOERR)
+            trap("INT",sigtrap_int_previous)
+            exit(SysExit::EX_IOERR)
           }
         end
-        Signal.trap("ABRT") do
+        sigrap_abrt_previous = Signal.trap("ABRT") do
           LogModule.with_system_warn {
             warn "Received SIGABRT. Exiting in #{Thread.current.inspect}"
             Gtk.main_quit
+            trap("ABRT",sigtrap_abrt_previous)
             exit(GappKit::SysExit::EX_PROTOCOL)
           }
         end
@@ -195,7 +204,7 @@ class GAppKit::GBuilderApp < Gtk::Application
         @logger.debug("In process #{Process.pid}")
 
         ## NB this will display information about exeptions raised
-        ## within Ruby, including exceptions that are trapped
+        ## within Ruby, including exceptions that are captured
         ## within some rescue form
         ##
         ## This is also reached from 'exit'
@@ -240,9 +249,27 @@ class GAppKit::GBuilderApp < Gtk::Application
         ##
         ## see ./tracetest.rb, ./tracetool.rb
 
-        Gtk.main()  ## FIXME move to GtkApp < GApp :: #main(args = nil)
+        Gtk.main() ## NB
+        ## TBD #main(args = nil)
+
+        ## NB Ruby-GNOME's Gtk.init acceps args (of some kind)
+        ## and also removes itself, such that Gtk.init becomes unavailable
+        ## after the method is called once - similar to Gdk.init
+        ## - they seem to be working around an interesting sort of
+        ##   segfault behavior related to the 'loader' framework in it
+
         ## vis a vis args, note e.g '--gapplication-app-id' in GLib's GApplication
-        ## and other args avl with GtkApplication
+        ## and other args avl with GtkApplication .. via (TBD...)
+        ##
+        ## ... for glib: g_application_run ...
+        ## + G_APPLICATION_HANDLES_COMMAND_LINE flag
+        ##
+        ## NB G_APPLICATION_IS_SERVICE flag :: GServiceApp
+        ##
+        ## NB --version arg
+        ##
+        ## NB args for file open && "open" handling
+
         ## >> documentation (DocBook | YARD)
         ## >> g.thinkum.space
         ##
@@ -268,9 +295,9 @@ class GAppKit::GBuilderApp < Gtk::Application
 
         warn "Exception #{exc.class}: #{exc}"
         ## ?? Exception NoMethodError: undefined method `message' for 8:Integer
-        ## ... and no backtrace. Where is that error arriving from?
+        ## ... and no backtrace. Where is that error arriving from? (IRB ??)
         ## ... when:
-        ##  1) app is ran via run_threaded
+        ##  1) app is ran via run_threaded (under IRB, in an Emacs environment)
         ##  2) SIGTRAP is sent to the Ruby process, externally, via kill(1)
         ##  3) prefs window is created in the app (TRAP trap not reached during run_threaded)
         ## ! Same happens when SIGINT is sent, when app is run via run_threaded
@@ -293,7 +320,7 @@ class GAppKit::GBuilderApp < Gtk::Application
     end
     @logger.debug("#{__method__} returning in #{Thread.current}")
     if Thread.current.status == "aborting"
-      ## NB This may be reached - on a Linux system - when
+      ## NB This may be reached - on a Linux system - when ...
       ## 1) the app is run via run_threaded
       ## 2) SIGINT is sent to the ruby process, externally
       ## 3) a dialogue window is created
@@ -301,7 +328,7 @@ class GAppKit::GBuilderApp < Gtk::Application
       ## - note that the SIGINT handler was not reached under
       ##   run_threaded, not until the dialogue window was created
       ## - that may be due to some peculiarities about where the trap
-      ##   handler is defined, and how Gtk.main is run
+      ##   handler is defined, and how Gtk.main is run x threads
       ##
       ## TBD whether this or the handler is ever reached under
       ## run_threaded, on a BSD system
@@ -321,7 +348,7 @@ class GAppKit::GBuilderApp < Gtk::Application
     ## but the next IRB propmpt/input line does not appear until after
     ## the app has exited
     @logger.debug("#{__method__} from #{Thread.current}")
-    GAppKit::NamedThread.new("%s#run @%x" % [self.class.name, self.object_id]) {
+    NamedThread.new("%s#run @%x" % [self.class.name, self.object_id]) {
       run()
     }
   end
@@ -351,3 +378,9 @@ class GAppKit::GBuilderApp < Gtk::Application
   end
 
 end
+
+end ## GAppKit module
+
+# Local Variables:
+# fill-column: 65
+# End:

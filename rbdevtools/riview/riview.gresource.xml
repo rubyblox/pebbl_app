@@ -2,16 +2,26 @@
 <!--
 process with
  glib-compile-resources --generate riview.gresource.xml
+
+TBD with
+- 'file' (linux) shows a file type of a GVariant database file
+
 test with
   resource = Gio::Resource.load("riview.gresource")
   resource._register
 
-  bytes = resource.lookup_data("/space/thinkum/RIView/ui/riview.ui",
-          Gio::ResourceLookupFlags.new)
-  bytes.to_s ## ech.
+  bytes = resource.lookup_data("/space/thinkum/riview/ui/appwindow.ui",0)
+
+  require 'stringio'
+  ios = StringIO.new
+  bytes.get_data.each { |c| ios.putc(c) } ## gir_ffi-gtk3
+  bytes.unref
+  ios.string
+
+
   ## alternately
-  s = resource.open_stream("/space/thinkum/RIView/ui/riview.ui",
-          Gio::ResourceLookupFlags.new)
+  s = resource.open_stream("/space/thinkum/riview/ui/appwindow.ui",0)
+
   ## ...
   s.unref
   resource._unregister
