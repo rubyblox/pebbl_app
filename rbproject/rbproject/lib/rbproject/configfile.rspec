@@ -1,0 +1,18 @@
+## configfile.rspec
+
+require('./configfile') ## the library to test
+
+describe Config::YAML::YAMLConfigFile do
+  let(:tag) { "config@Some::AppClass" }
+
+
+  it "parses a tag" do
+    expect (subject.class.parse_tag(tag)).to
+    be == "Some::AppClass"
+  end
+end
+
+# Local Variables:
+# fill-column: 65
+# mode: enh-ruby
+# End:

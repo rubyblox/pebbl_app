@@ -1,0 +1,231 @@
+
+require('./proj') ## the library to test
+require('stringio')
+
+RSpec.configure do |conf|
+  conf.full_backtrace=true
+  conf.color=false ## DNW ??
+end
+
+
+describe Proj do
+  subject {
+    app=Application.new("TEST");
+    app.log_level=Logger::DEBUG
+    Proj.new(app: app)
+  }
+
+  before {
+    ## set logger for present logging semantics under Proj debug
+    # $LOGGER=subject.app.logger
+  }
+
+  let!(:yaml_text_00) { "name: yaml-text-00
+version: 0.0.1
+summary: YAML Text 00
+description: ...
+homepage: https://www.example.com/
+license: bsd-2-clause
+doc_files:
+ - README
+ - nop.txt
+metadata:
+  repository: nop
+"}
+
+  ## FIXME test include handling
+  ## - read, write, and read/write/read
+  ##   for including proj conf
+#   let(:yaml_text_01) { yaml-text-00.dup.concat("include:
+#   tbd.yaml")
+#   }
+#
+#   ## FIXME test field mapping onto gemspec (rbproject)
+#   let(:yaml_text_tbd) { "doc_files:
+# - ChangeLog"
+#   }
+
+
+  it "stores YAML tag info in Psych" do
+    ## NB partially a test for the YAMLExt mixin module
+    cn = described_class.name
+    v = described_class::VERSION
+    tag = described_class::YAML_TAG
+    expect(tag).to be == "#{cn}@#{v}"
+    expect(Psych.load_tags[tag]).to be == cn
+    expect(Psych.dump_tags[described_class]).to be == tag
+  end
+
+  it "use a custom dump tag, per instance" do
+    subject.encode_with_tag=true
+    expect(subject.encode_with_tag).
+      to be == described_class::YAML_TAG
+  end
+
+  it "uses a provided Application and logger" do
+    ## NB per subject initialization, above
+    expect(subject.app).to_not be nil
+    expect(subject.app.log_progname).to be == "TEST"
+    expect(subject.app.log_level).to be == Logger::DEBUG
+  end
+
+  it "parses Proj fields from YAML" do
+    ios = StringIO.new(yaml_text_00)
+    subject.load_yaml_stream(ios);
+    expect(subject.name).to be == 'yaml-text-00'
+    expect(subject.version).to be == '0.0.1'
+    expect(subject.summary).to be == 'YAML Text 00'
+    expect(subject.description).to be == '...'
+    expect(subject.homepage).to be == 'https://www.example.com/'
+    expect(subject.license).to be == 'bsd-2-clause'
+    expect(subject.doc_files.is_a?(Array)).to be true
+    expect(subject.doc_files.length).to be == 2
+    expect(subject.doc_files[0]).to be == 'README'
+    expect(subject.doc_files[1]).to be == 'nop.txt'
+    expect(subject.metadata.is_a?(Hash)).to be true
+    expect(subject.metadata[:repository]).to be == 'nop'
+    ## ensure that additional data was not added
+    expect(subject.extra_conf_data.class).to be == Hash
+    expect(subject.extra_conf_data.length).to be == 0
+  end
+
+  shared_examples_for "Proj YAML writer" do
+    ## parameterization for testing the expected document marker
+    ## under tagged/untagged Proj#write_yaml_stream testing
+    it "writes YAML" do
+      ios = StringIO.new(yaml_text_00)
+      subject.load_yaml_stream(yaml_text_00)
+      subject.write_yaml_stream(ios)
+      ios.pos = 0
+
+      ## NB The following provides an inexhaustive line-by-line
+      ## test of the expected output from #write_yaml_stream
+
+      ## first line, the YAML tag
+      expect(ios.gets.chomp).to be == '%YAML 1.1'
+
+      ## when subject.encodes_with_tag = nil (default),
+      ## the next line read should be an untagged document
+      ## marker. Otherwise, the line would include the tag
+      ## configured under Proj#encode_with_tag,
+      ## typically the same as Proj::YAML_TAG
+      expect(ios.gets.chomp).to be == expect_document_marker
+
+      ## w/ internally unstringified keys in Proj#encode_with
+      # expect(ios.gets.chomp).to be == ':name: yaml-text-00'
+      ## w/ internally stringified keys in Proj#encode_with
+      expect(ios.gets.chomp).to be == 'name: yaml-text-00'
+    end
+  end
+
+  context "writing untagged YAML 1.1" do
+    let(:expect_document_marker) {  "---" }
+    it_should_behave_like "Proj YAML writer"
+  end
+
+  context "writing tagged YAML 1.1" do
+    let(:expect_document_marker) {
+      "--- !<#{described_class::YAML_TAG}>"
+    }
+    before { subject.encode_with_tag=true }
+    it_should_behave_like "Proj YAML writer"
+  end
+
+
+  shared_examples_for "Proj YAML read/write/read" do
+    ## parameterization for read/write/read examples with
+    ## untagged (default) and tagged YAML mappings - used below
+
+    it "reads written YAML" do
+
+      in_ios = StringIO.new(yaml_text_00)
+      subject.load_yaml_stream(in_ios)
+
+      out_ios = StringIO.new
+      subject.write_yaml_stream(out_ios)
+
+      #expect(subject.app.class).to be Application
+
+      other = described_class.new(app: subject.app)
+      ## FIXME also log the describe text
+      # subject.app.log_debug "using subject #{subject}"
+      # subject.app.log_debug "testing other #{other}"
+      out_ios.pos = 0
+      other.load_yaml_stream(out_ios)
+
+      described_class::YAML_FIELDS.each do |fieldspec|
+        ## ensure each field in the subject is equivalent to
+        ## that field in the other object
+        field_name= fieldspec.is_a?(Array) ? fieldspec[0] : fieldspec
+        ivar = ( "@" + field_name.to_s ).to_sym
+
+        if(subject.instance_variable_defined?(ivar))
+          # subject.app.log_debug "Testing instance variable #{ivar}"
+          expect(other.instance_variable_defined?(ivar)).
+            to be true
+          expect(subject.instance_variable_get(ivar)).
+            to  be == other.instance_variable_get(ivar)
+        else
+          expect(other.instance_variable_defined?(ivar)).
+            to be false
+        end
+      end
+    end
+  end ## shared example
+
+  context "re-reading untagged YAML" do
+    it_should_behave_like "Proj YAML read/write/read"
+  end
+
+  context "re-reading tagged YAML" do
+    before {
+      subject.encode_with_tag=true
+    }
+    it_should_behave_like "Proj YAML read/write/read"
+  end
+end
+
+describe AppIO do
+## TBD module as subject
+  before {
+    class TestApp
+      include AppIO
+    end
+  }
+
+  context "::bom_option_string!" do
+    it "returns the mode mofified with the :io_bom option" do
+      opts = {:io_bom => "UTF-8", :other_opt => false}
+      expect(TestApp::bom_option_string!("rw",opts,nil)).
+        to be == "rw:BOM|UTF-8"
+    end
+
+    it "returns the mode uncchanged when no :io_bom is provided" do
+      opts = {:other_opt => false}
+      expect(TestApp::bom_option_string!("rw",opts,nil)).
+        to be == "rw"
+    end
+  end ## ::bom_option_string context
+
+  context "::io_options!" do
+    it "filters IO constructor options" do
+      TestApp::IO_OPTION_FLAGS.each do |flag|
+        not_flag =( "not_" + flag.to_s).to_sym
+        opts = {flag => false, not_flag => true}
+        out = TestApp::io_options!(opts)
+        expect(opts.length).to be == 1
+        expect(opts[flag]).to be nil
+        expect(opts[not_flag]).to be true
+        expect(out.length).to be == 1
+        expect(out[flag]).to be false
+        expect(out[not_flag]).to be nil
+      end
+    end
+  end ## ::io_options! context
+
+end ## AppIO extension module
+
+# Local Variables:
+# fill-column: 65
+# mode: enh-ruby
+# End:
