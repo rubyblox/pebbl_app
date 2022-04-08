@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+process with
+ glib-compile-resources --generate riview.gresource.xml
+test with
+  resource = Gio::Resource.load("riview.gresource")
+  resource._register
+
+  bytes = resource.lookup_data("/space/thinkum/RIView/ui/riview.ui",
+          Gio::ResourceLookupFlags.new)
+  bytes.to_s ## ech.
+  ## alternately
+  s = resource.open_stream("/space/thinkum/RIView/ui/riview.ui",
+          Gio::ResourceLookupFlags.new)
+  ## ...
+  s.unref
+  resource._unregister
+  resource.unref
+
+  ## FIXME does glib provide a normal streams interface for this?
+  ## - TBD resource.open_stream
+  ## NB no bytes.unref method defined
+
+-->
+<gresources>
+  <!-- <gresource prefix="/space/thinkum/RIView"> -->
+  <!--   <file preprocess="xml-stripblanks" compressed="true" -->
+  <!--         alias="ui/riview.ui" -->
+  <!--         >ui/riview.glade</file> -->
+  <!-- </gresource> -->
+  <gresource prefix="/space/thinkum/riview">
+    <file preprocess="xml-stripblanks" compressed="true"
+          alias="ui/appwindow.ui"
+          >ui/appwindow.glade</file>
+    <file preprocess="xml-stripblanks" compressed="true"
+          >ui/docview.ui</file>
+    <file preprocess="xml-stripblanks" compressed="true"
+          >ui/prefs.ui</file>
+    <!-- <file preprocess="xml-stripblanks" compressed="true" -->
+    <!--       alias="gtk/menus.ui" -->
+    <!--       >ui/menus.ui</file> -->
+  </gresource>
+</gresources>
