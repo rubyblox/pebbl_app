@@ -18,8 +18,7 @@ class AssocHash::KeyException < RuntimeError
   ## @param container [AssocHash] Container context for this exception
   ## @param msg [String] Message for the exception. A generic default value
   ##  is provided, for purpose of convenience
-  def initialize (key, container,
-                  msg = "KeyException: #{key} in #{container}" )
+  def initialize(key, container, msg = "KeyException: #{key} in #{container}" )
     super(msg)
     @key = key
     @container = container
@@ -60,7 +59,7 @@ require('forwardable')
 ## *AssocHash* provides a *Hash* delegate class with dispatched
 ## evaluation for determining a hash key value for any object
 ## to be added to the delegate *Hash*. This behavior is
-## implemented principally in the *#add* method. 
+## implemented principally in the *#add* method.
 ##
 ## The *#add*  method furthermore provides support for
 ## conditional evaluation under a condition of duplicate key
@@ -113,7 +112,7 @@ class AssocHash::AssocHash
   ## @return [lambda] lambda form to use as a <em>default
   ##  proc</em> for in an initialized *AssocHash*
   ##
-  ## @note The object +whence+ may not have been fully initialized 
+  ## @note The object +whence+ may not have been fully initialized
   ##  when this *table_default* class method is evaluted
   ##
   ## @see #get
@@ -128,14 +127,14 @@ class AssocHash::AssocHash
   ## the +overwrite+ parameter in the *AssocHash* constructor
   ##
   ## @param whence [AssocHash] context of the returned function.
-  ##    
+  ##
   ## @return [lambda] a +lambda+ form to use as a default
   ##  +overwrite+ form within an initialized *AssocHash*. The
   ##  form would be called such as when testing for a condition
   ##  of _object overwrite_ in *AssocHash#add*. This function, as
   ##  returned, will raise a **KeyOverwriteError**
   ##
-  ## @note The object +whence+ may not have been fully initialized 
+  ## @note The object +whence+ may not have been fully initialized
   ##  when this *overwrite_default* class method is evaluted
   ##
   ## @see AssocHash#add
@@ -188,7 +187,7 @@ class AssocHash::AssocHash
   ##  return the object itself.
   ##
   ## @param default [any] Hash _default_ to use for the delegate
-  ##  *Hash*. 
+  ##  *Hash*.
   ##
   ##  If this parameter's value is a +lambda+ form or otherwise
   ##  of type *Proc* then that form will be used as a <em>default
@@ -311,7 +310,7 @@ class AssocHash::AssocHash
   def key(obj)
     @key_proc.call(obj)
   end
-  
+
   ## the +overwrite+ proc used in this *AssocHash*
   attr_reader :overwrite_proc
 
