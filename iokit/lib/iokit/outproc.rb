@@ -8,6 +8,10 @@ BEGIN {
 }
 
 
+## TBD outproc_privileged.rb
+## - sudo and askpass/tty
+## - deferred call after early uid change
+
 =begin rdoc
 = Overview
 The *OutProc::run* class method provides an extension
@@ -127,8 +131,9 @@ class IOKit::OutProc
                timeout: nil, **options)
 
     ## TBD implementing run_async + (poll fd ...) (use timeout)
-    ## - needs usage case
-
+    ## and async stream I/O
+    ## - needs usage case @ condition variables instead of poll,
+    ##   for async I/O across threads within the same process
     if encoding.is_a?(Array)
       ## here, the value of the encoding option should be
       ## an array of [external, internal] encoding values
@@ -138,7 +143,7 @@ class IOKit::OutProc
     end
 
     if read_out
-       if options.include?(:out)
+      if options.include?(:out)
          raise ArgumentError.new("Both :out and :read_out provided")
        else
          out_read, out_write = IO.pipe(*use_enc)

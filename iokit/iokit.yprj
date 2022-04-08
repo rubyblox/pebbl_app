@@ -1,0 +1,38 @@
+## iokit project definition		-*- yaml -*-
+name: iokit
+version: 0.0.1
+include: ../defaults.yprj
+summary: iokit
+description: iokit
+
+## FIXME @ rbproject
+## - tooling, vis a vis "templates" && IRB, ... & a management UI (IDE components)
+## - tooling, to run rspec tests during development
+## - tooling, vis a vis rake
+## - tooling, to generate rspec files (from template), ... 
+## - tooling, to generate RI files (RDoc), preview documentation files (YARD),  TBD @ YRI ...
+##   & preview RI files with RIView
+## - tooling, for gem installation
+## - tooling, vis a vis bundler
+
+require_paths:
+- lib/
+- lib/iokit
+
+lib_files:
+## FIXME write iokit.rb (IOKit module definition)
+-  lib/iokit.rb
+## FIXME move ./iproc.rb to:
+-  lib/iokit/ioproc.rb
+
+test_files:
+## FIXME move ./ioproc.rspec to:
+- spec/iokit/ioproc.rspec
+
+## doc_files ## TBD
+
+license: BSD-2-clause
+
+## TBD from project environment, if not specified
+## authors
+## email
