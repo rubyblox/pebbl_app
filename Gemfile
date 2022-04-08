@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 #
-# Gemfile for distkit
+# Gemfile for RbLib
 #
 
 ##
@@ -8,7 +8,7 @@
 ##
 puts "Loading #{binding.source_location[0]} (#{self.class})"
 
-module DistKit
+module RbLib
   class BundleTool < Bundler::Dsl
     ## prefer installed gems if available
     def self.def_gems(which)
@@ -32,8 +32,11 @@ module DistKit
         req = Gem::Dependency.new(name,*quals);
 
         catch (:found) do
-          ## FIXME find_all_by_name is frankly misleading, it does not
-          ## "find all". Neither does Gem::Specifications.each, actually.
+          ## This will simply iterate across all cached gemspecs,
+          ## until finding the first available match for each
+          ## Gmefile dependency. Anything not found will be installed
+          ## from the URL provided to the 'source' method at the Gemfile
+          ## top-level.
           Gem::Specification.each { |s|
             puts "Searching for #{name} ?= #{s.name} @ #{s.version}" if $DEBUG
             if s.satisfies_requirement?(req)
@@ -58,6 +61,9 @@ module DistKit
   end
 end
 
+## NB cannot wrap all of these Bundler::Dsl methods in a subclass,
+## or things break
+
 source 'https://rubygems.org'
 
 # stdlib = %w(net/http zlib time)
@@ -65,7 +71,7 @@ source 'https://rubygems.org'
 app_gems=	%w(nokogiri gpgme)
 dev_gems=	%w(rbs)
 
-DistKit::BundleTool.def_gems(app_gems)
+RbLib::BundleTool.def_gems(app_gems)
 group :development, :optional => true do
-  DistKit::BundleTool.def_gems(dev_gems)
+  RbLib::BundleTool.def_gems(dev_gems)
 end
