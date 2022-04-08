@@ -1,9 +1,4 @@
-## update.rb for emulators/linux_base-c8
-
-### FIXME move this comment to README / Design docs
-## cf. http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/repodata/e04cff091bb49d22e01417da1c3948e1f7a61ed7e08e60e595b4fa827fce1c31-filelists.xml.gz
-## ... via http://mirror.centos.org/centos/8-stream/BaseOS/x86_64/os/repodata/repomd.xml
-## / END FIXME
+## rpmwalk.rb - generic RPM repository tooling
 
 require 'net/http'
 require 'nokogiri'
