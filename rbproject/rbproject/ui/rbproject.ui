@@ -1237,12 +1237,14 @@
                         <property name="can-focus">True</property>
                         <property name="focus-on-click">False</property>
                         <property name="receives-default">True</property>
+                        <property name="relief">none</property>
+                        <property name="direction">up</property>
                         <property name="popover">FileEdPop</property>
                         <child>
                           <object class="GtkImage">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="icon-name">list-add</property>
+                            <property name="icon-name">zoom-in</property>
                           </object>
                         </child>
                       </object>
@@ -1293,6 +1295,8 @@
                         <property name="can-focus">True</property>
                         <property name="focus-on-click">False</property>
                         <property name="receives-default">True</property>
+                        <property name="relief">none</property>
+                        <property name="direction">up</property>
                         <property name="popover">ConsolePop</property>
                         <child>
                           <object class="GtkImage">
@@ -1300,7 +1304,7 @@
                             <property name="can-focus">False</property>
                             <property name="halign">center</property>
                             <property name="valign">center</property>
-                            <property name="icon-name">list-add</property>
+                            <property name="icon-name">zoom-in</property>
                           </object>
                         </child>
                       </object>
@@ -1449,6 +1453,9 @@
                                         <property name="visible">True</property>
                                         <property name="can-focus">True</property>
                                         <property name="model">ProjChangesStore</property>
+                                        <child internal-child="selection">
+                                          <object class="GtkTreeSelection"/>
+                                        </child>
                                         <child>
                                           <object class="GtkTreeViewColumn">
                                             <property name="title" translatable="yes">Time</property>
@@ -1609,6 +1616,8 @@
                         <property name="can-focus">True</property>
                         <property name="focus-on-click">False</property>
                         <property name="receives-default">True</property>
+                        <property name="relief">none</property>
+                        <property name="direction">up</property>
                         <property name="popover">ProjEdPop</property>
                         <child>
                           <object class="GtkImage">
@@ -1616,7 +1625,7 @@
                             <property name="can-focus">False</property>
                             <property name="halign">center</property>
                             <property name="valign">center</property>
-                            <property name="icon-name">list-add</property>
+                            <property name="icon-name">zoom-in</property>
                           </object>
                         </child>
                       </object>
