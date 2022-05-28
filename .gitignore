@@ -3,5 +3,6 @@
 .#*
 *.bak
 *.log
+.bundle
 Gemfile.lock
 vendor
