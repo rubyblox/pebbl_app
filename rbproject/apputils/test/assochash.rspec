@@ -1,6 +1,8 @@
 ## assochash.rspec
 
-require('./assochash') ## the library being tested
+## run with: TBD
+
+require_relative('apputils/assochash') ## the library being tested
 
 describe AssocHash::AssocHash do
   let(:unknown) { ("unknown-" + rand.to_s[2..]).to_sym }
@@ -28,7 +30,7 @@ describe AssocHash::AssocHash do
   end
 
   ## FIXME test to ensure consistency of behaviors when no default is provided
-  ## in the constructor for AssocHash - needs an "expect exception KeyNotFoundError" 
+  ## in the constructor for AssocHash - needs an "expect exception KeyNotFoundError"
   ## ... expect(frob).to err ??
 
   it "exposes a provided key proc" do
@@ -40,7 +42,7 @@ describe AssocHash::AssocHash do
 
   ## NB the rest of the tests for AssocHash (FIXME) were implemented
   ## initially, in effect, in ./option.rspec. This *.rspec was in fact
-  ## added after that other file. That was pursuant of some modest API 
+  ## added after that other file. That was pursuant of some modest API
   ## updates, insoafar as for the Hash 'default' handling in AssocHash
   ## and the extension of the same in the OptionMap impl
 
