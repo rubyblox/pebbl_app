@@ -14,10 +14,24 @@ devo_depends:
   - rspec
   - standard
   - debug
+required_ruby_version: ">= 2.7.0"
+require_paths:
+  - lib
 gems:
+  thinkum_space-project:
+    module: ThinkumSpace::Project
+    summary: Project Tools
+    description: Project tooling
+    source_files:
+      - lib/thinkum_space.rb
+      - lib/thinkum_space/project.rb
+      - lib/thinkum_space/project/ruby.rb
+      - lib/thinkum_space/project/ruby/y_spec.rb
+      - lib/thinkum_space/project/ruby/spectool.rb
+
   riview:
     module: RIView
-    summary: Documentation browser for Ruby, using Ruby-GNOME
+    summary: Documentation browser for Ruby, using Ruby-GNOME (prototype)
     description:
       This is a project.
     depends:
