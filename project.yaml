@@ -1,0 +1,39 @@
+## rblib project.yaml
+---
+authors:
+  - Sean Champ
+email:
+  - spchamp@users.noreply.github.com
+version: 1.0.2
+licenses:
+  - MPL-2.0
+devo_depends:
+  - rbs
+  - rake
+  - rspec
+  - standard
+  - debug
+gems:
+  riview:
+    module: RIView
+    summary: Documentation browser for Ruby, using Ruby-GNOME
+    description:
+      This is a project.
+    depends:
+      - gtk3
+      - gappkit
+      - rikit
+    resource_files:
+      - ui/appwindow.glade
+      - ui/prefs.ui
+      - ui/docview.ui
+
+  gappkit:
+    summary: Application support for Ruby-GNOME
+    description:
+      This is a project.
+
+  rikit:
+    summary: Prototype for user documentation support for Ruby
+    description:
+      This is a project.
