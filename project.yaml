@@ -8,6 +8,7 @@ version: 1.0.2
 licenses:
   - MPL-2.0
 devo_depends:
+  - psych
   - rbs
   - rake
   - rspec
@@ -29,11 +30,17 @@ gems:
       - ui/docview.ui
 
   gappkit:
+    module: GAppKit
     summary: Application support for Ruby-GNOME
     description:
       This is a project.
+    depends:
+      - gtk3
 
   rikit:
+    module: RIKit
     summary: Prototype for user documentation support for Ruby
     description:
       This is a project.
+    depends:
+      - rdoc
