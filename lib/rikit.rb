@@ -1,23 +1,19 @@
 ## rikit.rb - baseline module definition and autoloads
 
+gem 'thinkum_space-project'
+require 'thinkum_space/project/project_module'
+
 module RIKit
-  SOURCEDIR=File.join(__dir__, self.name.downcase).freeze
+  include ThinkumSpace::Project::ProjectModule
 
-  VERSION=File.read(File.join(SOURCEDIR, self.name.downcase + "_version.inc")).
-            split("\n").grep(/^[[:space:]]*[^#]/).first.strip.freeze
-
-  AUTOLOAD_MAP={
-    "storetool" => %w(QueryError StoreTool
-                      SystemStoreTool SiteStoreTool HomeStoreTool GemStoreTool),
-    "storetopics" => %w(TopicRegistryClass TopicRegistrantClass TopicRegistry
-                        Topic NamedTopic NamespaceTopic RITopicRegistry
-                        ModuleTopic ClassTopic MethodTopic ConstantTopic)
-  }.freeze
-
-  AUTOLOAD_MAP.each { |file, names|
-    path = File.join(SOURCEDIR, file + ".rb")
-    names.each { |name| autoload(name, path) }
-  }
+  defautoloads({"rikit/storetool" =>
+                %w(QueryError StoreTool SystemStoreTool
+                   SiteStoreTool HomeStoreTool GemStoreTool),
+              "rikit/storetopics" =>
+                %w(TopicRegistryClass TopicRegistrantClass TopicRegistry
+                   Topic NamedTopic NamespaceTopic RITopicRegistry
+                   ModuleTopic ClassTopic MethodTopic ConstantTopic)
+               })
 end
 
 # Local Variables:

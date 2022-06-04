@@ -3,27 +3,30 @@
 ## FIXME move to a separate gappkit gem,
 ## and add to a work area decl. for the riview app
 
+gem 'thinkum_space-project'
+require 'thinkum_space/project/project_module'
+
 module GAppKit
-  SOURCEDIR=File.join(__dir__, self.name.downcase).freeze
+  include ThinkumSpace::Project::ProjectModule
 
-  VERSION=File.read(File.join(SOURCEDIR, self.name.downcase + "_version.inc")).
-            split("\n").grep(/^[[:space:]]*[^#]/).first.strip.freeze
+  defautoloads({
+    "gappkit/logging" =>
+      %w(LoggerDelegate LogManager LogModule),
+    "gappkit/threads" =>
+      %w(NamedThread), ## FIXME move to a generic appkit gem
+    "gappkit/sysexit" =>
+      %w(SysExit),
+    "gappkit/glib_type_ext" =>
+      %w(GTypeExt),
+    "gappkit/gtk_type_ext" =>
+      %w(UIBuilder TemplateBuildeer
+         ResourceTemplateBuilder FileTemplateBuilder),
+    "gappkit/gbuilder_app" =>
+      %w(GBuilderApp),
+    "gappkit/basedir" =>
+      %w(FileResourceManager)
+  })
 
-  AUTOLOAD_MAP={
-    "logging" => %w(LoggerDelegate LogManager LogModule),
-    "threads" => %w(NamedThread), ## FIXME move to a generic appkit gem
-    "sysexit" => %w(SysExit),
-    "glib_type_ext" => %w(GTypeExt),
-    "gtk_type_ext" => %w(UIBuilder TemplateBuilder
-                         ResourceTemplateBuilder FileTemplateBuilder),
-    "gbuilder_app" => %w(GBuilderApp),
-    "basedir" => %w(FileResourceManager)
-  }.freeze
-
-  AUTOLOAD_MAP.each { |file, names|
-    path = File.join(SOURCEDIR, file + ".rb")
-    names.each { |name| autoload(name, path) }
-  }
 end
 
 # Local Variables:

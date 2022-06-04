@@ -1,8 +1,30 @@
 *~
 *#
 .#*
+.emacs.desktop
 *.bak
 *.log
-.bundle
 Gemfile.lock
-vendor
+*.gem
+## tools dirs
+/.bundle/
+/vendor
+/.yardoc
+/_yardoc/
+/coverage/
+/pkg/
+/spec/reports/
+## other
+/tmp/
+
+# rspec failure tracking
+.rspec_status
+
+## GLib2/Gtk
+# binary files from glib-compile-resources(1)
+*.gresource
+# binary files from glib-compile-schemas(1)
+gschemas.compiled
+## docs (RDoc, YARD)
+doc/
+.yardoc/

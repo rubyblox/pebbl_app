@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# Rakefile for rblib
 
 require "bundler/gem_tasks"
 require "rspec/core/rake_task"

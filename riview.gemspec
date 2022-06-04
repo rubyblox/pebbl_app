@@ -1,6 +1,8 @@
 ## riview.gemspec -- gemspec for RIView
 
-require_relative 'lib/thinkum_space/project/ruby/y_spec'
+## this assumes that $LOAD_PATH is configured to include ./lib
+## such that will be provided under the project Gemfile
+require 'thinkum_space/project/ruby/y_spec'
 
 Gem::Specification.new do |s|
 

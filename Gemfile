@@ -1,9 +1,14 @@
-# frozen_string_literal: true
-#
-# Gemfile for RbLib
-#
+# Gemfile for rblib
+
 
 source 'https://rubygems.org'
+
+## ensure that 'require' can be used during project development, for
+## accessing project source files within project gemspec files, by
+## adding the relative "lib" dir as an absolute pathname in $LOAD_PATH
+if ! $LOAD_PATH.member?(File.join(__dir__, "lib"))
+  $LOAD_PATH.unshift(File.join(__dir__, "lib"))
+end
 
 # stdlib = %w(net/http zlib time)
 
@@ -15,24 +20,36 @@ tool_gems=	%w(rbs rake rspec standard debug)
 
 project_gems=	%w(thinkum_space-project rikit riview gappkit)
 
+@gems_defined ||= {}
+
 runtime_gems.each do |name|
-  gem name
+  s_name = name.to_sym
+  if @gems_defined[s_name]
+    STDERR.puts("Gem already defined: #{name}") if $DEBUG
+  else
+    gem name
+    @gems_defined[s_name] = true
+    STDERR.puts("Defined gem: #{name}") if $DEBUG
+  end
 end
 
 group :development, :optional => true do
   tool_gems.each do |name|
-    gem name
+    if @gems_defined[name.to_sym]
+      STDERR.puts("Gem already defined: #{name}") if $DEBUG
+    else
+      gem name
+      @gems_defined[name.to_sym] = :development
+      STDERR.puts("Defined gem (:development): #{name}") if $DEBUG
+    end
   end
 end
 
-## $DEBUG = true serves to illustrate some odd output with irb under iruby
-$DEBUG = true
+## $DEBUG = true serves to illustrate some particular debugging output
+#$DEBUG = true
 
 if $DEBUG
-  ##
-  ### The following will result in some informative output, albeit delimited
-  ### with null characters and not particularly early in the gem resolver process
-  ###
+  ## enable some more of infomrative output from bundler
 
   ## /usr/local/lib/ruby/gems/3.1/gems/bundler-2.3.14/lib/bundler/resolver.rb
   ## @ Bundler::Resolver#debug?
@@ -44,21 +61,21 @@ if $DEBUG
 end ## $DEBUG
 
 
-## NB 'gemspec' method args,
-## from e.g
+## NB args on the Gemfile 'gemspec' method, from e.g
 ## /usr/local/lib/ruby/gems/3.1/gems/bundler-2.3.14/lib/bundler/dsl.rb
 ## :path (default "."), :glob, :name, :development_group (default :development)
 
-##
-## This file is being loaded twice in one 'bundle install'
-##
-## The second evaluation may entail a recursive parse of gemspec deps
-##
 project_gems.each do |name|
-  STDERR.puts("DEBUG gemspec: #{name}") if $DEBUG
-  gemspec name: name
-  ## FIXME here, ensure that each named gem will be available to each
-  ## subsequent gem in project_gems
+  s_name = name.to_sym
+  if @gems_defined[s_name]
+    STDERR.puts("Gem already defined: #{name}") if $DEBUG
+  else
+    STDERR.puts("Defining gem (gemspec): #{name}") if $DEBUG
+    gemspec name: name
+    @gems_defined[s_name] = :gemspec
+    STDERR.puts("Defined gem (gemspec): #{name}") if $DEBUG
+  end
 end
-# $GEMFILE_SOURCE = __FILE__
+
+
 
