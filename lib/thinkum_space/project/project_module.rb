@@ -246,7 +246,7 @@ module ThinkumSpace::Project::ProjectModule
     ## The returned pathname will have the suffix ".rb" appended, if
     ## that suffix is not already present in the provided path
     def autoload_source_path(path)
-      retpath = File.expand_path(path, source_path)
+      retpath = File.expand_path(path, self.source_path)
       ext = File.extname(retpath)
       sfx = ThinkumSpace::Project::ProjectModule::Const::SOURCE_SUFFIX
       if (ext != sfx)

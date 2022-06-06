@@ -354,7 +354,7 @@ class ThinkumSpace::Project::YSpec
     ##
     ## add the project YAML file
     ##
-    append_singleton_value(@pathname.to_s, :files, spec)
+    append_singleton_value(@pathname.basename.to_s, :files, spec)
 
     ##
     ## add the gemspec file
