@@ -5,7 +5,7 @@
 ## $ bundle exec rake --trace spec
 ##
 
-describe ThinkumSpace::Project::ProjectModule do
+describe %(Module includes ThinkumSpace::Project::ProjectModule) do
   let(:subject) {
     module ProjectModuleTests01
       include ThinkumSpace::Project::ProjectModule
