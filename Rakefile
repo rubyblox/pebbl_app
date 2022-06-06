@@ -66,8 +66,16 @@ if ENV['BUNDLE_GEMFILE'] &&
 
   RSpec::Core::RakeTask.new(:spec)
 
+
+  ENV['RBS_TEST_LOGLEVEL'] ||='debug'
+  ENV['RBS_TEST_TARGET'] ||= 'Project::*'
+
+  gem 'rbs'
+  require 'rbs/test/setup'
+  ## "No type checker was installed!" ??
+
   desc 'Default tasks'
-  task default: %i[spec]
+  task default: %i[spec test]
 
   #
   # task  :docs ... (needs test)

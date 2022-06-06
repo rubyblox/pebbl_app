@@ -1,6 +1,12 @@
+## RBS declarations for ThinkumSpace::Project::ProjectModule
+
+## test with the following, with a shell in the project root directory (??)_
+## $ RBS_TEST_LOGLEVEL=debug RUBYOPT='-rbundler/setup -rrbs/test/setup' RBS_TEST_TARGET="Project::*" bundle exec rake test
+
 module ThinkumSpace
   module Project
-    VERSION: String
-    # See the writing guide of rbs: https://github.com/ruby/rbs#guides
+    module ProjectModule
+      def self.s_to_filename: ((String | Symbol), String) -> String
+    end
   end
 end
