@@ -1,6 +1,6 @@
 ## gemspec for ThinkumSpace::Project
 
-require_relative 'lib/thinkum_space/project/ruby/y_spec'
+require_relative 'lib/thinkum_space/project/y_spec'
 
 Gem::Specification.new do |s|
 
@@ -9,7 +9,7 @@ Gem::Specification.new do |s|
 
   projinf = File.expand_path("project.yaml", __dir__)
 
-  ThinkumSpace::Project::Ruby::YSpec.configure_gem(s, projinf)
-  s.metadata['resource_root'] = __dir__
+  ThinkumSpace::Project::YSpec.configure_gem(s, projinf)
+  # s.metadata['resource_root'] = __dir__
 
 end

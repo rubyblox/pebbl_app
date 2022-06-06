@@ -1,6 +1,18 @@
-## GemReg spectool.rb
+## spec_tool.rb --- SpecTool and related class definitions (sandbox)
 
-module GemReg
+BEGIN {
+  ## When loaded from a gem, this file may be autoloaded
+
+  ## Ensure that the containing module is defined when loaded from a
+  ## project directory. The module may define autoloads that would be
+  ## used in this file.
+  require(__dir__ + ".rb")
+}
+
+
+require 'pathname'
+
+module ThinkumSpace::Project::Sandbox
 
   class FileNotFound < RuntimeError
     attr_reader :pathname
@@ -42,39 +54,37 @@ module GemReg
 
   class SpecTool
 
+    ## synchronization for chdir in #load
     PWD_LOCK = Mutex.new
+
+    ## synchrnoize onto Gem::Specification::LOAD_CACHE_MUTEX for the
+    ## duration of the provided block.
+    ##
+    ## This method does not support recursive synchronization
+    def self.synchronize_read(&block)
+      Gem::Specification::LOAD_CACHE_MUTEX.synchronize do
+        block.call
+      end
+    end
 
     ## return the value of *Gem::Specification::LOAD_CACHE*
     ##
-    ## In any multi-threaded applications, methods operating on this
-    ## return value should sychronize on the *Mutex*
-    ## +Gem::Specification::LOAD_CACHE_MUTEX+ for the duration of any
-    ## read or write operations on the return value.
-    ##
-    ## @see #find_cached_gems
-    ## @see #find_cached_gem
-    ## @see ::Gem::Specification::LOAD_CACHE_MUTEX
+    ## This method does not support recursive synchronization
     def self.gem_load_cache()
-      Gem::Specification::LOAD_CACHE_MUTEX.synchronize {
+      self.synchronize_read do
         Gem::Specification.const_get(:LOAD_CACHE)
-      }
+      end
     end
 
 
     ## Find all cached Gem Specification objects matching the provided
     ## specification name.
     ##
-    ## In any multi-threaded applications, methods operating on this
-    ## return value should sychronize on the *Mutex*
-    ## +Gem::Specification::LOAD_CACHE_MUTEX+ for the duration of any
-    ## read or write operations on the return value.
-    ##
-    ## @see #find_cached_gem
-    ## @see ::Gem::Specification::LOAD_CACHE_MUTEX
+    ## This method does not support recursive synchronization
     def self.find_cached_gems(name)
-      Gem::Specification::LOAD_CACHE_MUTEX.synchronize {
+      self.synchronize_read do
         self.gem_load_cache().values.find_all { |s| s.name == name }
-      }
+      end
     end
 
     ## Find any cached Gem Specification matching the provided
@@ -88,8 +98,10 @@ module GemReg
     ##
     ## This method does not support gem version qualification.
     ##
-    ## This method will err if  more than one version of a named Gem is
+    ## This method will err if more than one version of a named Gem is
     ## cached under *::Gem::Specification::LOAD_CACHE*
+    ##
+    ## This method does not support recursive synchronization
     ##
     ## @param name [String] Name for the Gem Specification
     ##
@@ -97,9 +109,9 @@ module GemReg
     def self.find_cached_gem(name)
       cached = self.find_cached_gems(name)
       count = cached.length
-      if (count == 1)
+      if (count.eql?(1))
         return cached[0]
-      elsif count.zero?
+      elsif count.eql?(0)
         raise GemQueryError.new(message: "No cached gems found \
 for name #{name}", name: name)
       else
@@ -115,12 +127,8 @@ found for name #{name}: #{cached}", name: name)
     ## This method differs from *Gem::Specification.load*, in at
     ## least the following features:
     ##
-    ## - This method will evaluate and return the Gem
-    ##   Specification defined in the specified file, on every
-    ##   call to the method.
-    ##
-    ## - This method will not perform any _untaint_ calls on the
-    ##   evaluated Gem Specification.
+    ## - This method will evaluate and return a new Gem Specification
+    ##   for the definition  in the specified file, on every invocation
     ##
     ## - This method will not store the evaluted Gem Specification,
     ##   outside of the return value.
@@ -133,6 +141,9 @@ found for name #{name}: #{cached}", name: name)
     ## - If the Gem Specification source text contains an error,
     ##   the error will propogated to the caller of this method,
     ##   rather than being intercepted for a warning message.
+    ##
+    ## - This method this will not # store the Gem Specification for
+    ##  reuse within the Gem module
     ##
     ## Behaviors similar to *Gem::Specification.load*:
     ##
@@ -148,9 +159,6 @@ found for name #{name}: #{cached}", name: name)
     ##
     ## - If the final top-level form in the file does not return a
     ##   Gem Specification, an error will be raised
-    ##
-    ## As one limitation to the following method, this will not
-    ## store the Gem Specification for reuse with the Gem module
     ##
     ## *Rationale*
     ##
@@ -169,62 +177,60 @@ found for name #{name}: #{cached}", name: name)
     ## environment.
     ##
     ## When editing a Gem Specification source file for simultaneous
-    ## access via an interactive Ruby session, the behavior of reusing
-    ## every cached Gem specification from *Gem::Specification.load*
-    ## would serve to require that the interactive Ruby session be
-    ## restarted after each Gem specification file update.
+    ## access from separate threads in  an interactive Ruby session, the
+    ## behavior of reusing every cached Gem specification from
+    ## *Gem::Specification.load* may serve to require that the
+    ## interactive Ruby session be restarted after each Gem
+    ## specification file update
     ##
-    ## Thus, the following method will evaluate the original gem
-    ## specification on every call to the method.
+    ## While the following method does not in itself address that
+    ## limitation at the scale of a Ruby process, this method will allow
+    ## for retrieving the current definition of a gemspec at the time of
+    ## the method call.
+    ##
+    ## *Known Limitation: Not all shell commands supported*
+    ##
+    ## If a project produces a Gem specification using some shell
+    ## command e.g git(1) such that the shell command may not produce an
+    ## equivalent output under the Gem specification directory as
+    ## installed, if absent of any resources in the original project
+    ## directory, this mthod may not be able to produce a usable Gem
+    ## specification from that Gem specification directory.
+    ##
+    ## In such instances, the project's original source code should be
+    ## consulted when available.
     ##
     ## *Known Limitations: This method temporarily modifies PWD*
     ##
-    ## In order to ensure proper evaluation of Gem Specification
-    ## distribution files, this method will temporarily set the value of
-    ## the calling process' current working directory to the directory
-    ## containing the provided Spec file. For purpose of thread-safe
-    ## evaluation, the *PWD_LOCK* mutex will be acquired for the
-    ## duration of this change in the process' current working
-    ## directory.
+    ## For compatibility with Gem specification files using shell
+    ## commands for operations on Gem specification data, this method
+    ## will temporarily set the value of the calling process' current
+    ## working directory to the Gem specifiation directory as
+    ## installed. For purpose of thread-safe evaluation, the *PWD_LOCK*
+    ## mutex will be acquired for the duration of this change in the
+    ## process' current working directory.
+    ##
+    ## In applications, any other threads may operate to change the
+    ## process' current working directory should synchronize on this
+    ## *PWD_LOCK*.
     ##
     ## After either a normal exit or a nonlocal return of this method,
-    ## the process' current working directory will be changed again, to
-    ## that which was in use at the beginning of the critical section
-    ## in this method.
-    ##
-    ## As such, in any multi-threaded program, this method should not be
-    ## used simultaneous to any other methods relying on the value of
-    ## *Dir.pwd*, within the same process - unless e.g those methods are
-    ## also synchronized on the *PWD_LOCK* used here, or if this method
-    ## will be executed under a fork, and thus under a separate process
-    ## environment.
-    ##
-    ## *Known Limitation: No Internal Caching*
-    ##
-    ## The following method could be updated to perform some caching,
-    ## such as based on the file's absolute pathname and the file's last
-    ## modified time. For any Gem Specification that was not updated
-    ## since last load, the only subsequent I/O that would need be
-    ## performed would be to access the file's metadata, as to retrieve
-    ## the file's last motified time. For any updated Gem Specification,
-    ## the latest form could be evaluated and returned as usual.
-    ##
-    ## Similar to *Gem::Specification*, for purpose of thread-safe
-    ## caching, that update would serve to require the creation of an
-    ## additional Mutex object. That Mutex would be used for
-    ## synchronizing any thread-safe access to the cache table.
+    ## the process' current working directory will be restored to that
+    ## which was in use at the beginning of the critical section in this
+    ## method. If any other thread has changed the current working
+    ## directory within that duration, the change will be in effect lost
+    ## upon exit from this method.
     ##
     ## *Known Limitation: No External Caching*
     ##
     ## This method does not use any of the following cache
     ## objects:
-    ## - Gem::Specification::LOAD_CACHE
+    ## - Gem::Specification::LOAD_CACHE (obsolete?)
     ## - @@stubs in Gem::Specification - as via Gem::Specification::stubs
     ## - @@all in Gem::Specification - as via Gem::Specification::_all
     ## - @@stubs_by_name in Gem::Specification, as via Gem::Specification::stubs_for(...)
-    ## - See also: Gem::Specifications::all= (NB May not be useful for activated gems)
     ## - Gem.loaded_specs, synchronizing on Gem::LOADED_SPECS_MUTEX,
-    ##   and used under Gem#activate
+    ##   and used e.g under Gem#activate
     ##
     def self.load(file, &block)
       usefile = File.expand_path(file)
@@ -237,9 +243,12 @@ found for name #{name}: #{cached}", name: name)
         PWD_LOCK.synchronize {
           begin
             ## FIXME this pwd call is problematic, but will be necessary
-            ## for evaluation of some Gem Specs, e.g for yard - such
-            ## that uses the 'find' shell command, to compute the set of
+            ## for evaluation of some Gem Specs, e.g for a yard gemspec
+            ## using the 'find' shell command, to compute the set of
             ## spec files
+            ##
+            ## this has side effects on the calling process, though the
+            ## original pwd should be restored on normal or abnormal return
             Dir.chdir(filedir)
             last = usebind.eval(text, usefile)
           ensure
@@ -255,87 +264,83 @@ found for name #{name}: #{cached}", name: name)
           return last
         else
           raise GemSyntaxError.new(message: "Evaluation of #{file} \
-did not return a Gem Specification: #{last}",
-                                   pathname: file)
+did not return a Gem Specification: #{last}", pathname: file)
         end
       else
         raise FileNotFound.new(usefile)
       end
     end
 
-
-    ## load and return a Gem Specification from any cached specification's
-    ## full gem path
-    ##
-    ## If a block is provided, that block will be be used for providing
-    ## a binding for gemspec evaluation, in the internal call to the
-    ## overriding *#load* method. The block will then be called with the
-    ## initialized Gem Specification object as its only argument.
-    ##
-    ## If no Gem Specification for the provided name can be located under
-    ## the initialized Gem Home and Gem Paths, an error of type
-    ## Gem::MissingSpecError will be raised.
-    ##
-    ## Given the provided +<name>+, if a file +<name>.gemspec+ does not
-    ## exist under the cached specification's +#full_gem_path+ then an
-    ## error will be raised.
-    ##
-    ## *Known Limitations*
-    ##
-    ## This method does not work with 'default' gem installations, e.g
-    ## the psych gem installation as provided in Ruby distribution (FIXME)
-    ##
-    ## This method shares any limitations of the overriding *load*
-    ## method.
-    ##
-    ## This method will not cache the returned Gem Specification for any
-    ## access within the Gem module.
-    ##
-    ## Any specification returned by this method will not be updated
-    ## when the specification used by the Gem module is activated.
-    ##
-    ## *Known Limitations*
-    ##
-    ## *FIXME* This method returns a spec with a spurious files list,
-    ## when used to retrieve the 'yard' gem - presumably due to the
-    ## value of 'pwd' when the Gem Specification is evaluated
-    ##
-    ## *Rationale*
-    ##
-    ## For some Gem Specification definitions, the Gem Specification
-    ## object loaded from the *spec_file* may differ from that loaded from
-    ## the +<name>.gemspec+ file under the specification's *full_gem_path*.
-    ## This issue is apparent with at least the +rdoc+ gem, version 6.3.1
-    ## installed from Arch Linux, under Ruby 3.0.0. The Gem Specification
-    ## provided in the *spec_file* for this gem does not identify any
-    ## +'*.rb'+ files, while the Gem Specification - of the same name
-    ## and version - as accessed under the gem's *full_gem_path* will
-    ## provide a complete Gem Specification, including Ruby source
-    ## files.
-    ##
-    ## As such, the Gem Specification returned by this method may differ
-    ## from that returned from Gem query methods, such as
-    ## *Gem::Specification::find_by_name(name)*.
-    ##
-    ## To the best estimation of the author of this method, the Gem
-    ## Specifications returned by this method may represent a manner of
-    ## _Gem Specification for distribution_, whreas the Gem
-    ## specification returned by such a method in the *Gem* module may
-    ## represent a _Gem Specification for runtime_.
-    ##
-    ## @see #load
-    def self.find_gem_spec(name, &block)
+    ## Utility method
+    def self.find_gem_spec(name)
+      ## FIXME add an optional version arg
+      ## TBD add optional search-patch args
+      ##
+      ## FIXME resume calling #load once a method is defined here for
+      ## configuring the load path for a provided gemspec and all
+      ## gemspecs on which the gemspec depends
       s = Gem::Specification::find_by_name(name)
-      gempath = s.full_gem_path
-      fullpath = File.expand_path(name + ".gemspec",gempath)
-      if File.exists?(fullpath)
-        fullspec  = self.load(fullpath, &block)
-        return fullspec
+      return s
+    end
+
+
+    ## utility method
+    def self.to_gem(gem)
+      case gem
+      when Gem::Specification
+        gem
+      when String
+        find_gem_spec(gem)
+      when Symbol
+        find_gem_spec(gem.to_s)
       else
-        raise FileNotFound.new(fullspec, "No gemspec found \
-for name #{name} under #{gempath}")
+        raise ( "Unrecognized gem specifier %S" % [ gem ])
       end
     end
+
+    def self.gem_base_directory(gem)
+      ## NB in applications: not every gemspec will have installed a
+      ## <name>.gemspec file under the spec.full_gem_path
+      ##
+      ## e.g
+      ## rblib vendor/bundle/ruby/3.1/gems/native-package-installer-1.1.4/
+      ## contains no *.gemspec file
+      ## to which, note the file
+      ## rblib vendor/bundle/ruby/3.1/specifications/native-package-installer-1.1.4.gemspec
+      ## accessible with
+      ## Gem::Specification.find_by_name("native-package-installer").spec_file
+      spec = to_gem(gem)
+      return Pathname(spec.full_gem_path)
+    end
+
+    ## utility method for editor applications
+    ##
+    ## e.g
+    ## using = ThinkumSpace::Project::Ruby
+    ## s_gtk = using::SpecTool.gemspec_source_file('gtk3')
+    ## s_npt = using::SpecTool.gemspec_source_file("native-package-installer")
+    ##
+    ## e.g with shell, using bundle-exec(1) in the rblib project source directory
+    ## $EDITOR $(bundle exec ruby -I lib -r 'thinkum_space/project/ruby/spectool' -e 'puts ThinkumSpace::Project::Ruby::SpecTool.gemspec_source_file("gtk3")')
+    ##
+    ## FIXME needs a binscript e.g as 'project edit gem' for a project(1) cmd
+    def self.gemspec_source_file(gem)
+      spec = to_gem(gem)
+      gempath = spec.full_gem_path
+      ## NB this assumes a certain convention in gemspec source naming
+      srcname = spec.name + '.gemspec'
+      srcpath = File.join(gempath, srcname)
+      if File.exists?(srcpath)
+        return srcpath
+      else
+        ## FIXME this quiet difference in the semantics of the return
+        ## value should be noted in the return value itself, or
+        ## reflected in some alternate approach for accessing the
+        ## gemspec source (e.g browse the spec.full_gem_path dir in such case)
+        return spec.spec_file
+      end
+    end
+
 
     ## Return the set of library files for a Gem Specification object,
     ## such that each library file is accessible under one or more of

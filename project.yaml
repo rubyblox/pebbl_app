@@ -4,57 +4,114 @@ authors:
   - Sean Champ
 email:
   - spchamp@users.noreply.github.com
-version: 1.0.2
+version: 1.0.3
 licenses:
   - MPL-2.0
+docs:
+  - README.md
+  - COPYING.md
 devo_depends:
-  - psych
   - rbs
   - rake
   - rspec
-  - standard
   - debug
+  - irb
 required_ruby_version: ">= 2.7.0"
 require_paths:
   - lib
+publish_gems:
+  - thinkum_space-project
 gems:
   thinkum_space-project:
     module: ThinkumSpace::Project
-    summary: Project Tools
-    description: Project tooling
+    summary: Project Tooling
+    description:
+      This gem provides a reusable toolbox for project configuration
+      methods used in Ruby projects at Thinkum.Space.
     source_files:
       - lib/thinkum_space.rb
       - lib/thinkum_space/project.rb
-      - lib/thinkum_space/project/ruby.rb
-      - lib/thinkum_space/project/ruby/y_spec.rb
-      - lib/thinkum_space/project/ruby/spectool.rb
+      - lib/thinkum_space/project/project_module.rb
+      - lib/thinkum_space/project/y_spec.rb
+    sandbox_files:
+      ## not published with the gem. To define autoloads for these files e.g:
+      ##    require 'thinkum_space/project'
+      ## as conditionally under 'bundle exec <ruby>' in the rblib source tree
+      ##
+      ## FIXME this should probably be moved to a root 'sandbox' library
+      ## path, then activated with some top-level add-on parameter for
+      ## bundler (or when :development under bundler eg), beyond an ad
+      ## hoc dispatch and test onto a bundler environment variable.
+      - lib/thinkum_space/project/sandbox.rb
+      - lib/thinkum_space/project/sandbox/spectool.rb
+    depends:
+      - psych
 
   riview:
     module: RIView
     summary: Documentation browser for Ruby, using Ruby-GNOME (prototype)
     description:
       This is a project.
+    build_depends:
+      - thinkum_space-project
     depends:
-      - gtk3
+      - gtk4
       - gappkit
       - rikit
+      - thinkum_space-project
+    source_files:
+      - lib/riview.rb
+      - lib/riview/dataproxy.rb
+      - lib/riview/riview_app.rb
     resource_files:
-      - ui/appwindow.glade
-      - ui/prefs.ui
-      - ui/docview.ui
+      - ui/appwindow.riview.ui
+      - ui/prefs.riview.ui
+      - ui/docview.riview.ui
 
   gappkit:
     module: GAppKit
-    summary: Application support for Ruby-GNOME
+    summary: Application support for Ruby-GNOME (prototype)
     description:
       This is a project.
+    build_depends:
+      - thinkum_space-project
     depends:
-      - gtk3
+      - gtk4
+      - thinkum_space-project
+    source_files:
+      - lib/gappkit.rb
+      - lib/gappkit/logging.rb
+      - lib/gappkit/threads.rb
+      - lib/gappkit/sysexit.rb
+      - lib/gappkit/glib_type_ext.rb
+      - lib/gappkit/gtk_type_ext.rb
+      - lib/gappkit/gbuilder_app.rb
+      - lib/gappkit/basedir.rb
+##    - lib/gappkit/tools/resources.rb
+##    - lib/gappkit/tools/ui.rb
+##    - lib/gappkit/tools/schemas.rb
 
   rikit:
     module: RIKit
     summary: Prototype for user documentation support for Ruby
     description:
       This is a project.
+    build_depends:
+      - thinkum_space-project
     depends:
       - rdoc
+      - thinkum_space-project
+
+  ### sandbox - source code needs migration to root project context
+  # projectkit:
+  #   module: ProjectKit
+  #   summary: Prototype for project tooling support
+  #   description:
+  #     This project's single source file will likely be migtrated into
+  #     the thinkum_space-project gemspec
+  #   build_depends:
+  #     - thinkum_space-project
+  #   depends:
+  #     - thinkum_space-project
+  #   source_files:
+  #     - lib/projectkit/rspectool.rb

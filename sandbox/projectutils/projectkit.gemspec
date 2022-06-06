@@ -1,16 +1,17 @@
-## projectkit.gemspec
+## projectkit.gemspec -- gemspec for ProjectKit
 
-## NB this_dir provides a value other than __dir__, as that
-## would be a relative path under eval by 'gem build'
-this_dir=File.dirname(File.expand_path(__FILE__))
+require_relative '../lib/thinkum_space/project/ruby/y_spec'
+## ^ FIXME this is not portable outside of the original source tree
 
-Kernel.load(File.join(this_dir,'../project_tools.rb'))
-lib_name = Project.filename_no_suffix(__FILE__)
-module_file = File.join("lib", lib_name + ".rb")
-Kernel.load(File.join(this_dir, module_file))
+Gem::Specification.new do |s|
 
-lib_module = ::ProjectKit
+  name = File.basename(__FILE__).split("\.")[0]
+  s.name = name
 
-$GEMSPEC = Gem::Specification.new do |s|
-  Project.gemspec_common_config(s, this_dir, lib_module)
+  projinf = File.expand_path("../project.yaml", __dir__)
+
+  ThinkumSpace::Project::Ruby::YSpec.configure_gem(s, projinf)
+  s.metadata['resource_root'] = __dir__
+
+  s.files << %q(lib/projectkit/rspectool.rb)
 end

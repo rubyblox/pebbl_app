@@ -8,7 +8,8 @@ Gemfile.lock
 *.gem
 ## tools dirs
 /.bundle/
-/vendor
+/vendor*
+/doc
 /.yardoc
 /_yardoc/
 /coverage/
@@ -25,6 +26,3 @@ Gemfile.lock
 *.gresource
 # binary files from glib-compile-schemas(1)
 gschemas.compiled
-## docs (RDoc, YARD)
-doc/
-.yardoc/
