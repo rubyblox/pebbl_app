@@ -22,8 +22,6 @@ describe ThinkumSpace::Project::ProjectModule do
     subject.defautoload("nonexistent_a", :NonexistentA)
     subject.defautoload("nonexistent_b.rb", :NonexistentB)
 
-    ## FIXME if subject.source_path was not called before the following,
-    ## then these would return relative pathnames
     expect(subject.autoload?(:NonexistentA)).
       to be == File.expand_path("nonexistent_a.rb", __dir__)
     expect(subject.autoload?(:NonexistentB)).
@@ -44,7 +42,6 @@ describe ThinkumSpace::Project::ProjectModule do
     subject.autoloads_defer = false
   end
 
-
   it "Accepts and applies a different source_path" do
     expect(subject.source_path).to be == __dir__
     subject.source_path = "/nonexistent"
@@ -54,6 +51,7 @@ describe ThinkumSpace::Project::ProjectModule do
       to be == File.expand_path("nonexistent_e.rb", "/nonexistent")
     expect(subject.autoload?(:NonexistentF)).
       to be == File.expand_path("nonexistent_f.rb", "/nonexistent")
+    subject.source_path = __dir__
   end
 
 end
