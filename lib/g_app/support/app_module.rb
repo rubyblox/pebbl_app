@@ -58,7 +58,6 @@ module GApp::Support::AppModule
     XDG_CACHE_HOME_ENV ||= "XDG_CACHE_HOME".freeze
 
     XDG_RUNTIME_DIR_ENV ||= "XDG_RUNTIME_DIR".freeze
-    XDG_STATE_HOME_ENV ||= "XDG_STATE_HOME".freeze
 
     XDG_DATA_SUBDIR ||= ".local/share".freeze
     XDG_CONFIG_SUBDIR ||= ".local/config".freeze
@@ -73,10 +72,10 @@ module GApp::Support::AppModule
     ## :nodoc: FIXME This is the standard default for XDG_CONFIG_DIRS value
     ## but would not be applicable on most BSD operating systems, such
     ## that would use an "etc/xdg" subdirectory under some prefix path,
-    ## e.g under "/usr/local" on FreeBSD, or under one of a modular X
-    ## Windows subdir or "/usr/pkg" on NetBSD. This prefix path
-    ## may typically be configured within the runtime environment, e.g
-    ## using a PREFIX environment variable.
+    ## e.g under "/usr/local" on FreeBSD or "/usr/pkg" on NetBSD. During
+    ## package installation tasks, this prefix path may be furthermore
+    ## configured within the runtime environment, e.g using a PREFIX
+    ## environment variable
     CONFIG_DIRS_DEFAULT ||= "/etc/xdg".freeze
   end
 
@@ -199,7 +198,6 @@ module GApp::Support::AppModule
       end
     end
 
-
     def envdir(envar, &fallback)
       if envdir = ENV[envar]
         return envdir
@@ -284,10 +282,6 @@ module GApp::Support::AppModule
         using.flatten_dirs(using.map_join(using::Const::MENUS, dirs))
       end
 
-      ## FIXME in each of the *_home! methods below,
-      ## recursively create all nonexistent parent dirs
-      ## using the process' active umask
-
       def app_config_home()
         using = GApp::Support::AppModule
         File.join(using.config_home, app_dirname)
@@ -323,7 +317,6 @@ module GApp::Support::AppModule
       ## ensuring the directory exists
       def app_cache_home!()
         dir = app_cache_home
-        ## FIXME this and the previous will not recursively create the dirs
         GApp::Support::Files.mkdir_p(dir)
         return dir
       end
