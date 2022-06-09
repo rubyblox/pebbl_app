@@ -10,7 +10,7 @@ BEGIN {
 
 require 'gtk3'
 
-module GAppKit::UIBuilder
+module GApp::Support::UIBuilder
   def self.extended(extclass)
     def extclass.builder()
       @builder ||= Gtk::Builder.new()
@@ -57,10 +57,10 @@ end
 ##
 ## @see ResourceTemplateBuilder
 ## @see FileTemplateBuilder
-module GAppKit::TemplateBuilder
+module GApp::Support::TemplateBuilder
   def self.included(extclass)
-    extclass.extend GAppKit::GTypeExt
-    extclass.extend GAppKit::UIBuilder
+    extclass.extend GApp::Support::GTypeExt
+    extclass.extend GApp::Support::UIBuilder
 
     ## set the template path to be used for this class
     ##
@@ -148,9 +148,9 @@ module GAppKit::TemplateBuilder
 end
 
 
-module GAppKit::ResourceTemplateBuilder
+module GApp::Support::ResourceTemplateBuilder
   def self.extended(extclass)
-    extclass.include GAppKit::TemplateBuilder
+    extclass.include GApp::Support::TemplateBuilder
 
     ## ensure that a resource bundle at the provided +path+ is
     ## registered at most once, for this class
@@ -158,6 +158,7 @@ module GAppKit::ResourceTemplateBuilder
     ## @see ::init
     ## @see ::resource_bundle_path
     ## @see ::resource_bundle
+    ## @see Gio::resource.load
     def extclass.use_resource_bundle(path)
       ## NB storing the bundle in extclass, such that  _unregister and
       ## unref (??) can be called for the Resource bundle, during some
@@ -194,13 +195,13 @@ module GAppKit::ResourceTemplateBuilder
       @bundle
     end
 
-    ## set this class' template as a resource path
+    ## set this class' template, using a configured resource path
     ##
-    ## The resource path for the configured template must provide a
+    ## The @template path for this class must provide a
     ## valid resource path onto the resource bundle initialized to this
-    ## class
+    ## class [FIXME this needs clarification and testing during development]
     ##
-    ## This method is used by Gtk support in Ruby-GNOME
+    ## This method extends on Gtk support in Ruby-GNOME
     ##
     ## @see ::use_resource_bundle
     ## @see ::use_template
@@ -222,13 +223,13 @@ module GAppKit::ResourceTemplateBuilder
   end
 end
 
-module GAppKit::FileTemplateBuilder
+module GApp::Support::FileTemplateBuilder
   def self.extended(extclass)
-    extclass.include GAppKit::TemplateBuilder
+    extclass.include GApp::Support::TemplateBuilder
 
     ## load this class' template as a file
     ##
-    ## This method is used by Gtk support in Ruby-GNOME
+    ## This method extends on Gtk support in Ruby-GNOME
     ##
     ## @see ::use_template
     def extclass.init
@@ -245,8 +246,6 @@ module GAppKit::FileTemplateBuilder
           self.set_template(data: bytes)
         ensure
           ## TBD no #unref available for GLib::Bytes here
-          ##
-          ## TBD The template bytes data may be reused internally in Gtk ?
           fio.unref()
           gfile.unref()
         end

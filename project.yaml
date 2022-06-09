@@ -1,21 +1,25 @@
+%YAML 1.1
 ## rblib project.yaml
 ---
 authors:
   - Sean Champ
 email:
   - spchamp@users.noreply.github.com
-version: 1.0.3
+version: 1.0.4
 licenses:
   - MPL-2.0
 docs:
   - README.md
   - COPYING.md
 devo_depends:
-  - rbs
-  - rake
-  - rspec
-  - debug
-  - irb
+  ## NB always quote the version-bounds strings when using any version-bounded
+  ## syntax for dependencies in project.yaml
+  - [rbs,	">=2"]
+  - [rake,	">=13"]
+  - [rspec,	">=3"]
+  - [debug,	">=1"]
+  - [irb,	">=1"]
+  - [yard,	">=0.9"]
 required_ruby_version: ">= 2.7.0"
 require_paths:
   - lib
@@ -55,8 +59,8 @@ gems:
     build_depends:
       - thinkum_space-project
     depends:
-      - gtk4
-      - gappkit
+      - [gtk3, ">=3"]
+      - g_app-support
       - rikit
       - thinkum_space-project
     source_files:
@@ -68,28 +72,32 @@ gems:
       - ui/prefs.riview.ui
       - ui/docview.riview.ui
 
-  gappkit:
-    module: GAppKit
-    summary: Application support for Ruby-GNOME (prototype)
+  g_app-support:
+    module: GApp::Support
+    autoloads:
+      - GApp: lib/g_app.rb
+      - GApp::Support: lib/g_app/support.rb
+    summary: Application support for Ruby-GNOME applications (prototype)
     description:
-      This is a project.
+      The g_app-support gem provides a small number of reusable Ruby
+      module and class definitions for applications using Ruby-GNOME
     build_depends:
       - thinkum_space-project
     depends:
-      - gtk4
+      - [gtk3, ">=3"]
       - thinkum_space-project
     source_files:
-      - lib/gappkit.rb
-      - lib/gappkit/logging.rb
-      - lib/gappkit/threads.rb
-      - lib/gappkit/sysexit.rb
-      - lib/gappkit/glib_type_ext.rb
-      - lib/gappkit/gtk_type_ext.rb
-      - lib/gappkit/gbuilder_app.rb
-      - lib/gappkit/basedir.rb
-##    - lib/gappkit/tools/resources.rb
-##    - lib/gappkit/tools/ui.rb
-##    - lib/gappkit/tools/schemas.rb
+      - lib/g_app/support.rb
+      - lib/g_app/support/logging.rb
+      - lib/g_app/support/threads.rb
+      - lib/g_app/support/sysexit.rb
+      - lib/g_app/support/glib_type_ext.rb
+      - lib/g_app/support/gtk_type_ext.rb
+      - lib/g_app/support/gbuilder_app.rb
+      - lib/g_app/support/basedir.rb
+##    - lib/g_app/support/tools/resources.rb
+##    - lib/g_app/support/tools/ui.rb
+##    - lib/g_app/support/tools/schemas.rb
 
   rikit:
     module: RIKit

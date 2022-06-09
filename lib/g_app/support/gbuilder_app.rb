@@ -10,7 +10,7 @@ BEGIN {
 require 'logger'
 require 'gtk3'
 
-module GAppKit
+module GApp::Support
 
 #class GApp < GLib::Application
 ## FIXME define in gapp.rb
@@ -379,7 +379,7 @@ class GBuilderApp < Gtk::Application
 
 end
 
-end ## GAppKit module
+end ## GApp::Support module
 
 # Local Variables:
 # fill-column: 65

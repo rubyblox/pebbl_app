@@ -8,7 +8,7 @@ BEGIN {
 }
 
 ## Thread class accepting a thread name in the constructor
-class GAppKit::NamedThread < Thread
+class GApp::Support::NamedThread < Thread
 
   attr_reader :run_block
 

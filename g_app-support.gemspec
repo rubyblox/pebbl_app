@@ -1,4 +1,4 @@
-## gappkit.gemspec
+## g_app-support.gemspec
 
 ## this assumes that $LOAD_PATH is configured to include ./lib
 ## such that will be provided under the project Gemfile

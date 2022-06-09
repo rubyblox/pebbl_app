@@ -26,7 +26,7 @@ require('forwardable')
 ##  storage within a class, and support for shadowing the *Kernel.warn*
 ##  method with s proc dispatching to an arbitrary *Logger*
 ##
-module GAppKit::LoggerDelegate
+module GApp::Support::LoggerDelegate
 
   def self.extended(extclass)
     extclass.extend Forwardable
@@ -167,7 +167,7 @@ end
 ## @see *LogModule*, which provides an extension of this module via
 ##  a module, such that may be suitable for extension onto the Ruby
 ##  *Warning* module
-module GAppKit::LogManager
+module GApp::Support::LogManager
   def self.extended(extender)
 
     def extender.logger=(logger)
@@ -272,7 +272,7 @@ module GAppKit::LogManager
 end # LogManager module
 
 
-module GAppKit::LogModule
+module GApp::Support::LogModule
   ## for Warning.extend(..) which will not accept a class as an arg
   ##
   ## e.g
@@ -290,10 +290,10 @@ module GAppKit::LogModule
   ## about the warning
 
   ## TBD @ <app>
-  # GAppKit::LogModule.logger ||= @logger
-  # GAppKit::LogModule.manage_warnings
+  # GApp::Support::LogModule.logger ||= @logger
+  # GApp::Support::LogModule.manage_warnings
 
-  extend(GAppKit::LogManager)
+  extend(GApp::Support::LogManager)
 
 end
 

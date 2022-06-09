@@ -1,5 +1,7 @@
 ## basedir.rb - API for application base directory handling
 
+require 'g_app'
+
 ## This source file provides the following methods, such that may
 ## be applied for purpose of setting and accessing an application
 ## base directory within any one or more Ruby classes.
@@ -74,7 +76,7 @@
 ## application's recourse base directory - e.g user home
 ## directory - independent of this API.
 
-module GAppKit
+module GApp::Support
 
 module FileResourceManager
   def self.extended(extclass)
@@ -131,7 +133,7 @@ module FileResourceManager
   end ## extended
 end
 
-end ## GAppKit module
+end ## GApp::Support module
 
 ## Local Variables:
 ## fill-column: 65

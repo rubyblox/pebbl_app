@@ -1,29 +1,53 @@
-## gappkit.rb - baseline module definition and autoloads
+## support.rb --- GApp::Support module definition
 
-## FIXME move to a separate gappkit gem,
-## and add to a work area decl. for the riview app
+BEGIN {
+  gem 'thinkum_space-project'
+  require 'thinkum_space/project/project_module'
 
-gem 'thinkum_space-project'
-require 'thinkum_space/project/project_module'
+  ## ensure that the module and any autoloads in the module will
+  ## be defined, when loading this source file individually
+  require 'g_app'
+}
 
-module GAppKit
+
+## prototyping
+require 'thinkum_space/project/spec_finder'
+
+module GApp::Support
   include ThinkumSpace::Project::ProjectModule
+  self.source_path = __dir__
+
+  ## return the first gem specification found within active
+  ## gemspecs, for any gem providing this module's original
+  ## source file under the gem's files list.
+  ##
+  ## this method may not return an expected value for any module
+  ## including this module, unless overridden in the including
+  ## module.
+  ##
+  ## @see ThinkumSpace::Project::SpecFinder.find_for_file
+  def self.gem
+    return ThinkumSpace::Project::SpecFinder.find_for_file(__FILE__)
+  end
 
   defautoloads({
-    "gappkit/logging" =>
+    "support/app_module" =>
+      %w(AppModule),
+    "support/logging" =>
       %w(LoggerDelegate LogManager LogModule),
-    "gappkit/threads" =>
-      %w(NamedThread), ## FIXME move to a generic appkit gem
-    "gappkit/sysexit" =>
+    "support/threads" =>
+      %w(NamedThread),
+    "support/sysexit" =>
       %w(SysExit),
-    "gappkit/glib_type_ext" =>
+    "support/glib_type_ext" =>
       %w(GTypeExt),
-    "gappkit/gtk_type_ext" =>
-      %w(UIBuilder TemplateBuildeer
+    "support/gtk_type_ext" =>
+      ## FIXME => WidgetBuilder
+      %w(UIBuilder TemplateBuilder
          ResourceTemplateBuilder FileTemplateBuilder),
-    "gappkit/gbuilder_app" =>
+    "support/gbuilder_app" =>
       %w(GBuilderApp),
-    "gappkit/basedir" =>
+    "support/basedir" =>
       %w(FileResourceManager)
   })
 

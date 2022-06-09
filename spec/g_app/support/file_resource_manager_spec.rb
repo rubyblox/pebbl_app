@@ -1,11 +1,15 @@
 ## test/basedir.rb
 
-require 'basedir.rb' # the library to test
+## FIXME obsolete implementation @ FileResourceManager
+##
+## newer implementation: ThinkumSpace::Project::ProjectModule
 
-describe GAppKit::FileResourceManager do
+require 'g_app/support/basedir' # the library to test
+
+describe GApp::Support::FileResourceManager do
   subject{
     class TestClass
-      extend GAppKit::FileResourceManager ## the module to test ...
+      extend GApp::Support::FileResourceManager ## the module to test ...
     end
     TestClass
   }

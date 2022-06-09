@@ -1,27 +1,5 @@
 ## apploader_gtk.rb - something to call Gtk.init
 
-## NB some forms under each of the Ruby-GNOME Gtk and Gdk modules
-## will not become available until after calling either of the the
-## Ruby-GNOME methods Gtk.init or Gdk.init
-##
-## After either call, some API forms will become available e.
-## g Gtk.init_check,...
-##
-## Gdk.init can be called separately but
-## - it accepts no ostensible args
-## - it removes itself after the call, and
-## - it calls Gtk.init, such that also removes itself after call
-##
-## - NB Ruby-GNOME Gdk.init also pulls in a hard dependency on X11
-##   cf. "The source code"
-##
-## ... such that neither Gdk.init nor Gtk.init will be available
-##     after either of the two is called.
-##
-##
-## Pursuant towards minimizing any sense of ambiguity about what APIs
-## are available in GTK with Ruby-GNOME ... apploader_gtk.rb
-
 ## TBD the API here
 ## - it could be called from a BEGIN form, e.g for the RIView app
 ##

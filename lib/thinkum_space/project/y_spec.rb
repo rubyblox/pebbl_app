@@ -1,9 +1,7 @@
 ## yspec.rb --- YAML-based configuration tooling for gemspecs
 
+## bootstrap module definition, without autoloads
 if !defined?(::ThinkumSpace::Project)
-  ## this file will be loaded from some gemspec definitions
-  ##
-  ## provide stub module definitions here, for namespaces in this file
   module ThinkumSpace
     module Project
     end
@@ -24,7 +22,7 @@ require 'psych'
 ##
 ## FIXME the YAML format used here needs documentation. For an example
 ## of the YAML syntax, refer to the file project.yaml in this source
-## file's original source repository.
+## file's original source repository. See also: OpenSchema (JSON, YAML?)
 ##
 ## FIXME provide a read_config instance method and a dump_config
 ## instance method, for application in transferring data values from a
@@ -41,6 +39,7 @@ require 'psych'
 ##
 class ThinkumSpace::Project::YSpec
 
+  ## Constants forThinkumSpace::Project::YSpec
   module Const
     GEMS_FIELD		||= 'gems'.freeze
     FILENAME_FIELD	||= 'filename'.freeze
@@ -49,6 +48,8 @@ class ThinkumSpace::Project::YSpec
     RESOURCE_FIELD	||= 'resource_files'.freeze
     DEVO_FIELD		||= 'devo_depends'.freeze
     DEPS_FIELD		||= 'depends'.freeze
+    BDEPS_FIELD		||= 'build_depends'.freeze
+    ALLDEPS_FIELDS	||= [BDEPS_FIELD, DEPS_FIELD, DEVO_FIELD].freeze
     WWW_FIELD		||= 'homepage'.freeze
     WWW_URI_FIELD	||= 'homepage_uri'.freeze
     SRC_URI_FIELD	||= 'source_code_uri'.freeze
@@ -70,6 +71,8 @@ class ThinkumSpace::Project::YSpec
     METADATA_DEFAULT ||= %w(module homepage_uri source_code_uri
                             changelog_uri allowed_push_host
                            ).map { |name| name.freeze }.freeze
+
+    GEM_REQUIREMENT_DEFAULT ||= Gem::Requirement.default.to_s.freeze
   end
 
   ## pathname for serialized YAML data for this YSpec instance
@@ -185,13 +188,19 @@ class ThinkumSpace::Project::YSpec
   ##
   def load_config()
     ## this asumes that @gem_name was set for a present writer session
-    @proj_data = Psych.load_file(@pathname)
-    return self
+    begin
+      @proj_data = Psych.safe_load_file(@pathname)
+      return self
+    rescue Psych::SyntaxError => e
+      msg_warn("Error in project data %s", e)
+      raise e
+    end
   end
 
-  ## return a matched value for a named field in active project data. If
-  ## no matchind configuration data is found, invoke any provided
-  ## fallback block or return a default value
+  ## return the value of a named named field in active project data. If
+  ## no matching configuration data is found within the project scope in
+  ## the project data, invoke any provided fallback block or return a
+  ## default value.
   ##
   ## If project data has not been initialized in this instance, this
   ## method will call #load_config on the instance before operating on
@@ -211,7 +220,10 @@ class ThinkumSpace::Project::YSpec
   ##        been configured for the named field, the block will be
   ##        invoked with the field name. The return value from the block
   ##        will then provide the return value for this method.
-  def project_singleton_value(field, default: false, &fallback)
+  ## @see #gem_field_value
+  def project_field_value(field, default: false, &fallback)
+    ## NB this method is used in the project Rakefile and thus cannot be
+    ## usefully defined as a protected method
     load_config if !@proj_data
     if @proj_data.has_key?(field)
       @proj_data[field]
@@ -222,12 +234,40 @@ class ThinkumSpace::Project::YSpec
     end
   end
 
+
+  ## return the value of a named named field in either the gem scope or
+  ## the project scope, for a named gem in active project data. If
+  ## no matching configuration data is found within the gem scope or the
+  ## project scope in the project data, invoke any provided fallback
+  ## block or return a default value.
+  ##
+  ## @param gem [String] the name of the gem being configured
+  ## @param default [Any] default value if no gem or project
+  ##        configuration data has been provided for the named field and
+  ##        no block was provided
+  ## @param block [Proc] If a block is provided and no gem or project
+  ##        data has been configured for the named field, the block will
+  ##        be invoked with the field name. The return value from the
+  ##        block will then provide the return value for this method.
+  ## @see #project_field_value
+  def gem_field_value(gem, field, default: false, &fallback)
+    load_config if !@proj_data
+    load_gem_config(gem)
+    if @gem_data.has_key?(field)
+      return @gem_data[field]
+    else
+      project_field_value(field, default) do
+        fallback.yield(field)
+      end
+    end
+  end
+
   ## return the set of gem names configured under the active project
   ## data for this instance
   ##
   ## @return [Array<String>] array of gem names
   def gems()
-    data = project_singleton_value(Const::GEMS_FIELD) do |f|
+    data = project_field_value(Const::GEMS_FIELD) do |f|
       ## fallback block, when no gems field is configured on the active
       ## project data. return a new, empty array
       return []
@@ -249,7 +289,7 @@ class ThinkumSpace::Project::YSpec
     ## If no gem is found for the name in the active project data, a
     ## partial configuration may still be provied for the named gem,
     ## using any gem configuration fields defined at the project scope.
-    all_gem_data = project_singleton_value(Const::GEMS_FIELD) do |field|
+    all_gem_data = project_field_value(Const::GEMS_FIELD) do |field|
       ## fallback block, if no gems map is yet configured to the project
       ##
       ## this ensures that an empty table is initialized for
@@ -258,7 +298,10 @@ class ThinkumSpace::Project::YSpec
                name, field, @pathname)
       return (@gem_data = {})
     end
+    ## FIXME store the all_gem_data value itself,
+    ## access later via @gem_name as a key on that value
     @gem_data = all_gem_data[name]
+    return self
   end
 
   ## write an active configuration to a provided gemspec
@@ -329,6 +372,7 @@ class ThinkumSpace::Project::YSpec
     ##
     ## metadata fields (optional. gem field overrides project field)
     ##
+    ## FIXME support a custom metadata map under both the project and gem scopes
     for md in @metadata_fields
       set_field_metadata(md, spec)
     end
@@ -378,13 +422,149 @@ class ThinkumSpace::Project::YSpec
     append_enumerable(Const::RESOURCE_FIELD, :files, spec)
 
     ##
-    ## runtime, development dependencies (union of project, gem fields)
+    ## gemspec runtime and development dependencies
+    ## (multi-source union of project, gem fields)
     ##
-    ## FIXME support a configurable selection of group from the input YAML here
+    ## Synopsis - YAML to gemspec map
     ##
-    call_enumerable(Const::DEPS_FIELD, :add_runtime_dependency, spec)
+    ##  'build_depends', 'depends' => runtime dependencies
+    ##
+    ##  'devo_depends' => development dependencies
+    ##
+    ##   Each named YAML field for deps must be encoded
+    ##   using a seq (array) syntax in YAML.
+    ##
+    ##   Each value for each dep may be encoded as a string (name)
+    ##   or as an array of strings (name and one or more version bounds)
+    ##
+    ## Syntax supported as the value for each dep encoded in YAML:
+    ##
+    ## "<gem>"
+    ## - depends on <gem> at any version
+    ##
+    ## ["<gem>", "<version>", ...]
+    ## - depends on <gem> at a version determined from the provided
+    ##   version bounds onto available gem sources
+    ## - at least one version bound must be specified
+    ##
+    ## Gem deps listed in YAML under the 'depends' and/or
+    ## 'build_depends' fields will be translated to runtime dependencies
+    ## in the gemspec
+    ##
+    ## Gem deps listed under the "devo_depends" field will be translated
+    ## to development dependencies in the gemspec.
+    ##
+    ## Gem deps listd under the 'build_depends' field will also be
+    ## stored in the gemspec under the 'build_depends' metadata field,
+    ## as well as being interpolated as runtime dependencies for purposes
+    ## of Ruby gemspec eval
+    ##
+    ## If a named dependency is listed more than once, and/or is listed
+    ## in both gemspec scope and in project scope in the YAML, the first
+    ## declaration will take precedence. Later declarations will be
+    ## ignored and a warning message produced
+    ##
+    ## FIXME this needs something like an openschema documentation
 
-    call_enumerable(Const::DEVO_FIELD, :add_development_dependency, spec)
+    ## caching for the precedence conditional:
+    alldeps = {}
+    depname = false
+    lastdep = false
+    ## gemspec encoding for deps:
+    Const::ALLDEPS_FIELDS.map do |field|
+      callback_enumerable(field) do |value|
+        ## FIXME document this in the YSpec YAML schema docs :
+        ## first dep overides any later, in the gemspec encoding for a
+        ## gem dependency of a provided name
+        ##
+        ## In this API, data in the gemspec scope is parsed first
+        case value
+        when Array
+          depname = value[0]
+        else
+          depname = value
+        end
+        if alldeps.has_key?(depname)
+          first_field = alldeps[depname][0]
+          if ! ((first_field == Const::BDEPS_FIELD) && (field == Const::DEPS_FIELD))
+            ## do not warn about gemspec dependencies duplicated
+            ## when listed as both a build dependency and a runtime
+            ## dependency in project.yaml
+            ##
+            ## for purposes of distribution in host package management
+            ## systems, not all build dependencies may be runtime
+            ## dependencies.
+            ##
+            ## for purposes of gemspec initialization from project.yaml:
+            ## If a build dependency is configured for a gem,
+            ## then it will indicate a runtime dependency for the gem,
+            ## there being no singular distinction of "build" or "run"
+            ## stages in this context.
+            ##
+            ## To provide information for host package developement tasks,
+            ## each build dependency should be declared separate to each
+            ## application runtime dependency in project.yaml
+            ##
+            ## The conditional form above may simply serve to prevent
+            ## that any misleading warning message would be emitted
+            ## under any duplication in the interpretation of
+            ## application build dependencies and runtime
+            ## dependencies both as gemspec runtime dependencies.
+            ##
+            unparsed = alldeps[depname][1].to_s
+            msg_warn("Skipping duplicate %s dependency (%s): %p | \
+first declared under %s as %p",
+                     name, field, value,
+                     first_field, unparsed)
+          end
+        else
+          as_devo = (field == Const::DEVO_FIELD)
+          ## FIXME capture any Gem::Requirement::BadRequirementError,
+          ## then warn for the origin filename and dep value and raise
+          lastdep = write_dep(value, spec, development: as_devo)
+          ## lastdep will be the new Gem::Dependency object,
+          ## as initialized and returned from write_dep
+          alldeps[depname] = [field, lastdep]
+        end
+      end
+    end
+
+    ## post-parse, outside of the previous iterator.
+    #
+    ## determine the list of build dependencies from project.yaml and
+    ## store in gem metadata
+    ##
+    ## This reuses the project.yaml field name Const::BDEPS_FIELD as a
+    ## metadata field name onto the gemspec.
+    ##
+    ## The array value, if non-empty, will be translated to a string in
+    ## YAML syntax before storing in gemspec metadata
+    bdeps = []
+    alldeps.map do |name, data|
+      kind = data[0]
+      if (kind == Const::BDEPS_FIELD)
+        ## converting each initialized Gem::Dependency under build_depends
+        ## to a string, before storing in the gemspec metadata
+        gemdep = data[1]
+        bdeps << gemdep
+      end
+    end
+    ## FIXME revise the handling for build_depends here
+    ## - add build_depends to the runtime dependencies only under some
+    ##   conditional configuration in the environment
+    ## - retain the behavior of not warning on runtime deps
+    ##   duplicationg build deps
+    ## - for gappkit and extensionss, define a class extending Gem::Specification
+    ##   - extend #activate and extend #to_yaml
+    ##   - for #activate under a "Building" environment ... TBD
+    ##   - in #to_yaml : ensure that a 'require' call is added for the extending
+    ##     Ruby source file (using the definition location of the gemspec's class,
+    ##     for the filename relative to the first match in $LOAD_PATH e.g)
+    ##     and ensure that the spec's actual class is used in the output source text
+    ##
+    ## for now ... store YAML in a metadata string (does not use an extension class)
+    set_direct_metadata(Const::BDEPS_FIELD, bdeps.to_yaml(header: true), spec) if ! bdeps.length.eql?(0)
+
     ##
     ## set require_path, require_paths from YAML
     ##
@@ -420,9 +600,57 @@ class ThinkumSpace::Project::YSpec
   ## @param args [Array<Any>] format arguments
   ## @param uplevel [Integer] a non-negative integer to provide as the
   ##        uplevel value for Kernel.warn
-  def msg_warn(str, *args, uplevel: 0)
+  def msg_warn(str, *args, uplevel: 1)
     Kernel.warn(str % args, uplevel: uplevel)
   end
+
+  ## add a dependency definition to a provided gemspec from a scalar or
+  ## array type dependency declaration decoded from YAML
+  ##
+  ## This method accepts the following syntax for a dependency value:
+  ##
+  ## A single gem name, encoded as a string:
+  ## > `"<name>"`
+  ##
+  ## An array of a gem name and one or more gem version bounds, each
+  ## encoded as as a string:
+  ## > ["<name>", "<version>" ...]
+  ##
+  ## If the depval is provided as a string, the value of the runtime
+  ## constant Const::GEM_REQUIREMENT_DEFAULT will be used as a single
+  ## version bound for the requirement.
+  ##
+  ## @param depval [String, Array<String>] the dependency declaration,
+  ##        such as decoded from YAML
+  ## @param spec [Gem::Specification] the gemspec receiving the
+  ##        dependency definition
+  ## @param development [boolean] true if the value indicates a
+  ##        development dependency, else the value will be interpreted
+  ##        as a runtime dependency
+  def write_dep(depval, spec, development: false)
+    case depval
+    when Array
+      name = depval[0]
+      bounds = depval[1..]
+      req = Gem::Requirement.new(bounds)
+      group = development ? :development : :runtime
+      dep = Gem::Dependency.new(name, req, group)
+      spec.add_dependency(dep)
+      return dep
+    else
+      ## depval is a string - dispatch to call on an array with defaults added
+      self.write_dep([depval, Const::GEM_REQUIREMENT_DEFAULT],
+                     spec, development: development)
+    end
+  end
+
+  # def read_dep(dep)
+  #   ## translate a gemspec's dependency object
+  #   ## to a value for encoding in YAML
+  #   ##
+  #   ## FIXME this method would be integrated with a broader YAML-gen
+  #   ## frameowrk in YSpec
+  # end
 
   ## set a value onto a provided gemspec, using a setter method
   ## computed from #writer_for for the named set_field.
@@ -578,6 +806,22 @@ class ThinkumSpace::Project::YSpec
   ## >
   ## > `call_enumerable(Const::DEVO_FIELD, :add_development_dependency, spec)`
   ##
+  ## **Known Limitations**
+  ##
+  ## This method may be suitable for storing literal values from some
+  ## enumerable field to the provided gemspec.
+  ##
+  ## For any method call on the gemspec that must receive more than one
+  ## parameter from each element in the enumerable field, TBD (FIXME)
+  ##
+  ## Alternately, for any value from the configured project data that
+  ## must be applied to the gemspec via some non-field callback method,
+  ## e.g `Gem::Specification#add_runtime_dependency` TBD (FIXME)
+  ##
+  ## **Deprecation**
+  ##
+  ## This method is now unused in YSpec. Refer to #callback_enumerable
+  ##
   ## @param field [String] field name for gem and project data
   ## @param speccall [String, Symbol] name of the callout method for the
   ##        provided gem specification. The named method should return
@@ -585,7 +829,7 @@ class ThinkumSpace::Project::YSpec
   ##        preferred.
   ## @param spec [Gem::Specification] a Gem specification object
   ## @see #append_enumerable
-  def call_enumerable(field, speccall, spec)
+  def call_enumerable(field, speccall, spec, &transform)
     callmtd  = speccall.to_sym
     if (configured = @proj_data[field])
       configured.each do |value|
@@ -595,6 +839,20 @@ class ThinkumSpace::Project::YSpec
     if (configured = @gem_data[field])
       configured.each do |value|
         spec.send(callmtd, value)
+      end
+    end
+  end
+
+  def callback_enumerable(field, &callback)
+    raise "No callback provided for field #{field.inspect}" unless callback
+    if (configured = @proj_data[field])
+      configured.each do |value|
+        callback.call(value)
+      end
+    end
+    if (configured = @gem_data[field])
+      configured.each do |value|
+        callback.call(value)
       end
     end
   end

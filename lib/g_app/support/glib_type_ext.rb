@@ -46,7 +46,7 @@ require 'glib2'
 ##
 ## It's assumed that this module will be extended from some direct or
 ## indirect subclass of *+GLib::Object+*
-module GAppKit::GTypeExt
+module GApp::Support::GTypeExt
   def self.extended(extclass)
     ## return a boolean value indicating whether this class hass been
     ## registered
