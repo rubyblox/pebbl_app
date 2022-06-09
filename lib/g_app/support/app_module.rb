@@ -126,19 +126,13 @@ module GApp::Support::AppModule
     end
 
     def state_home
-      envdir = ENV[Const::XDG_STATE_HOME_ENV]
-      if envdir && File.exists?(envdir)
-        return env
-      else
+      envdir(Const::XDG_STATE_HOME_ENV) do
         return File.join(self.home, Const::XDG_STATE_SUBDIR)
       end
     end
 
     def tmpdir
-      envdir = ENV[Const::TMPDIR_ENV]
-      if envdir && File.exists?(envdir)
-        return env
-      else
+      envdir(Const::TMPDIR_ENV) do
         return Const::TMPDIR
       end
     end
