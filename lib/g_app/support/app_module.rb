@@ -1,6 +1,6 @@
 ## app_module.rb --- Definition of GApp::Support::AppModule
 
-## modules, autoloads
+## define modules, autoloads
 require 'g_app/support'
 
 ## earlier protototype:
@@ -99,7 +99,6 @@ module GApp::Support::AppModule
       end.split(File::PATH_SEPARATOR)
     end
 
-
     def home
       envdir = ENV[Const::HOME_ENV]
       if envdir
@@ -169,7 +168,10 @@ module GApp::Support::AppModule
           rundir = rundir + Const::DOT + n
           n = n + 1
         end
-        Dir.mkdir(rundir, 0o0700) if !File.exists(rundir)
+        if !File.exists(rundir)
+          GApp::Support::Files.mkdir_p(rundir)
+          File.chmod(0o0700, rundir)
+        end
         return rundir
       end
     end
@@ -291,11 +293,11 @@ module GApp::Support::AppModule
         File.join(using.config_home, app_dirname)
       end
 
-      ## return the vlaue of #app_config_home,
+      ## return the value of #app_config_home,
       ## ensuring the directory exists
       def app_config_home!()
         dir = app_config_home
-        Dir.mkdir(dir) if !File.exists(dir)
+        GApp::Support::Files.mkdir_p(dir)
         return dir
       end
 
@@ -304,11 +306,11 @@ module GApp::Support::AppModule
         File.join(using.state_home, app_dirname)
       end
 
-      ## return the vlaue of #app_state_home,
+      ## return the value of #app_state_home,
       ## ensuring the directory exists
       def app_state_home!()
         dir = app_state_home
-        Dir.mkdir(dir) if !File.exists(dir)
+        GApp::Support::Files.mkdir_p(dir)
         return dir
       end
 
@@ -317,12 +319,12 @@ module GApp::Support::AppModule
         File.join(using.cache_home, app_dirname)
       end
 
-      ## return the vlaue of #app_cache_home,
+      ## return the value of #app_cache_home,
       ## ensuring the directory exists
       def app_cache_home!()
         dir = app_cache_home
         ## FIXME this and the previous will not recursively create the dirs
-        Dir.mkdir(dir) if !File.exists(dir)
+        GApp::Support::Files.mkdir_p(dir)
         return dir
       end
 
@@ -330,28 +332,15 @@ module GApp::Support::AppModule
         using = GApp::Support::AppModule
         basedir = using.runtime_dir!
         dir = File.join(basedir, app_dirname)
-        Dir.mkdir(dir, 0o700) if !File.exists(dir)
+        if !File.exists(rundir)
+          GApp::Support::Files.mkdir_p(dir)
+          File.chmod(0o0700, dir)
+        end
         return dir
       end
 
     end ## class << whence
   end
-
-  ## this cannot be usefully conducated in any method on app's gemspec
-  ## as the Gem::Specification class may not be an extensible class
-  ## - not in #activate
-  ## - and not even in a new #run method if the new #run method must
-  ##   necesarily dispatch on any singleton method on a gemspec
-  ##   created during gemspec init (when that gemspec is not what the
-  ##   gem architecture is actually using for the named gem)
-
-  ## This class, in itself, will not provide any special handling onto
-  ## GLib::MainLoop, GLib::MainLoop#context,
-  ## or for ctxt = MainLoop#context;
-  ##    ctxt.iteration, ctxt.acquire, ctxt.prepare, ctxt.query,
-  ##    ctxt.check, and ctxt.disaptch
-  ## etc ...
-
 
 end
 

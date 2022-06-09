@@ -33,6 +33,8 @@ module GApp::Support
   defautoloads({
     "support/app_module" =>
       %w(AppModule),
+    "support/files" =>
+      %w(Files),
     "support/logging" =>
       %w(LoggerDelegate LogManager LogModule),
     "support/threads" =>

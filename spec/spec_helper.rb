@@ -18,10 +18,14 @@ RSpec.configure do |config|
   test_home_dir=File.join(test_out_dir, "home")
 
   ## an ephemeral, singleton mkdir_p method
+  ##
+  ## this mirrors the implementation in
+  ## rblib lib/g_app/support/files.rb
+  ## @ GApp::Support::Files.mkdir_p
   def config.mkdir_p(path)
     dirs = []
     lastdir = nil
-    path.split(File::SEPARATOR).each do |name|
+    File.expand_path(path).split(File::SEPARATOR)[1..].each do |name|
       dirs << name
       lastdir = File::SEPARATOR + dirs.join(File::SEPARATOR)
       Dir.mkdir(lastdir) if ! File.directory?(lastdir)
