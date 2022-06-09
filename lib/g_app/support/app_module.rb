@@ -194,6 +194,8 @@ module GApp::Support::AppModule
       end
     end
 
+    protected
+
     def envdir(envar, &fallback)
       if envdir = ENV[envar]
         return envdir
@@ -218,7 +220,7 @@ module GApp::Support::AppModule
       end
     end
 
-  end
+  end ## class << self
 
   def self.included(whence)
     class << whence
@@ -330,7 +332,7 @@ module GApp::Support::AppModule
       end
 
     end ## class << whence
-  end
+  end ## included
 
 end
 
