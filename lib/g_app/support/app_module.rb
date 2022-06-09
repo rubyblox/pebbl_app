@@ -3,6 +3,8 @@
 ## define modules, autoloads
 require 'g_app/support'
 
+require 'thinkum_space/project/project_module'
+
 ## earlier protototype:
 ## ./apploader_gtk.rb
 
@@ -232,8 +234,9 @@ module GApp::Support::AppModule
       ##
       ## @see app_name=
       def app_name
-        using = GApp::Support::AppModule::Const
-        @app_name ||= self.name.split(using::NS_DELIM).join(using::DOT)
+        using = ThinkumSpace::Project::ProjectModule
+        const = GApp::Support::AppModule::Const
+        @app_name ||= using.s_to_filename(self, const::DOT)
       end
 
       ## configure an app name for this module

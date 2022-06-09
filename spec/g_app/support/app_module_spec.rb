@@ -39,6 +39,33 @@ end
 
 describe GApp::Support::AppModule do
 
+  context "app metadata in implementating namespace" do
+    let(:altname) { "TestApp" }
+    subject {
+      module TestClasses
+        module TestApp
+          include GApp::Support::AppModule
+        end
+      end
+      }
+
+    it "provides a default app name" do
+      expect(subject.app_name).to be == "test_classes.test_app"
+    end
+
+    it "accepts an app_name" do
+      subject.app_name = altname
+      expect(subject.app_name).to be == altname
+    end
+
+    it "uses a downcased app dirname" do
+      subject.app_name = altname
+      expect(subject.app_dirname).to be == altname.downcase
+    end
+
+
+  end
+
   it_behaves_like "scalar configured by process environment",
     mtd: :data_home, var: described_class::Const::XDG_DATA_HOME_ENV,
     value: "dirs/data"
