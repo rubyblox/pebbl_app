@@ -1,15 +1,26 @@
 #!/usr/bin/env ruby
-# frozen_string_literal: true
 
-require "bundler/setup"
-require "thinkum_space/project"
+## For this project, the availability of IRB under bundler will require
+## that bundler was configured for a developer environment.
+##
+## e.g for a shell in the project source root
+##
+## $ bundle config --with-development
+##
 
-# You can add fixtures and/or initialization code here to make experimenting
-# with your gem easier. You can also use a different console, if you like.
+require %q(bundler/setup)
 
-# (If you use this, don't forget to add pry to your Gemfile!)
-# require "pry"
-# Pry.start
+require %q(irb)
+require %q(irb/completion)
 
-require "irb"
+require %q(thinkum_space/project/y_spec)
+
+yspec = ThinkumSpace::Project::YSpec.new(
+  ENV['PROJECT_YAML'] ||
+    File.expand_path('project.yaml', File.dirname(ENV['BUNDLE_GEMFILE']))
+)
+yspec.load_config.gems.each do |name|
+  gem(name)
+end
+
 IRB.start(__FILE__)
