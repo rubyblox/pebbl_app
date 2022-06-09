@@ -63,20 +63,31 @@ describe GApp::Support::AppModule do
     mtd: :home, var: described_class::Const::HOME_ENV,
     value: "dirs/home"
 
-  ## test path list of more than one element (data dirs, config dirs)
-  it_behaves_like "path array configured by process environment",
-    mtd: :data_dirs, var: described_class::Const::XDG_DATA_DIRS_ENV,
-    value: "dirs/data:usr/dirs/data"
-  it_behaves_like "path array configured by process environment",
-    mtd: :config_dirs, var: described_class::Const::XDG_CONFIG_DIRS_ENV,
-    value: "dirs/config:usr/dirs/config"
+  context "provided with a path list of more than one element" do
+    it_behaves_like "path array configured by process environment",
+      mtd: :data_dirs, var: described_class::Const::XDG_DATA_DIRS_ENV,
+      value: "dirs/data:usr/dirs/data"
+    it_behaves_like "path array configured by process environment",
+      mtd: :config_dirs, var: described_class::Const::XDG_CONFIG_DIRS_ENV,
+      value: "dirs/config:usr/dirs/config"
+  end
 
-  ## test path list of one element (data dirs, config dirs)
-  it_behaves_like "path array configured by process environment",
-    mtd: :data_dirs, var: described_class::Const::XDG_DATA_DIRS_ENV,
-    value: "dirs/data"
-  it_behaves_like "path array configured by process environment",
-    mtd: :config_dirs, var: described_class::Const::XDG_CONFIG_DIRS_ENV,
-    value: "dirs/config"
+  context "provided with a path list of one element" do
+    it_behaves_like "path array configured by process environment",
+      mtd: :data_dirs, var: described_class::Const::XDG_DATA_DIRS_ENV,
+      value: "dirs/data"
+    it_behaves_like "path array configured by process environment",
+      mtd: :config_dirs, var: described_class::Const::XDG_CONFIG_DIRS_ENV,
+      value: "dirs/config"
+  end
+
+  context "provided with an empty path list" do
+    it_behaves_like "path array configured by process environment",
+      mtd: :data_dirs, var: described_class::Const::XDG_DATA_DIRS_ENV,
+      value: ""
+    it_behaves_like "path array configured by process environment",
+      mtd: :config_dirs, var: described_class::Const::XDG_CONFIG_DIRS_ENV,
+      value: ""
+  end
 
 end
