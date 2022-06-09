@@ -105,7 +105,7 @@ module GApp::Support::AppModule
       if envdir
         return envdir
       else
-        raise "No HOME available in environment"
+        raise GApp::Support::EnvironmentError.new("No HOME available in environment")
       end
     end
 
@@ -176,20 +176,27 @@ module GApp::Support::AppModule
         return envname
       else
         ## portable whoami(1)
-        who_str, err_str, st = Open3::capture3(Const::WHOAMI_CMD)
-        if st.exitstatus.eql?(0)
-          ## on MS Windows, 'whoami' with no args produces a name of a
-          ## syntax e.g "domain\user". On this same platform, "/" is
-          ## typically the file pathname separator, so calling basename
-          ## here should serve to return the actual username
-          ##
-          ## FIXME this needs test with ruby under mingw, where ideally a
-          ## POSIX-like 'whoami' would be available under PATH
-          return File.basename(who_str)
-        else
-          raise "Unable to determine username. Shell command %p failed (%d): %p" % [
-            Const::WHOAMI_CMD, st.exitstatus, err_str
-          ]
+        begin
+          who_str, err_str, st = Open3::capture3(Const::WHOAMI_CMD)
+          if st.exitstatus.eql?(0)
+            ## on MS Windows, 'whoami' with no args produces a name of a
+            ## syntax e.g "domain\user". On this same platform, "/" is
+            ## typically the file pathname separator, so calling basename
+            ## here should serve to return the actual username
+            ##
+            ## FIXME this needs test with ruby under mingw, where ideally a
+            ## POSIX-like 'whoami' would be available under PATH
+            return File.basename(who_str.chomp)
+          else
+            raise GApp::Support::EnvironmentError.new(
+              "Unable to determine username. Shell command %p failed (%d): %p" % [
+                Const::WHOAMI_CMD, st.exitstatus, err_str
+              ])
+          end
+        rescue SystemCallError => e
+          raise GApp::Support::EnvironmentError.new(
+            "Failed when calling %p : %s" % [Const::WHOAMI_CMD, e]
+          )
         end
       end
     end

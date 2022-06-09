@@ -58,9 +58,50 @@ describe GApp::Support::AppModule do
     mtd: :tmpdir, var: described_class::Const::TMPDIR_ENV,
     value: "dirs/tmp"
 
-  it_behaves_like "scalar configured by process environment",
-    mtd: :home, var: described_class::Const::HOME_ENV,
-    value: "dirs/home"
+  context "homedir" do
+    let!(:stored_home) { ENV['HOME'] }
+    after(:each) do
+      ENV['HOME'] = stored_home
+    end
+
+    it_behaves_like "scalar configured by process environment",
+      mtd: :home, var: described_class::Const::HOME_ENV,
+      value: "dirs/home"
+
+    it "Fails when no HOME is configured" do
+      ENV.delete('HOME')
+      expect {subject.home}.to raise_error GApp::Support::EnvironmentError
+    end
+  end
+
+  context "derives application configuration from user name" do
+    let!(:stored_user) { ENV['USER'] }
+    let!(:stored_path) { ENV['PATH'] }
+    after(:each) do
+      ENV['USER'] = stored_user
+      ENV['PATH'] = stored_path
+    end
+
+    it_behaves_like "scalar configured by process environment",
+      mtd: :username, var: described_class::Const::USER_ENV,
+      value: "user"
+
+    it "calls whoami for username when no user name is configured" do
+      pathdirs = ENV['PATH'].split(File::PATH_SEPARATOR)
+      pathdirs.unshift(__dir__)
+      ENV['PATH'] = pathdirs.join(File::PATH_SEPARATOR)
+      ## the expected value should be produced with the local ./whoami script
+      ENV.delete('USER')
+      expect(subject.username).to be == "whoami:#{stored_user}"
+    end
+
+    it "fails when no user name is configured and the whoami call fails" do
+      ENV['PATH'] = "/nonexistent"
+      ENV.delete('USER')
+      expect { subject.username }.to raise_error GApp::Support::EnvironmentError
+    end
+
+  end
 
   context "provided with a path list of more than one element" do
     it_behaves_like "path array configured by process environment",
@@ -91,7 +132,7 @@ describe GApp::Support::AppModule do
 
 end
 
-shared_examples "an app" do |conf|
+shared_examples "an implementing app" do |conf|
   let(:using) { GApp::Support::AppModule }
   let(:using_mtd) { conf[:using_mtd] }
   let(:mtd) { conf[:mtd] }
@@ -127,7 +168,7 @@ describe %(GApp::Support::AppModule implementation) do
       expect(subject.app_name).to be == "test_classes.test_app"
     end
 
-    it "accepts an app_name" do
+    it "accepts an app name" do
       subject.app_name = altname
       expect(subject.app_name).to be == altname
     end
@@ -139,8 +180,13 @@ describe %(GApp::Support::AppModule implementation) do
 
   end
 
-  it_behaves_like "an app", using_mtd: :config_home, mtd: :app_config_home
-  it_behaves_like "an app", using_mtd: :state_home, mtd: :app_state_home
-  it_behaves_like "an app", using_mtd: :cache_home, mtd: :app_cache_home
+  context "app filesystem metadata" do
+    it_behaves_like "an implementing app",
+      using_mtd: :config_home, mtd: :app_config_home
+    it_behaves_like "an implementing app",
+      using_mtd: :state_home, mtd: :app_state_home
+    it_behaves_like "an implementing app",
+      using_mtd: :cache_home, mtd: :app_cache_home
+  end
 
 end

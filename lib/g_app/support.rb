@@ -33,6 +33,8 @@ module GApp::Support
   defautoloads({
     "support/app_module" =>
       %w(AppModule),
+    "support/exceptions" =>
+      %w(EnvironmentError),
     "support/files" =>
       %w(Files),
     "support/logging" =>

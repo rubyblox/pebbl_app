@@ -1,0 +1,5 @@
+#!/bin/sh
+
+## mock-up script for app_module_spec.rb
+
+echo "whoami:$(id -un)"
