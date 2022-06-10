@@ -4,16 +4,11 @@
 
 require 'pebbl_app/project/y_spec'
 
-## pre-configuration, short of an rspec extension for YSpec support
-if ! (gemfile = ENV['BUNDLE_GEMFILE'])
-  raise "No BUNDLE_GEMFILE configured in env"
-end
-$DATA_ROOT = File.dirname(gemfile)
 data_file = File.join($DATA_ROOT, "project.yaml")
 if File.exists?(data_file)
   $YSPEC= PebblApp::Project::YSpec.new(data_file)
 else
-  raise "Project data not found: #{data_file}"
+   RSpec::Expectations.fail_with("Project data not found: #{data_file}")
 end
 
 shared_examples_for "a project gemspec" do |conf|
@@ -37,7 +32,3 @@ $YSPEC.gems.each do |name|
     it_behaves_like "a project gemspec", name: name
   end
 end
-
-
-
-

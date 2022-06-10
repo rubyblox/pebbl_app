@@ -5,6 +5,14 @@
 # require "pebbl_app/project"
 
 RSpec.configure do |config|
+  ## configure $DATA_ROOT and test for bundler environment
+  if ! (gemfile = ENV['BUNDLE_GEMFILE'])
+    RSpec::Expectations.fail_with(
+      "No BUNDLE_GEMFILE configured in env (rspec without bundler?)"
+    )
+  end
+  $DATA_ROOT = File.dirname(gemfile)
+
   ## configure an ENV for the testing environment
   if ! (test_out_dir = ENV['TEST_OUTPUT_DIR'])
     if (base_file = ENV['BUNDLE_GEMFILE'])
