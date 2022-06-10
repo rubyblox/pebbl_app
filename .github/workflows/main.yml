@@ -26,7 +26,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: ['2.7', '3.0', '3.1', head, jruby, jruby-head, truffleruby, truffleruby-head]
+        ## The jruby main release is not included in the ruby matrix for
+        ## this GH action.
+        ##
+        ## in the ubuntu-latest runner for GH actions circa June, 2022
+        ## the jruby installed is an implementation of Ruby 2.6. This
+        ## Ruby language version is not supported in this project.
+        ruby: ['2.7', '3.0', '3.1', head, jruby-head, truffleruby, truffleruby-head]
 
     steps:
     - name: Disable initramfs update
