@@ -1,8 +1,6 @@
-## rblib configuration for rspec
+## configuration for rspec
 
 ## see also: ./spec_helper_spec.rb
-
-# require "pebbl_app/project"
 
 RSpec.configure do |config|
   ## configure $DATA_ROOT and test for bundler environment
@@ -14,22 +12,17 @@ RSpec.configure do |config|
   $DATA_ROOT = File.dirname(gemfile)
 
   ## configure an ENV for the testing environment
-  if ! (test_out_dir = ENV['TEST_OUTPUT_DIR'])
-    if (base_file = ENV['BUNDLE_GEMFILE'])
-      base_dir = File.dirname(base_file)
-    else
-      base_dir = File.dirname(__dir__)
-    end
-    test_out_dir = File.join(base_dir, "tmp/tests")
+  if !(test_out_dir = ENV['TEST_OUTPUT_DIR'])
+    test_out_dir = File.join($DATA_ROOT, "tmp/tests")
   end
-  test_out_dir=File.expand_path(test_out_dir)
-  test_home_dir=File.join(test_out_dir, "home")
+  test_tmpdir = File.expand_path("tmp", test_out_dir)
+  test_home_dir=File.expand_path("home", test_tmpdir)
 
   ## an ephemeral, singleton mkdir_p method
   ##
   ## this mirrors the implementation in
-  ## rblib lib/pebbl_app/gtk_support/files.rb
-  ## @ PebblApp::GtkSupport::Files.mkdir_p
+  ## rblib lib/pebbl_app/support/files.rb
+  ## @ PebblApp::Support::Files.mkdir_p
   def config.mkdir_p(path)
     dirs = []
     lastdir = nil
@@ -40,6 +33,7 @@ RSpec.configure do |config|
     end
   end
   config.mkdir_p(test_home_dir)
+  ENV['TMPDIR'] = test_tmpdir
   ENV['HOME'] = test_home_dir
 
   ## ensure any singleton methods defined here can be accessed under
