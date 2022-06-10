@@ -2,9 +2,11 @@ name: Ruby
 
 ## docs
 ## https://github.com/ruby/setup-ruby
+## ?? https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/enabling-debug-logging
 
 env:
   RUBYOPT: '--debug'
+  ACTIONS_RUNNER_DEBUG: true
 
 on:
   push:
