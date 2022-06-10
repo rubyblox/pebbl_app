@@ -192,9 +192,10 @@ class PebblApp::Project::YSpec
       if Psych.respond_to?(:safe_load_file)
         @proj_data = Psych.safe_load_file(@pathname)
       else
-        ## TBD if this is being reached under some Ruby
+        ## TBD as to how this is being reached under some Ruby
         ## implementations, though the latest Psych is installed from
         ## gemfiles - seen during GH tests
+        Kernel.warn("Psych.safe_load_file not available", uplevel: 0) if $DEBUG
         @proj_data = Psych.load_file(@pathname)
       end
       return self
