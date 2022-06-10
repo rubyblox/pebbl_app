@@ -102,9 +102,13 @@ module PebblApp::Support::Files
     def mkdir_p(path)
       dirs = []
       lastdir = nil
-      File.expand_path(path).split(File::SEPARATOR)[1..].each do |name|
+      File.expand_path(path).split(File::SEPARATOR).each do |name|
         dirs << name
-        lastdir = File::SEPARATOR + dirs.join(File::SEPARATOR)
+        if (name == "".freeze)
+          lastdir = File::SEPARATOR
+        else
+          lastdir = dirs.join(File::SEPARATOR)
+        end
         Dir.mkdir(lastdir) if ! File.directory?(lastdir)
       end
       return lastdir
