@@ -104,6 +104,11 @@ gems:
       A minial Ruby toolkit for PebblApp applications using Ruby-GNOME
     build_depends:
       - pebbl_app-support
+      ## the following build dependencies may be needed mostly under GitHub Actions for this project
+      ## FIXME move to a new gh_depends field, to be handled conditionally in an exension on YSpec
+      ## when running within a GitHub actions environment
+      - [native-package-installer, ">=1.1"]
+      - [pkg-config, ">=1.4"]
     depends:
       - [gtk3, ">=3"]
       - pebbl_app-support
