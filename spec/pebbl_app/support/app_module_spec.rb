@@ -1,8 +1,7 @@
-## rspec tests for GApp::Support::AppModule
+## rspec tests for PebblApp::Support::AppModule
 
 ## the library to test
-require 'g_app/support/app_module'
-
+require 'pebbl_app/support/app_module'
 
 shared_examples "scalar configured by process environment" do |conf|
   let!(:var) { conf[:var] }
@@ -36,7 +35,7 @@ shared_examples "path array configured by process environment" do |conf|
   end
 end
 
-describe GApp::Support::AppModule do
+describe PebblApp::Support::AppModule do
 
   it_behaves_like "scalar configured by process environment",
     mtd: :data_home, var: described_class::Const::XDG_DATA_HOME_ENV,
@@ -68,9 +67,9 @@ describe GApp::Support::AppModule do
       mtd: :home, var: described_class::Const::HOME_ENV,
       value: "dirs/home"
 
-    it "Fails when no HOME is configured" do
+    it "fails when no HOME is configured" do
       ENV.delete('HOME')
-      expect {subject.home}.to raise_error GApp::Support::EnvironmentError
+      expect {subject.home}.to raise_error PebblApp::Support::EnvironmentError
     end
   end
 
@@ -90,17 +89,18 @@ describe GApp::Support::AppModule do
       pathdirs = ENV['PATH'].split(File::PATH_SEPARATOR)
       pathdirs.unshift(__dir__)
       ENV['PATH'] = pathdirs.join(File::PATH_SEPARATOR)
-      ## the expected value should be produced with the local ./whoami script
+      ## the expected value should be produced with the local ./whoami mock
       ENV.delete('USER')
       expect(subject.username).to be == "whoami:#{stored_user}"
     end
 
     it "fails when no user name is configured and the whoami call fails" do
+      ## ensure that the local whomai mock is not in PATH
       ENV['PATH'] = "/nonexistent"
+      ## ensure that no USER string is present in the process environment
       ENV.delete('USER')
-      expect { subject.username }.to raise_error GApp::Support::EnvironmentError
+      expect { subject.username }.to raise_error PebblApp::Support::EnvironmentError
     end
-
   end
 
   context "provided with a path list of more than one element" do
@@ -132,36 +132,42 @@ describe GApp::Support::AppModule do
 
 end
 
-shared_examples "an implementing app" do |conf|
-  let(:using) { GApp::Support::AppModule }
-  let(:using_mtd) { conf[:using_mtd] }
+shared_examples "app subdirectory model" do |conf|
+  let(:ns) { PebblApp::Support::AppModule }
+  let(:ns_mtd) { conf[:ns_mtd] }
   let(:mtd) { conf[:mtd] }
 
-  it "uses a known directory for #{conf[:using_mtd]}" do
+  it "uses a known directory for #{conf[:ns_mtd]}" do
     ## testing dirname under the provided implementation method
+    ## given that the ns module will return the dirname of the dir
+    ## returned by <described_class>:<mtd>
     expect(File.dirname(subject.send(mtd))).to be ==
-      using.send(using_mtd)
+      ns.send(ns_mtd)
 
-    ## testing basename under the provided implementation method
+    ## testing basename under the provided implementation method,
+    ## given that the implementing method will return a directory
+    ## representing the app_dirname, suffixed to pathname from the
+    ## corresponding method in the namespace module
     expect(File.basename(subject.send(mtd))).to be ==
       File.basename(subject.app_dirname)
 
     ## testing full pathname under the provided implementation method
     expect(subject.send(mtd)).to be ==
-      File.join(using.send(using_mtd), subject.app_dirname)
+      File.join(ns.send(ns_mtd), subject.app_dirname)
   end
 end
 
-describe %(GApp::Support::AppModule implementation) do
+describe %(PebblApp::Support::AppModule implementation) do
     subject {
       module TestClasses
         module TestApp
-          include GApp::Support::AppModule
+          ## an implementing module, for the test
+          include PebblApp::Support::AppModule
         end
       end
       }
 
-  context "app metadata in implementating namespace" do
+  context "app metadata in implementing namespace" do
     let(:altname) { "TestApp" }
 
     it "provides a default app name" do
@@ -180,13 +186,13 @@ describe %(GApp::Support::AppModule implementation) do
 
   end
 
-  context "app filesystem metadata" do
-    it_behaves_like "an implementing app",
-      using_mtd: :config_home, mtd: :app_config_home
-    it_behaves_like "an implementing app",
-      using_mtd: :state_home, mtd: :app_state_home
-    it_behaves_like "an implementing app",
-      using_mtd: :cache_home, mtd: :app_cache_home
+  context "app filesystem" do
+    it_behaves_like "app subdirectory model",
+      ns_mtd: :config_home, mtd: :app_config_home
+    it_behaves_like "app subdirectory model",
+      ns_mtd: :state_home, mtd: :app_state_home
+    it_behaves_like "app subdirectory model",
+      ns_mtd: :cache_home, mtd: :app_cache_home
   end
 
 end

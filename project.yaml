@@ -108,17 +108,17 @@ gems:
       - [gtk3, ">=3"]
       - pebbl_app-support
     source_files:
-      - lib/g_app/gtk_support.rb
-      - lib/g_app/gtk_support/logging.rb
-      - lib/g_app/gtk_support/threads.rb
-      - lib/g_app/gtk_support/sysexit.rb
-      - lib/g_app/gtk_support/glib_type_ext.rb
-      - lib/g_app/gtk_support/gtk_type_ext.rb
-      - lib/g_app/gtk_support/gbuilder_app.rb
-      - lib/g_app/gtk_support/basedir.rb
-##    - lib/g_app/gtk_support/tools/resources.rb
-##    - lib/g_app/gtk_support/tools/ui.rb
-##    - lib/g_app/gtk_support/tools/schemas.rb
+      - lib/pebbl_app/gtk_support.rb
+      - lib/pebbl_app/gtk_support/logging.rb
+      - lib/pebbl_app/gtk_support/threads.rb
+      - lib/pebbl_app/gtk_support/sysexit.rb
+      - lib/pebbl_app/gtk_support/glib_type_ext.rb
+      - lib/pebbl_app/gtk_support/gtk_type_ext.rb
+      - lib/pebbl_app/gtk_support/gbuilder_app.rb
+      - lib/pebbl_app/gtk_support/basedir.rb
+##    - lib/pebbl_app/gtk_support/tools/resources.rb
+##    - lib/pebbl_app/gtk_support/tools/ui.rb
+##    - lib/pebbl_app/gtk_support/tools/schemas.rb
 
   riview:
     module: RIView
