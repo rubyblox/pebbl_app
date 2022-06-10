@@ -1,5 +1,8 @@
 name: Ruby
 
+## docs
+## https://github.com/ruby/setup-ruby
+
 on:
   push:
     branches:
@@ -12,9 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     name: Ruby ${{ matrix.ruby }}
     strategy:
+      fail-fast: false
       matrix:
-        ruby:
-          - '3.1.2'
+        ruby: ['2.7', '3.0', '3.1', head, jruby, jruby-head, truffleruby, truffleruby-head]
 
     steps:
     - uses: actions/checkout@v3

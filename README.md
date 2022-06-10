@@ -48,6 +48,6 @@ The sandbox sections of the project's source tree would serve a purpose for
 retaining some earlier Ruby gem prototypes, from previous to the
 development of this centralized project at Thinkum.Space.
 
-[pebblapp]: https://github.com/rubyblox/rblib
+[pebblapp]: https://github.com/rubyblox/pebbl_app
 [rubygems]: https://www.rubygems.org/
 

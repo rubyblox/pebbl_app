@@ -47,14 +47,20 @@ if ENV['BUNDLE_GEMFILE'] &&
   gem 'bundler'
   require "bundler/gem_helper"
   ## initialize Rake tasks for all project gems
-  require 'thinkum_space/project/y_spec'
-  yspec = ThinkumSpace::Project::YSpec.new(
+  ##
+  require 'pebbl_app/project/y_spec'
+  yspec = PebblApp::Project::YSpec.new(
     ENV['PROJECT_YAML'] || File.join(__dir__, "project.yaml")
   )
   yspec.load_config
+  ## FIXME this set of gems should only be used for publish
   publish_gems =
-    yspec.project_singleton_value('publish_gems') do
-      ## fallback block, if no publish_gems field is configured for the project
+    yspec.project_field_value('publish_gems') do
+      ## fallback block
+      ##
+      ## if no publish_gems field is configured for the project, use all
+      ## gems defined in project.yaml
+      ##
       yspec.gems
     end
   publish_gems.each do |name|
