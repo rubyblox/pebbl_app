@@ -1,5 +1,8 @@
 %YAML 1.1
 ## rblib project.yaml
+##
+## Known limitations for this project.yaml syntax:
+## - do not delimit values with a tab character, as this may fail in psych under jruby
 ---
 ## common gemspec author, contact info
 authors:
@@ -54,12 +57,12 @@ devo_depends:
   ## Workaround: Set a version bounds on each third-party dep
   ##
   ## TBD this may not be sufficient for all gems (yard specifically, here?)
-  - [rbs,	">=2"]
-  - [rake,	">=13"]
-  - [rspec,	">=3"]
-  - [debug,	">=1"]
-  - [irb,	">=1"]
-  - [yard,	">=0.9"]
+  - [rbs, ">=2"]
+  - [rake, ">=13"]
+  - [rspec, ">=3"]
+  - [debug, ">=1"]
+  - [irb, ">=1"]
+  - [yard, ">=0.9"]
 required_ruby_version: ">= 2.7.0"
 require_paths:
   - lib
