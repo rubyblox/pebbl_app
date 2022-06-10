@@ -34,8 +34,6 @@ jobs:
     - name: Disable man-db update
       run: sudo rm -f /var/lib/man-db/auto-update
     - uses: actions/checkout@v3
-      with:
-        path: ${{ github.repository }}
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:
