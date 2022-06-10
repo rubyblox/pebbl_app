@@ -1,3 +1,4 @@
+## PebblApp::Support::Files module definition
 
 ## define modules, autoloads
 require 'pebbl_app/support'
