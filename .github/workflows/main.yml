@@ -8,9 +8,6 @@ name: Ruby
 ##
 # $ gh run view --log $(gh run list --json databaseId | awk 'BEGIN { RS="},?"; FS=":" } { print $2; exit 1 }')
 ##
-##
-## TBD disabling unneeded apt/dpkg maintenance proceseses in the builder container,
-## such that those only interfere with dependency installation here
 
 env:
   RUBYOPT: '--debug'
@@ -29,19 +26,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ## fails in all. see remark about apt/gpkg under systemd
         ruby: ['2.7', '3.0', '3.1', head, jruby, jruby-head, truffleruby, truffleruby-head]
 
     steps:
-    - uses: actions/checkout@v3
     - name: Disable initramfs update
       run: sudo sed -i.bak 's@yes@no@g' /etc/initramfs-tools/update-initramfs.conf
     - name: Disable man-db update
       run: sudo rm -f /var/lib/man-db/auto-update
+    - uses: actions/checkout@v3
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ matrix.ruby }}
-        bundler-cache: true
+        bundler-cache: false
     - name: Run the default task
       run: bundle exec rake
