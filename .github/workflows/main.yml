@@ -3,6 +3,9 @@ name: Ruby
 ## docs
 ## https://github.com/ruby/setup-ruby
 
+env:
+  RUBYOPT: '--debug'
+
 on:
   push:
     branches:
