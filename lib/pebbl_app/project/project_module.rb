@@ -22,11 +22,11 @@ require 'rubygems'
 ## library path:
 ##
 ## ~~~~
-## gem 'thinkum_space-project'
-## require 'thinkum_space/project/project_module'
+## gem 'pebbl_app-project'
+## require 'pebbl_app/project/project_module'
 ##
 ## module AppModule
-##   include ThinkumSpace::Project::ProjectModule
+##   include PebblApp::Project::ProjectModule
 ##   self.source_path = __dir__
 ##   defautoloads({'app_module/app' => %w(App AppClass AppError)})
 ## end
@@ -57,7 +57,7 @@ require 'rubygems'
 ## Example:
 ## ~~~~
 ## module AppModule
-##   include ThinkumSpace::Project::ProjectModule
+##   include PebblApp::Project::ProjectModule
 ##   self.source_path = __dir__
 ##   begin
 ##     autoloads_defer = true
@@ -115,7 +115,7 @@ require 'rubygems'
 ##
 ## ~~~~
 ## module AppModule
-##   include ThinkumSpace::Project::ProjectModule
+##   include PebblApp::Project::ProjectModule
 ##   self.source_path = __dir__
 ##   defautoloads({%(app_module/app} => %w(App AppClass AppError)})
 ## end
@@ -133,7 +133,7 @@ require 'rubygems'
 ## constant has been defined in some Ruby source file. This is known to
 ## affect Ruby releases up to and including Ruby 3.1.2.
 ##
-## For appliations of `ThinkumSpace::Project::ProjectModule`, there is a
+## For appliations of `PebblApp::Project::ProjectModule`, there is a
 ## known workaround as to directly set the `source_path` for any
 ## including module.
 ##
@@ -148,7 +148,7 @@ require 'rubygems'
 ##
 ## The primary configuration would be in evaluating:
 ##
-## > `include ThinkumSpace::Project::ProjectModule`
+## > `include PebblApp::Project::ProjectModule`
 ##
 ## ... as within a containing namespace, i.e. within a module or class
 ## definition. This would ensure that the `defautoloads` methods
@@ -156,15 +156,15 @@ require 'rubygems'
 ## module.
 ##
 ## As denoted in the previous, the `source_path` should be set directly
-## for any module or class applying `ThinkumSpace::Project::ProjectModule`
+## for any module or class applying `PebblApp::Project::ProjectModule`
 ## by way of include.
 ##
 ## A module or class definition may override any methods defined by
 ## including this module.
 ##
-module ThinkumSpace::Project::ProjectModule
+module PebblApp::Project::ProjectModule
 
-  ## Constants for ThinkumSpace::Project::ProjectModule
+  ## Constants for PebblApp::Project::ProjectModule
   module Const
     UPCASE_RE ||= /[[:upper:]]/.freeze
     ALNUM_RE ||= /[[:alnum:]]/.freeze
@@ -354,7 +354,7 @@ module ThinkumSpace::Project::ProjectModule
         usepath = path
         ## and FIXME defer autoload
       end
-      sfx = ThinkumSpace::Project::ProjectModule::Const::SOURCE_SUFFIX
+      sfx = PebblApp::Project::ProjectModule::Const::SOURCE_SUFFIX
       sfxlen = sfx.length
       if (path.length <= sfxlen) || (path[-sfxlen..] != sfx)
         usepath = usepath + sfx
@@ -367,13 +367,13 @@ module ThinkumSpace::Project::ProjectModule
     ## localized syntax should be applied for interpolating a file name
     ## from a symbol name.
     ##
-    ## This method will calls ThinkumSpace::Project::ProjectModule.s_to_filename(s, delim)
+    ## This method will calls PebblApp::Project::ProjectModule.s_to_filename(s, delim)
     ## with the provided argument values.
     ##
     ## This method will be used for filename interpolation in calls to
     ## `defautoloads` that have not provided a direct filename.
-    def s_to_filename(s, delim = ThinkumSpace::Project::ProjectModule::Const::DASH)
-      ThinkumSpace::Project::ProjectModule.s_to_filename(s, delim)
+    def s_to_filename(s, delim = PebblApp::Project::ProjectModule::Const::DASH)
+      PebblApp::Project::ProjectModule.s_to_filename(s, delim)
     end
 
 
@@ -434,7 +434,7 @@ module ThinkumSpace::Project::ProjectModule
     ## Example:
     ## ~~~~
     ## module AppModule
-    ##   include ThinkumSpace::Project::ProjectModule
+    ##   include PebblApp::Project::ProjectModule
     ##   self.source_path = __dir__
     ##   defautoloads({'app_module/app' => %w(App AppClass AppError)})
     ## end

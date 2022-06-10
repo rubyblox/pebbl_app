@@ -1,15 +1,11 @@
-## project.rb --- module definition for ThinkumSpace::Project
+## module definition for PebblApp::Project
 
 BEGIN {
-  ## When loaded from a gem, this file may be autoloaded
-
-  ## Ensure that the containing module is defined when loaded from a
-  ## project directory. The module may define autoloads that would be
-  ## used in this file.
+  ## Ensure that the containing module is defined
   require(__dir__ + ".rb")
 }
 
-module ThinkumSpace::Project
+module PebblApp::Project
   autoload(:ProjectModule, File.join(__dir__, 'project/project_module.rb'))
   autoload(:YSpec, File.join(__dir__, 'project/y_spec.rb'))
 

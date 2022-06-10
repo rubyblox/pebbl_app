@@ -1,10 +1,9 @@
-## exceptions.rb -- exception classes in GApp::Support
+## exceptions.rb -- exception classes in PebblApp::Support
 
 ## define modules, autoloads
-require 'g_app/support'
+require 'pebbl_app/support'
 
-module GApp::Support
-
+module PebblApp::Support
 
  class EnvironmentError < Exception
  end

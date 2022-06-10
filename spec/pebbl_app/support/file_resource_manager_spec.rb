@@ -2,14 +2,14 @@
 
 ## FIXME obsolete implementation @ FileResourceManager
 ##
-## newer implementation: ThinkumSpace::Project::ProjectModule
+## newer implementation: PebblApp::Project::ProjectModule
 
-require 'g_app/support/basedir' # the library to test
+require 'pebbl_app/gtk_support/basedir' # the library to test
 
-describe GApp::Support::FileResourceManager do
+describe PebblApp::GtkSupport::FileResourceManager do
   subject{
     class TestClass
-      extend GApp::Support::FileResourceManager ## the module to test ...
+      extend PebblApp::GtkSupport::FileResourceManager ## the module to test ...
     end
     TestClass
   }

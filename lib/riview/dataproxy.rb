@@ -63,7 +63,7 @@ BEGIN {
 ##   internal access to the +data+ value.
 ##
 class DataProxy < GLib::Object # < GLib::Boxed
-  extend GApp::Support::GTypeExt
+  extend PebblApp::GtkSupport::GTypeExt
   self.register ## register the type, exactly once
 
   ## NB - documentation
@@ -152,7 +152,7 @@ end
 =begin Example
 
 class OtherProxy < DataProxy
-  extend GApp::Support::GTypeExt
+  extend PebblApp::GtkSupport::GTypeExt
   self.register
 
   def signal_do_data_changed()

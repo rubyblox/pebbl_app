@@ -1,9 +1,9 @@
 
 ## define modules, autoloads
-require 'g_app/support'
+require 'pebbl_app/support'
 
 ## Filesystem Support
-module GApp::Support::Files
+module PebblApp::Support::Files
 
   class << self
 

@@ -1,20 +1,15 @@
-## support.rb --- GApp::Support module definition
+## PebblApp::GtkSupport module definition
 
 BEGIN {
-  gem 'thinkum_space-project'
-  require 'thinkum_space/project/project_module'
-
-  ## ensure that the module and any autoloads in the module will
-  ## be defined, when loading this source file individually
-  require 'g_app'
+  gem 'pebbl_app-support'
+  require 'pebbl_app/project/project_module'
 }
 
+## prototyping - gem method for this individual module
+require 'pebbl_app/project/spec_finder'
 
-## prototyping
-require 'thinkum_space/project/spec_finder'
-
-module GApp::Support
-  include ThinkumSpace::Project::ProjectModule
+module PebblApp::GtkSupport
+  include PebblApp::Project::ProjectModule
   self.source_path = __dir__
 
   ## return the first gem specification found within active
@@ -25,33 +20,29 @@ module GApp::Support
   ## including this module, unless overridden in the including
   ## module.
   ##
-  ## @see ThinkumSpace::Project::SpecFinder.find_for_file
+  ## @see PebblApp::Project::SpecFinder.find_for_file
   def self.gem
-    return ThinkumSpace::Project::SpecFinder.find_for_file(__FILE__)
+    return PebblApp::Project::SpecFinder.find_for_file(__FILE__)
   end
 
   defautoloads({
-    "support/app_module" =>
+    "gtk_support/app_module" =>
       %w(AppModule),
-    "support/exceptions" =>
-      %w(EnvironmentError),
-    "support/files" =>
-      %w(Files),
-    "support/logging" =>
+    "gtk_support/logging" =>
       %w(LoggerDelegate LogManager LogModule),
-    "support/threads" =>
+    "gtk_support/threads" =>
       %w(NamedThread),
-    "support/sysexit" =>
+    "gtk_support/sysexit" =>
       %w(SysExit),
-    "support/glib_type_ext" =>
+    "gtk_support/glib_type_ext" =>
       %w(GTypeExt),
-    "support/gtk_type_ext" =>
+    "gtk_support/gtk_type_ext" =>
       ## FIXME => WidgetBuilder
       %w(UIBuilder TemplateBuilder
          ResourceTemplateBuilder FileTemplateBuilder),
-    "support/gbuilder_app" =>
+    "gtk_support/gbuilder_app" =>
       %w(GBuilderApp),
-    "support/basedir" =>
+    "gtk_support/basedir" =>
       %w(FileResourceManager)
   })
 

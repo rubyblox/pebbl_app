@@ -1,19 +1,59 @@
 %YAML 1.1
 ## rblib project.yaml
 ---
+## common gemspec author, contact info
 authors:
   - Sean Champ
 email:
   - spchamp@users.noreply.github.com
-version: 1.0.4
+## default version when not specified in gem scope
+version: 1.0.1
+## default licenses list
 licenses:
   - MPL-2.0
+## common docs files, used in each gem
 docs:
   - README.md
   - COPYING.md
+## common spec files for rpsec tests
+spec_files:
+  - spec/spec_helper.rb
+  - spec/spec_helper_spec.rb
+## common development dependencies
 devo_depends:
   ## NB always quote the version-bounds strings when using any version-bounded
   ## syntax for dependencies in project.yaml
+  ##
+  ## Usage note: When setting version bounds on these tool dependencies,
+  ## it may serve to ensure that bundler will not try to install
+  ## the latest version from the Web, such that may fail if no
+  ## bundle path has been set for the Gemfile project.
+  ##
+  ## With a version bounds set on each dependency, then if that
+  ## gem is available of a compatible version from gems installed
+  ## via the host package management system (and no bundle path is set)
+  ## then Bundler may allow that the installed gem would be used.
+  ##
+  ## Without a version bounds set, Bundler may by try to install
+  ## the newest version from the Web e.g under bundle-install(1).
+  ## When no bundle path is set and the user will not be installing
+  ## gems from bundler with sudo, then this may result in an error.
+  ##
+  ## TBD if this may be a configurable behavior in bundler (needs test)
+  ## given any set of gems already installed on the host.
+  ##
+  ##
+  ## If a bundle path is configured for the Gemfile project, then it
+  ## seems bundler will not use any gems installed on the host, but
+  ## will install all gems from the Web (FIXME needs test, this also
+  ## should be a configurable behavior, to allow for using host gems
+  ## when matching the version bounds, then installing from web
+  ## only for gems that are not already available on the host)
+  ## (should be configurable per each Gemfile project / bundler config context)
+  ##
+  ## Workaround: Set a version bounds on each third-party dep
+  ##
+  ## TBD this may not be sufficient for all gems (yard specifically, here?)
   - [rbs,	">=2"]
   - [rake,	">=13"]
   - [rspec,	">=3"]
@@ -24,19 +64,24 @@ required_ruby_version: ">= 2.7.0"
 require_paths:
   - lib
 publish_gems:
-  - thinkum_space-project
+  - pebbl_app-support
+#  - pebbl_app-gtk_support
 gems:
-  thinkum_space-project:
-    module: ThinkumSpace::Project
-    summary: Project Tooling
+  pebbl_app-support:
+    version: 1.0.4
+    modules:
+      - PebblApp::Project
+      - PebblApp::Support
+    summary: PebblApp support for projects
     description:
-      This gem provides a reusable toolbox for project configuration
-      methods used in Ruby projects at Thinkum.Space.
+      A minimal Ruby toolkit for PebblApp projects
     source_files:
-      - lib/thinkum_space.rb
-      - lib/thinkum_space/project.rb
-      - lib/thinkum_space/project/project_module.rb
-      - lib/thinkum_space/project/y_spec.rb
+      - lib/pebbl_app.rb
+      - lib/pebbl_app/project.rb
+      - lib/pebbl_app/project/project_module.rb
+      - lib/pebbl_app/project/y_spec.rb
+      - lib/pebbl_app/support.rb
+      - lib/pebbl_app/support/app_module.rb
     sandbox_files:
       ## not published with the gem. To define autoloads for these files e.g:
       ##    require 'thinkum_space/project'
@@ -46,10 +91,34 @@ gems:
       ## path, then activated with some top-level add-on parameter for
       ## bundler (or when :development under bundler eg), beyond an ad
       ## hoc dispatch and test onto a bundler environment variable.
-      - lib/thinkum_space/project/sandbox.rb
-      - lib/thinkum_space/project/sandbox/spectool.rb
+      - lib/pebbl_app/project/sandbox.rb
+      - lib/pebbl_app/project/sandbox/spectool.rb
+      - sandbox/lib/pebbl_app/project/ext_spec.rb
     depends:
       - psych
+
+  pebbl_app-gtk_support:
+    module: PebblApp::GtkSupport
+    summary: PebblApp support for Ruby-GNOME applications
+    description:
+      A minial Ruby toolkit for PebblApp applications using Ruby-GNOME
+    build_depends:
+      - pebbl_app-support
+    depends:
+      - [gtk3, ">=3"]
+      - pebbl_app-support
+    source_files:
+      - lib/g_app/gtk_support.rb
+      - lib/g_app/gtk_support/logging.rb
+      - lib/g_app/gtk_support/threads.rb
+      - lib/g_app/gtk_support/sysexit.rb
+      - lib/g_app/gtk_support/glib_type_ext.rb
+      - lib/g_app/gtk_support/gtk_type_ext.rb
+      - lib/g_app/gtk_support/gbuilder_app.rb
+      - lib/g_app/gtk_support/basedir.rb
+##    - lib/g_app/gtk_support/tools/resources.rb
+##    - lib/g_app/gtk_support/tools/ui.rb
+##    - lib/g_app/gtk_support/tools/schemas.rb
 
   riview:
     module: RIView
@@ -57,12 +126,12 @@ gems:
     description:
       This is a project.
     build_depends:
-      - thinkum_space-project
+      - pebbl_app-support
     depends:
       - [gtk3, ">=3"]
-      - g_app-support
+      - pebbl_app-gtk_support
       - rikit
-      - thinkum_space-project
+      - pebbl_app-support
     source_files:
       - lib/riview.rb
       - lib/riview/dataproxy.rb
@@ -72,43 +141,16 @@ gems:
       - ui/prefs.riview.ui
       - ui/docview.riview.ui
 
-  g_app-support:
-    module: GApp::Support
-    autoloads:
-      - GApp: lib/g_app.rb
-      - GApp::Support: lib/g_app/support.rb
-    summary: Application support for Ruby-GNOME applications (prototype)
-    description:
-      The g_app-support gem provides a small number of reusable Ruby
-      module and class definitions for applications using Ruby-GNOME
-    build_depends:
-      - thinkum_space-project
-    depends:
-      - [gtk3, ">=3"]
-      - thinkum_space-project
-    source_files:
-      - lib/g_app/support.rb
-      - lib/g_app/support/logging.rb
-      - lib/g_app/support/threads.rb
-      - lib/g_app/support/sysexit.rb
-      - lib/g_app/support/glib_type_ext.rb
-      - lib/g_app/support/gtk_type_ext.rb
-      - lib/g_app/support/gbuilder_app.rb
-      - lib/g_app/support/basedir.rb
-##    - lib/g_app/support/tools/resources.rb
-##    - lib/g_app/support/tools/ui.rb
-##    - lib/g_app/support/tools/schemas.rb
-
   rikit:
     module: RIKit
     summary: Prototype for user documentation support for Ruby
     description:
       This is a project.
     build_depends:
-      - thinkum_space-project
+      - pebbl_app-support
     depends:
       - rdoc
-      - thinkum_space-project
+      - pebbl_app-support
 
   ### sandbox - source code needs migration to root project context
   # projectkit:
@@ -116,10 +158,10 @@ gems:
   #   summary: Prototype for project tooling support
   #   description:
   #     This project's single source file will likely be migtrated into
-  #     the thinkum_space-project gemspec
+  #     the pebbl_app-support gemspec
   #   build_depends:
-  #     - thinkum_space-project
+  #     - pebbl_app-support
   #   depends:
-  #     - thinkum_space-project
+  #     - pebbl_app-support
   #   source_files:
   #     - lib/projectkit/rspectool.rb

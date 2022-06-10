@@ -2,11 +2,11 @@
 
 require 'rubygems'
 
-gem 'thinkum_space-project'
-require 'thinkum_space/project/project_module'
+gem 'pebbl_app-support'
+require 'pebbl_app/project/project_module'
 
 module RIView
-  include ThinkumSpace::Project::ProjectModule
+  include PebblApp::Project::ProjectModule
 
   RESOURCE_ROOT ||=
     Gem::Specification::find_by_name(self.to_s.downcase).full_gem_path.freeze

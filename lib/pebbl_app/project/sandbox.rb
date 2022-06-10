@@ -1,4 +1,4 @@
-## sandbox.rb --- module definition for ThinkumSpace::Project::Sandbox
+## sandbox.rb --- module definition for PebblApp::Project::Sandbox
 
 BEGIN {
   ## When loaded from a gem, this file may be autoloaded
@@ -8,10 +8,10 @@ BEGIN {
   require(__dir__ + ".rb")
 }
 
-require 'thinkum_space/project/project_module'
+require 'pebbl_app/project/project_module'
 
-module ThinkumSpace::Project::Sandbox
-  include ThinkumSpace::Project::ProjectModule
+module PebblApp::Project::Sandbox
+  include PebblApp::Project::ProjectModule
 
   defautoloads({
     'sandbox/spec_tool' =>

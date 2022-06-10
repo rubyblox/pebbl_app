@@ -10,7 +10,7 @@ BEGIN {
 
 require 'gtk3'
 
-module GApp::Support::UIBuilder
+module PebblApp::GtkSupport::UIBuilder
   def self.extended(extclass)
     def extclass.builder()
       @builder ||= Gtk::Builder.new()
@@ -18,7 +18,7 @@ module GApp::Support::UIBuilder
 
     def extclass.builder=(builder)
       if @builder && (@builder != builder)
-        warn "in #{self}: :builder is already bound to #{@builder}. Ignoring builder #{builder}"
+        Kernel.warn("in #{self}: :builder is already bound to #{@builder}. Ignoring builder #{builder}", uplevel: 1)
       else
         @builder = builder
       end
@@ -57,10 +57,10 @@ end
 ##
 ## @see ResourceTemplateBuilder
 ## @see FileTemplateBuilder
-module GApp::Support::TemplateBuilder
+module PebblApp::GtkSupport::TemplateBuilder
   def self.included(extclass)
-    extclass.extend GApp::Support::GTypeExt
-    extclass.extend GApp::Support::UIBuilder
+    extclass.extend PebblApp::GtkSupport::GTypeExt
+    extclass.extend PebblApp::GtkSupport::UIBuilder
 
     ## set the template path to be used for this class
     ##
@@ -148,9 +148,9 @@ module GApp::Support::TemplateBuilder
 end
 
 
-module GApp::Support::ResourceTemplateBuilder
+module PebblApp::GtkSupport::ResourceTemplateBuilder
   def self.extended(extclass)
-    extclass.include GApp::Support::TemplateBuilder
+    extclass.include PebblApp::GtkSupport::TemplateBuilder
 
     ## ensure that a resource bundle at the provided +path+ is
     ## registered at most once, for this class
@@ -223,9 +223,9 @@ module GApp::Support::ResourceTemplateBuilder
   end
 end
 
-module GApp::Support::FileTemplateBuilder
+module PebblApp::GtkSupport::FileTemplateBuilder
   def self.extended(extclass)
-    extclass.include GApp::Support::TemplateBuilder
+    extclass.include PebblApp::GtkSupport::TemplateBuilder
 
     ## load this class' template as a file
     ##

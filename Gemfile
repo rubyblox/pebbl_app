@@ -22,9 +22,9 @@ end ## $DEBUG
 ##
 ## configure bundler for all project gemspecs
 ##
-require 'thinkum_space/project/y_spec'
+require 'pebbl_app/project/y_spec'
 
-yspec = ThinkumSpace::Project::YSpec.new(
+yspec = PebblApp::Project::YSpec.new(
   ENV['PROJECT_YAML'] || File.join(__dir__, "project.yaml")
 )
 project_gems = yspec.load_config.gems

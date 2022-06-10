@@ -10,24 +10,24 @@ BEGIN {
 require 'logger'
 require 'gtk3'
 
-module GApp::Support
+module PebblApp::GtkSupport
 
-#class GApp < GLib::Application
-## FIXME define in gapp.rb
+#class GLibApp < GLib::Application
+## FIXME define in glib_app.rb
 #
 
 
 #class GBuilderApp
 class GBuilderApp < Gtk::Application
 
-  extend(LoggerDelegate)  ## FIXME move to GApp
-  def_logger_delegate(:@logger)  ## FIXME move to GApp
-  attr_reader :logger  ## FIXME move to GApp
-  LOG_LEVEL_DEFAULT = Logger::DEBUG  ## FIXME move to GApp
+  extend(LoggerDelegate)  ## FIXME move to GLibApp (glib_app.rb)
+  def_logger_delegate(:@logger)  ## FIXME move to GLibApp (glib_app.rb)
+  attr_reader :logger  ## FIXME move to GLibApp (glib_app.rb)
+  LOG_LEVEL_DEFAULT = Logger::DEBUG  ## FIXME move to GLibApp (glib_app.rb)
 
   extend(UIBuilder)
 
-  extend(LogManager) ## FIXME move to GApp
+  extend(LogManager) ## FIXME move to GLibApp (glib_app.rb)
 
   # attr_reader :gtk_loop # see ...
 
@@ -51,7 +51,7 @@ class GBuilderApp < Gtk::Application
   ##   GBuilderApp.get_app_flag_value([:is_service, :handles_open])
   ##       => <Integer>
 
-  def self.get_app_flag_value(datum)  ## FIXME move to GApp
+  def self.get_app_flag_value(datum)  ## FIXME move to GLibApp (glib_app.rb)
     name, value = nil
     case datum
     when Array
@@ -114,7 +114,7 @@ class GBuilderApp < Gtk::Application
 
     super(name)
 
-    ## FIXME move to GApp
+    ## FIXME move to GLibApp (glib_app.rb)
     fl_value = self.class.get_app_flag_value(flags)
     fl_obj = Gio::ApplicationFlags.new(fl_value)
     ## NB fl_obj would be a proxy object for an enum value,
@@ -143,7 +143,7 @@ class GBuilderApp < Gtk::Application
     # }
   end
 
-  def run()  ## FIXME move to GApp
+  def run()  ## FIXME move to GLibApp (glib_app.rb)
     @logger.debug("#{__method__} in #{Thread.current}")
 
     begin
@@ -197,7 +197,7 @@ class GBuilderApp < Gtk::Application
             warn "Received SIGABRT. Exiting in #{Thread.current.inspect}"
             Gtk.main_quit
             trap("ABRT",sigtrap_abrt_previous)
-            exit(GappKit::SysExit::EX_PROTOCOL)
+            exit(SysExit::EX_PROTOCOL)
           }
         end
 
@@ -340,7 +340,7 @@ class GBuilderApp < Gtk::Application
     end
   end
 
-  def run_threaded()  ## FIXME move to GApp
+  def run_threaded()  ## FIXME move to GLibApp (glib_app.rb)
     ## FIXME this thread appears to no longer run asynchronously,
     ## when launched under IRB
     ##
@@ -379,7 +379,7 @@ class GBuilderApp < Gtk::Application
 
 end
 
-end ## GApp::Support module
+end ## PebblApp::GtkSupport module
 
 # Local Variables:
 # fill-column: 65

@@ -1,28 +1,24 @@
 # riview_ui.rb
 
 BEGIN {
-  ## When loaded from a gem, this file may be autoloaded
-
-  ## Ensure that the module is defined when loaded individually,
-  ## such that the module will define autoloads used in this file
-  require(__dir__ + ".rb")
-
-  ## TBD
-  if (defined?(IRB.conf) && ! IRB.conf.empty?)
-    ## Development Environment
-    # require 'ProjectKit' ## FIXME not yet installed as a gem
-    ## ^ NB maint under rbdevtools:/projectkit
-    ## defining ProjectKit::SpecTool
-    ## ... which presently defines fork_in (FIXME)
-    ##
-    ## NB see also
-    ## rbproject:/iokit, defining IOKit::OutProc
-  end
+  require 'riview'
 }
 
 ## test:
-##  app = RIViewApp.new; app.run_threaded
+##  app = RIView::RIViewApp.new; app.run_threaded
 
+## ensure that modules used in this class are defined.
+gem 'pebbl_app-gtk_support'
+## FIXME the next two source lines only needed until y_spec
+## activation support, pursuant of closing a bug
+## about the default source path determined for PebblApp::GtkSupport
+require 'pebbl_app'
+require 'pebbl_app/gtk_support'
+
+require 'rikit'
+require 'gtk3'
+
+Gtk.init()
 
 module RIView
 
@@ -48,13 +44,13 @@ end
 
 class AppWindow < Gtk::ApplicationWindow
 
-  extend(GAppKit::LoggerDelegate)
+  extend(PebblApp::GtkSupport::LoggerDelegate)
   def_logger_delegate(:@logger)
   attr_reader :logger
   LOG_LEVEL_DEFAULT = Logger::DEBUG
 
-  extend(GAppKit::FileTemplateBuilder)
-  self.use_template(File.join(RESOURCE_ROOT, "ui/appwindow.glade"))
+  extend(PebblApp::GtkSupport::FileTemplateBuilder)
+  self.use_template(File.join(RESOURCE_ROOT, "ui/appwindow.riview.ui"))
 
   def set_window_action(name, &block)
     application.log_debug("Adding action '#{name}' in #{self} (#{Thread.current})")
@@ -212,9 +208,9 @@ end
 
 
 class RIDocView < Gtk::TextView
-  extend(GAppKit::FileTemplateBuilder)
+  extend(PebblApp::GtkSupport::FileTemplateBuilder)
   ## FIXME only one template-based class per UI file...?
-  self.use_template(File.join(RESOURCE_ROOT,"ui/docview.ui"))
+  self.use_template(File.join(RESOURCE_ROOT,"ui/docview.riview.ui"))
 
   self.bind_ui_internal("DocTextView")
 
@@ -249,7 +245,7 @@ end
 
 
 class PrefsWindow < Gtk::Dialog
-  extend(GAppKit::LoggerDelegate)
+  extend(PebblApp::GtkSupport::LoggerDelegate)
   def_logger_delegate(:@logger)
   attr_reader :logger
   LOG_LEVEL_DEFAULT = Logger::DEBUG
@@ -257,8 +253,8 @@ class PrefsWindow < Gtk::Dialog
   ## TBD GLib::Log usage in e.g
   ## ~/.local/share/gem/ruby/3.0.0/gems/glib2-3.4.9/lib/glib2.rb
 
-  extend(GAppKit::FileTemplateBuilder)
-  self.use_template(File.join(RESOURCE_ROOT, "ui/prefs.ui"))
+  extend(PebblApp::GtkSupport::FileTemplateBuilder)
+  self.use_template(File.join(RESOURCE_ROOT, "ui/prefs.riview.ui"))
 
   ## ensure that some objects from the template will be accessible
   ## within each instance
@@ -309,7 +305,7 @@ class PrefsWindow < Gtk::Dialog
 end
 
 
-class RIViewApp < GAppKit::GBuilderApp
+class RIViewApp < PebblApp::GtkSupport::GBuilderApp
 
   attr_reader :system_store, :site_store, :home_store, :gem_stores
 
@@ -337,8 +333,10 @@ class RIViewApp < GAppKit::GBuilderApp
       begin
         st = RIKit::StoreTool.gem_storetool(s)
         h[st.path]=st
-      rescue RIKit::QueryError
-        ## nop
+      rescue RIKit::QueryError, ArgumentError => e
+        ## NOP case
+        Kernel.warn("Ignoring exception during app initialization: #{e}",
+                    uplevel: 1)
       end
     }
     @gem_stores = h

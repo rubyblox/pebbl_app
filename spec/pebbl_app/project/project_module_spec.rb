@@ -1,14 +1,14 @@
-## RSpec for ThinkumSpace::Project::ProjectModule
+## RSpec for PebblApp::Project::ProjectModule
 
 ## test with the following, under the project root directory
 ##
 ## $ bundle exec rake --trace spec
 ##
 
-describe %(Module includes ThinkumSpace::Project::ProjectModule) do
+describe %(Module includes PebblApp::Project::ProjectModule) do
   let(:subject) {
     module ProjectModuleTests01
-      include ThinkumSpace::Project::ProjectModule
+      include PebblApp::Project::ProjectModule
     end
   }
 

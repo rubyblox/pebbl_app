@@ -1,13 +1,13 @@
-## g_app-support.gemspec
+## pebbl_app-gtk_support.gemspec
 
 ## this assumes that $LOAD_PATH is configured to include ./lib
 ## such that will be provided under the project Gemfile
-require 'thinkum_space/project/y_spec'
+require 'pebbl_app/project/y_spec'
 
 Gem::Specification.new do |s|
 
   ## FIXME define support for gemspec extensions
-  ## => glib-compile-schemas, glib-compile-resources
+  ## => glib-compile-resources, glib-compile-schemas
   ## and if any gettext support is available
   ##
   ## plus integration for configuring a resource root
@@ -23,9 +23,8 @@ Gem::Specification.new do |s|
 
   projinf = File.expand_path("project.yaml", __dir__)
 
-  yspec = ThinkumSpace::Project::YSpec.new(projinf)
+  yspec = PebblApp::Project::YSpec.new(projinf)
   yspec.write_config(s)
   # s.metadata['resource_root'] = __dir__
-
 end
 

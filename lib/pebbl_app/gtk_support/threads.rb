@@ -8,7 +8,7 @@ BEGIN {
 }
 
 ## Thread class accepting a thread name in the constructor
-class GApp::Support::NamedThread < Thread
+class PebblApp::GtkSupport::NamedThread < Thread
 
   attr_reader :run_block
 

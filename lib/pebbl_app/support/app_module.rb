@@ -1,45 +1,22 @@
-## app_module.rb --- Definition of GApp::Support::AppModule
+## Definition of PebblApp::Support::AppModule
 
-## define modules, autoloads
-require 'g_app/support'
+require 'pebbl_app/project/project_module'
 
-require 'thinkum_space/project/project_module'
-
-## earlier protototype:
-## ./apploader_gtk.rb
+require 'pebbl_app/support'
 
 require 'open3'
 
-## Goals
-## - provide support for pathname handling for applications
-## - provide support for runtime configuration for applications,
-##   under some YAML syntax for application configuration
-## - provide support for creating XDG desktop files
-##   as typically during application installation
-##
-## Far-term goals
-## - provide support for application packaging
-## - provide support for issue tracking for applications
-module GApp::Support::AppModule
+## :nodoc: Goals
+## [X] provide support for pathname handling for applications
+## [ ] provide support for parsing of application configuration data
+##     in a YAML syntax, from directories configured per project
+##     (e.g GEMFILE dir), per user (using XDG dirs) and per application
+##     (also using XDG dirs)
+## [ ] provide support for storing configuration data to a YAML syntax
 
-  ## 1. compute a timeout for Gtk.init
-  ## 2. compute a default display for Gtk.init
-  ##    and emit a warning if no display can be determined
-  ## 3. call Gtk.init with locally derived args
-  ##    assuming Gtk.init handles args like in GTK 3 for now
-  ##
-  ## TBD before Gtk.init: Initialize a logger, ideally such that would
-  ## also be used under GTK and such that could be mapped to a PTY
-  ## and/or to a file
+module PebblApp::Support::AppModule
 
-  ## this needs to access a configuration context from outside of
-  ## anything that would be initilized under Ruby with Gtk.init
-  ## this << MOAR THE YAML
-  ##  0) --arbitrary_args under ARGV
-  ##  1) YAML under a user xdg path for (TBD) "This App"
-  ##  2) YAML under the gemspec's full dir for a gemspec providing "This app's sources"
-
-  ## Constants for GApp::Support::AppModule
+  ## Constants for PebblApp::Support::AppModule
   module Const
     NULL_ARRAY ||= [].freeze
     NS_DELIM ||= "::".freeze
@@ -105,7 +82,7 @@ module GApp::Support::AppModule
       if envdir
         return envdir
       else
-        raise GApp::Support::EnvironmentError.new("No HOME available in environment")
+        raise PebblApp::Support::EnvironmentError.new("No HOME available in environment")
       end
     end
 
@@ -164,7 +141,7 @@ module GApp::Support::AppModule
           n = n + 1
         end
         if !File.exists(rundir)
-          GApp::Support::Files.mkdir_p(rundir)
+          PebblApp::Support::Files.mkdir_p(rundir)
           File.chmod(0o0700, rundir)
         end
         return rundir
@@ -188,13 +165,13 @@ module GApp::Support::AppModule
             ## POSIX-like 'whoami' would be available under PATH
             return File.basename(who_str.chomp)
           else
-            raise GApp::Support::EnvironmentError.new(
+            raise PebblApp::Support::EnvironmentError.new(
               "Unable to determine username. Shell command %p failed (%d): %p" % [
                 Const::WHOAMI_CMD, st.exitstatus, err_str
               ])
           end
         rescue SystemCallError => e
-          raise GApp::Support::EnvironmentError.new(
+          raise PebblApp::Support::EnvironmentError.new(
             "Failed when calling %p : %s" % [Const::WHOAMI_CMD, e]
           )
         end
@@ -243,8 +220,8 @@ module GApp::Support::AppModule
       ##
       ## @see app_name=
       def app_name
-        using = ThinkumSpace::Project::ProjectModule
-        const = GApp::Support::AppModule::Const
+        using = PebblApp::Project::ProjectModule
+        const = PebblApp::Support::AppModule::Const
         @app_name ||= using.s_to_filename(self, const::DOT)
       end
 
@@ -264,7 +241,7 @@ module GApp::Support::AppModule
       end
 
       def app_data_dirs()
-        using = GApp::Support::AppModule
+        using = PebblApp::Support::AppModule
         dirs = using.flatten_dirs(using.data_dirs)
         ## FIXME this assumes that any of the dirs would be created
         ## during install, if the dir was to exist and contain any files
@@ -273,7 +250,7 @@ module GApp::Support::AppModule
       end
 
       def app_config_dirs()
-        using = GApp::Support::AppModule
+        using = PebblApp::Support::AppModule
         dirs = using.flatten_dirs(using.config_dirs)
         ## FIXME this assumes that any of the dirs would be created
         ## during install, if the dir was to exist and contain any files
@@ -282,14 +259,14 @@ module GApp::Support::AppModule
       end
 
       def app_menu_dirs()
-        using = GApp::Support::AppModule
+        using = PebblApp::Support::AppModule
         dirs = using.flatten_dirs(using.config_dirs)
         ## FIXME similar to the config_dirs instance, from which this derives
         using.flatten_dirs(using.map_join(using::Const::MENUS, dirs))
       end
 
       def app_config_home()
-        using = GApp::Support::AppModule
+        using = PebblApp::Support::AppModule
         File.join(using.config_home, app_dirname)
       end
 
@@ -297,12 +274,12 @@ module GApp::Support::AppModule
       ## ensuring the directory exists
       def app_config_home!()
         dir = app_config_home
-        GApp::Support::Files.mkdir_p(dir)
+        PebblApp::Support::Files.mkdir_p(dir)
         return dir
       end
 
       def app_state_home()
-        using = GApp::Support::AppModule
+        using = PebblApp::Support::AppModule
         File.join(using.state_home, app_dirname)
       end
 
@@ -310,12 +287,12 @@ module GApp::Support::AppModule
       ## ensuring the directory exists
       def app_state_home!()
         dir = app_state_home
-        GApp::Support::Files.mkdir_p(dir)
+        PebblApp::Support::Files.mkdir_p(dir)
         return dir
       end
 
       def app_cache_home()
-        using = GApp::Support::AppModule
+        using = PebblApp::Support::AppModule
         File.join(using.cache_home, app_dirname)
       end
 
@@ -323,16 +300,16 @@ module GApp::Support::AppModule
       ## ensuring the directory exists
       def app_cache_home!()
         dir = app_cache_home
-        GApp::Support::Files.mkdir_p(dir)
+        PebblApp::Support::Files.mkdir_p(dir)
         return dir
       end
 
       def app_runtime_dir!()
-        using = GApp::Support::AppModule
+        using = PebblApp::Support::AppModule
         basedir = using.runtime_dir!
         dir = File.join(basedir, app_dirname)
         if !File.exists(rundir)
-          GApp::Support::Files.mkdir_p(dir)
+          PebblApp::Support::Files.mkdir_p(dir)
           File.chmod(0o0700, dir)
         end
         return dir

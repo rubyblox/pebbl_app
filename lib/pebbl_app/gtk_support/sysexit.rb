@@ -7,7 +7,7 @@ BEGIN {
   require(__dir__ + ".rb")
 }
 
-module GApp::Support::SysExit
+module PebblApp::GtkSupport::SysExit
   EX_OK = 0
 
   EX_USAGE	= 0x40

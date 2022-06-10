@@ -1,8 +1,8 @@
 ## yspec.rb --- YAML-based configuration tooling for gemspecs
 
 ## bootstrap module definition, without autoloads
-if !defined?(::ThinkumSpace::Project)
-  module ThinkumSpace
+if !defined?(::PebblApp::Project)
+  module PebblApp
     module Project
     end
   end
@@ -37,9 +37,9 @@ require 'psych'
 ## of a format configuration declaration and/or a general guess from
 ## configuration data initially read from any output YAML file.
 ##
-class ThinkumSpace::Project::YSpec
+class PebblApp::Project::YSpec
 
-  ## Constants forThinkumSpace::Project::YSpec
+  ## Constants forPebblApp::Project::YSpec
   module Const
     GEMS_FIELD		||= 'gems'.freeze
     FILENAME_FIELD	||= 'filename'.freeze
@@ -256,8 +256,8 @@ class ThinkumSpace::Project::YSpec
     if @gem_data.has_key?(field)
       return @gem_data[field]
     else
-      project_field_value(field, default) do
-        fallback.yield(field)
+      project_field_value(field, default: default) do
+        fallback.yield(field) if fallback
       end
     end
   end
@@ -360,12 +360,11 @@ class ThinkumSpace::Project::YSpec
       ## transfer the gemspec's homepage into metadata, if set under
       ## optional fields
       set_direct_metadata(Const::WWW_FIELD, homepage, spec)
-    elsif homepage = (@gem_data[Const::WWW_URI_FIELD] ||
-                      @proj_data[Const::WWW_URI_FIELD])
+    elsif (homepage = gem_field_value(name, Const::WWW_URI_FIELD))
       ## if configured only for homepage_uri in the project YAML,
       ## transfer the URI into the homepage field on the gemspec
       ## and set as metadata
-      set_direct_field(Const::WWW_FIELD, spec, homepage)
+      set_direct_field(Const::WWW_FIELD, homepage, spec)
       set_direct_metadata(Const::WWW_URI_FIELD, homepage, spec)
     end
 

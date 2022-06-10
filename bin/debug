@@ -3,17 +3,17 @@
 # require %(irb)
 # require %(irb/setup)
 
-## first (??)
-require %(thinkum_space/project/ext_spec)
+## sandbox
+#require %(thinkum_space/project/ext_spec)
 
 require %(bundler/setup)
 
 #require %(irb)
 #require %(irb/completion)
 
-require %(thinkum_space/project/y_spec)
+require %(pebbl_app/project/y_spec)
 
-yspec = ThinkumSpace::Project::YSpec.new(
+yspec = PebblApp::Project::YSpec.new(
   ENV['PROJECT_YAML'] ||
     File.expand_path('project.yaml', File.dirname(ENV['BUNDLE_GEMFILE']))
 )

@@ -1,10 +1,10 @@
 ## rikit.rb - baseline module definition and autoloads
 
-gem 'thinkum_space-project'
-require 'thinkum_space/project/project_module'
+gem 'pebbl_app-support'
+require 'pebbl_app/project/project_module'
 
 module RIKit
-  include ThinkumSpace::Project::ProjectModule
+  include PebblApp::Project::ProjectModule
 
   defautoloads({
     "rikit/storetool" =>

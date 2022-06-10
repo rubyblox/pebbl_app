@@ -12,7 +12,7 @@ BEGIN {
 
 require 'pathname'
 
-module ThinkumSpace::Project::Sandbox
+module PebblApp::Project::Sandbox
 
   class FileNotFound < RuntimeError
     attr_reader :pathname
@@ -316,12 +316,12 @@ did not return a Gem Specification: #{last}", pathname: file)
     ## utility method for editor applications
     ##
     ## e.g
-    ## using = ThinkumSpace::Project::Ruby
+    ## using = PebblApp::Project::Ruby
     ## s_gtk = using::SpecTool.gemspec_source_file('gtk3')
     ## s_npt = using::SpecTool.gemspec_source_file("native-package-installer")
     ##
     ## e.g with shell, using bundle-exec(1) in the rblib project source directory
-    ## $EDITOR $(bundle exec ruby -I lib -r 'thinkum_space/project/ruby/spectool' -e 'puts ThinkumSpace::Project::Ruby::SpecTool.gemspec_source_file("gtk3")')
+    ## $EDITOR $(bundle exec ruby -I lib -r 'pebbl_app/support/ruby/spectool' -e 'puts PebblApp::Project::Ruby::SpecTool.gemspec_source_file("gtk3")')
     ##
     ## FIXME needs a binscript e.g as 'project edit gem' for a project(1) cmd
     def self.gemspec_source_file(gem)

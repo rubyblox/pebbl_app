@@ -2,7 +2,7 @@
 
 ## see also: ./spec_helper_spec.rb
 
-require "thinkum_space/project"
+# require "pebbl_app/project"
 
 RSpec.configure do |config|
   ## configure an ENV for the testing environment
@@ -20,8 +20,8 @@ RSpec.configure do |config|
   ## an ephemeral, singleton mkdir_p method
   ##
   ## this mirrors the implementation in
-  ## rblib lib/g_app/support/files.rb
-  ## @ GApp::Support::Files.mkdir_p
+  ## rblib lib/pebbl_app/gtk_support/files.rb
+  ## @ PebblApp::GtkSupport::Files.mkdir_p
   def config.mkdir_p(path)
     dirs = []
     lastdir = nil
