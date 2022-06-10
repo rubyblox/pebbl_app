@@ -189,7 +189,14 @@ class PebblApp::Project::YSpec
   def load_config()
     ## this asumes that @gem_name was set for a present writer session
     begin
-      @proj_data = Psych.safe_load_file(@pathname)
+      if Psych.respond_to?(:safe_load_file)
+        @proj_data = Psych.safe_load_file(@pathname)
+      else
+        ## TBD if this is being reached under some Ruby
+        ## implementations, though the latest Psych is installed from
+        ## gemfiles - seen during GH tests
+        @proj_data = Psych.load_file(@pathname)
+      end
       return self
     rescue Psych::SyntaxError => e
       msg_warn("Error in project data %s", e)
@@ -402,6 +409,7 @@ class PebblApp::Project::YSpec
     ##
     ## add the gemspec file
     ##
+    ## FIXME define a fallback block here, initializing the default value in same
     append_singleton(Const::FILENAME_FIELD, :files, spec,
                      default: (name + ".gemspec"))
 
