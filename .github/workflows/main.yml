@@ -19,10 +19,6 @@ on:
       - main
   pull_request:
 
-runs:
-  post: find /home/runner/work/${{ github.repository_owner }}//${{ github.repository }}/vendor/bundle/ -type f -name mkmf.log | { while read LOG; do echo "#-- ${LOG}"; cat ${LOG}; done; }
-  post-if: job.status == 'failure'
-
 jobs:
   build:
     runs-on: ubuntu-latest
