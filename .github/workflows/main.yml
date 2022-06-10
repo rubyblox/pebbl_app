@@ -21,6 +21,9 @@ on:
 
 jobs:
   build:
+    runs:
+      post: find /home/runner/work/${{ github.repository_owner }}//${{ github.repository }}/vendor/bundle/ -type f -name mkmf.log | { while read LOG; do echo "#-- ${LOG}"; cat ${LOG}; done; }
+      post-if: job.status == 'failure'
     runs-on: ubuntu-latest
     name: Ruby ${{ matrix.ruby }}
     strategy:
