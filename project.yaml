@@ -108,16 +108,14 @@ gems:
       A minial Ruby toolkit for PebblApp applications using Ruby-GNOME
     build_depends:
       - pebbl_app-support
-      ## the following build dependencies may be needed mostly under GitHub Actions for this project
-      ## FIXME move to a new gh_depends field, to be handled conditionally in an exension on YSpec
-      ## when running within a GitHub actions environment
-      - [native-package-installer, ">=1.1"]
-      - [pkg-config, ">=1.4"]
     depends:
       - [gtk3, ">=3"]
       - pebbl_app-support
     source_files:
       - lib/pebbl_app/gtk_support.rb
+      - lib/pebbl_app/gtk_support/app_module.rb
+      - lib/pebbl_app/gtk_support/exceptions.rb
+      ## earlier prototype definitions:
       - lib/pebbl_app/gtk_support/logging.rb
       - lib/pebbl_app/gtk_support/threads.rb
       - lib/pebbl_app/gtk_support/sysexit.rb
@@ -125,9 +123,10 @@ gems:
       - lib/pebbl_app/gtk_support/gtk_type_ext.rb
       - lib/pebbl_app/gtk_support/gbuilder_app.rb
       - lib/pebbl_app/gtk_support/basedir.rb
-##    - lib/pebbl_app/gtk_support/tools/resources.rb
-##    - lib/pebbl_app/gtk_support/tools/ui.rb
-##    - lib/pebbl_app/gtk_support/tools/schemas.rb
+      ### sandbox (to implement)
+      ## - lib/pebbl_app/gtk_support/tools/resources.rb
+      ## - lib/pebbl_app/gtk_support/tools/ui.rb
+      ## - lib/pebbl_app/gtk_support/tools/schemas.rb
 
   riview:
     module: RIView
