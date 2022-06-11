@@ -160,9 +160,9 @@ end
 describe %(PebblApp::Support::AppModule implementation) do
     subject {
       module TestClasses
-        module TestApp
-          ## an implementing module, for the test
-          include PebblApp::Support::AppModule
+        ## an implementing class, for the test
+        class TestApp
+          extend PebblApp::Support::AppModule
         end
       end
       }
@@ -193,6 +193,13 @@ describe %(PebblApp::Support::AppModule implementation) do
       ns_mtd: :state_home, mtd: :app_state_home
     it_behaves_like "app subdirectory model",
       ns_mtd: :cache_home, mtd: :app_cache_home
+  end
+
+
+  context "configuration" do
+    it "Provides a configuration map" do
+      expect(subject.config).to_not be_falsey
+    end
   end
 
 end

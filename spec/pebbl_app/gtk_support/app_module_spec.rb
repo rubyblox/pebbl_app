@@ -6,20 +6,21 @@ require 'pebbl_app/gtk_support/app_module.rb'
 describe %(PebblApp::GtkSupport::AppModule implementation) do
     subject {
       module TestClasses
-        module GtkTestApp
-          ## an implementing module, for the test
-          include PebblApp::GtkSupport::AppModule
+        ## an implementing class, for the test
+        class GtkTestApp
+          #include PebblApp::GtkSupport::AppModule
+          extend PebblApp::GtkSupport::AppModule
         end
       end
     }
 
-    context "configuration" do
-      it "Provides a configuration map" do
-        expect(subject.config).to_not be_falsey
-      end
-    end
-
     context "GTK support" do
+      ## tests specs defined here may modify DISPLAY in the test
+      ## environment. The initial value should be restored after
+      ## each test.
+      ##
+      ## This text context requires that some DISPLAY is available.
+      ## See also: Xvfb(1)
       let!(:display_initial) { ENV['DISPLAY'] }
 
       before(:each) do
@@ -30,15 +31,6 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
 
       after(:each) do
         ENV['DISPLAY'] = display_initial
-      end
-
-      it "fails if no display is available" do
-        ENV.delete('DISPLAY')
-        null_argv = []
-        subject.configure(argv: null_argv)
-        expect { subject.activate(argv: null_argv) }.to raise_error(
-          PebblApp::GtkSupport::ConfigurationError
-        )
       end
 
       it "parses arg --display DPY" do
@@ -77,12 +69,22 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
         expect(subject.parsed_args).to be == []
       end
 
-      it "overrides env DISPLAY with args" do
-        ## FIXME this requires a working DISPLAY to set in the module's
-        ## option parser args. (Needs test with xvfb)
-        ##
-        ## FIXME this may be deadlocking under GH actions - needs log
-        ## review, after whenever the action exits.
+      it "indicates when no display is configured" do
+        ENV.delete('DISPLAY')
+        null_argv = []
+        subject.configure(argv: null_argv)
+        expect(subject.display?).to_not be_truthy
+      end
+
+      it "fails in activate if no display is configured" do
+        ENV.delete('DISPLAY')
+        null_argv = []
+        expect { subject.activate(argv: null_argv) }.to raise_error(
+          PebblApp::GtkSupport::ConfigurationError
+        )
+      end
+
+      it "overrides env DISPLAY with any display arg" do
         if (initial_dpy = ENV['DISPLAY'])
           ENV['DISPLAY']= initial_dpy + ".nonexistent"
           subject.parse_opts(['--display', initial_dpy])
@@ -92,7 +94,9 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
         end
       end
 
-      it "calls Gtk.init" do
+      it "dispatches to Gtk.init" do
+        ## this test spec will have side effects that may affect any
+        ## later tests using GNOME components
         subject.config[:gtk_init_timeout] = 5
         expect { subject.activate(argv: []) }.to_not raise_error
       end

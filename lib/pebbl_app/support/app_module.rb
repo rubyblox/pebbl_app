@@ -1,10 +1,10 @@
 ## Definition of PebblApp::Support::AppModule
 
 require 'pebbl_app/project/project_module'
-
 require 'pebbl_app/support'
 
 require 'open3'
+require 'optparse'
 
 ## :nodoc: Goals
 ## [X] provide support for pathname handling for applications
@@ -14,6 +14,11 @@ require 'open3'
 ##     (also using XDG dirs)
 ## [ ] provide support for storing configuration data to a YAML syntax
 
+## provides general compatbility with the XDG Base Directory
+## Specification.
+##
+## More info:
+## https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
 module PebblApp::Support::AppModule
 
   ## Constants for PebblApp::Support::AppModule
@@ -206,117 +211,206 @@ module PebblApp::Support::AppModule
 
   end ## class << self
 
-  def self.included(whence)
-    class << whence
+  def self.extended(whence)
 
-      ## return the app name for this module
-      ##
-      ## If no app name has been configured as with app_name= then a
-      ## default app name will be initialized from the module's name
-      ## with each Ruby namespace string "::" translated to a full stop
-      ## character, ".".
-      ##
-      ## @return [String] an app name
-      ##
-      ## @see app_name=
-      def app_name
-        using = PebblApp::Project::ProjectModule
-        const = PebblApp::Support::AppModule::Const
-        @app_name ||= using.s_to_filename(self, const::DOT)
-      end
+    ## return the app name for this module
+    ##
+    ## If no app name has been configured as with app_name= then a
+    ## default app name will be initialized from the module's name
+    ## with each Ruby namespace string "::" translated to a full stop
+    ## character, ".".
+    ##
+    ## @return [String] an app name
+    ##
+    ## @see app_name=
+    def app_name
+      using = PebblApp::Project::ProjectModule
+      const = PebblApp::Support::AppModule::Const
+      @app_name ||= using.s_to_filename(self, const::DOT)
+    end
 
-      ## configure an app name for this module
-      ##
-      ## @param name [String] the app name to use
-      ##
-      ## @return [String] the provided name
-      ##
-      ## @see app_name
-      def app_name=(name)
-        @app_name = name
-      end
+    ## configure an app name for this module
+    ##
+    ## @param name [String] the app name to use
+    ##
+    ## @return [String] the provided name
+    ##
+    ## @see app_name
+    def app_name=(name)
+      @app_name = name
+    end
 
-      def app_dirname
-        app_name.downcase
-      end
+    def app_dirname
+      app_name.downcase
+    end
 
-      def app_data_dirs()
-        using = PebblApp::Support::AppModule
-        dirs = using.flatten_dirs(using.data_dirs)
-        ## FIXME this assumes that any of the dirs would be created
-        ## during install, if the dir was to exist and contain any files
-        ## for the app
-        using.flatten_dirs(using.map_join(self.app_dirname, dirs))
-      end
+    def app_data_dirs()
+      using = PebblApp::Support::AppModule
+      dirs = using.flatten_dirs(using.data_dirs)
+      ## FIXME this assumes that any of the dirs would be created
+      ## during install, if the dir was to exist and contain any files
+      ## for the app
+      using.flatten_dirs(using.map_join(self.app_dirname, dirs))
+    end
 
-      def app_config_dirs()
-        using = PebblApp::Support::AppModule
-        dirs = using.flatten_dirs(using.config_dirs)
-        ## FIXME this assumes that any of the dirs would be created
-        ## during install, if the dir was to exist and contain any files
-        ## for the app - siimlar to the data_dirs instance
-        using.flatten_dirs(using.map_join(self.app_dirname, dirs))
-      end
+    def app_config_dirs()
+      using = PebblApp::Support::AppModule
+      dirs = using.flatten_dirs(using.config_dirs)
+      ## FIXME this assumes that any of the dirs would be created
+      ## during install, if the dir was to exist and contain any files
+      ## for the app - siimlar to the data_dirs instance
+      using.flatten_dirs(using.map_join(self.app_dirname, dirs))
+    end
 
-      def app_menu_dirs()
-        using = PebblApp::Support::AppModule
-        dirs = using.flatten_dirs(using.config_dirs)
-        ## FIXME similar to the config_dirs instance, from which this derives
-        using.flatten_dirs(using.map_join(using::Const::MENUS, dirs))
-      end
+    def app_menu_dirs()
+      using = PebblApp::Support::AppModule
+      dirs = using.flatten_dirs(using.config_dirs)
+      ## FIXME similar to the config_dirs instance, from which this derives
+      using.flatten_dirs(using.map_join(using::Const::MENUS, dirs))
+    end
 
-      def app_config_home()
-        using = PebblApp::Support::AppModule
-        File.join(using.config_home, app_dirname)
-      end
+    def app_config_home()
+      using = PebblApp::Support::AppModule
+      File.join(using.config_home, app_dirname)
+    end
 
-      ## return the value of #app_config_home,
-      ## ensuring the directory exists
-      def app_config_home!()
-        dir = app_config_home
+    ## return the value of #app_config_home,
+    ## ensuring the directory exists
+    def app_config_home!()
+      dir = app_config_home
+      PebblApp::Support::Files.mkdir_p(dir)
+      return dir
+    end
+
+    def app_state_home()
+      using = PebblApp::Support::AppModule
+      File.join(using.state_home, app_dirname)
+    end
+
+    ## return the value of #app_state_home,
+    ## ensuring the directory exists
+    def app_state_home!()
+      dir = app_state_home
+      PebblApp::Support::Files.mkdir_p(dir)
+      return dir
+    end
+
+    def app_cache_home()
+      using = PebblApp::Support::AppModule
+      File.join(using.cache_home, app_dirname)
+    end
+
+    ## return the value of #app_cache_home,
+    ## ensuring the directory exists
+    def app_cache_home!()
+      dir = app_cache_home
+      PebblApp::Support::Files.mkdir_p(dir)
+      return dir
+    end
+
+    def app_runtime_dir!()
+      using = PebblApp::Support::AppModule
+      basedir = using.runtime_dir!
+      dir = File.join(basedir, app_dirname)
+      if !File.exists(rundir)
         PebblApp::Support::Files.mkdir_p(dir)
-        return dir
+        File.chmod(0o0700, dir)
       end
+      return dir
+    end
 
-      def app_state_home()
-        using = PebblApp::Support::AppModule
-        File.join(using.state_home, app_dirname)
+    ## return a configuration object for this application
+    def config
+      ## FIXME the 'config' object could be defined as of a distinct
+      ## class, such as to provide all of the args parsing support there
+      @config ||= {}
+    end
+
+    proc {
+      ## this defines a no-op method in the including class, providing a
+      ## receiver for other protocol methods defined here.
+      ##
+      ## if this method was defined with 'def' here, then it could
+      ## shadow any :configure_option_parser method defined in an
+      ## implementing class, such that the method in the implementing
+      ## class may not be reached by other protocol methods defined in
+      ## this 'extended' block in this source file. This has been
+      ## observed under rspec tests, when defining the method with 'def'
+      ## instead of define_method, in this source file.
+      ##
+      ## defining the method with define_method in this 'extended'
+      ## section, this will then provide a default protocol method that
+      ## can be overidden normally in the implementing class.
+      ##
+      ## the containing proc is used here, to prevent local args from
+      ## being bound in the including class.
+      ##
+      ## This method should be defined with a lambda proc such as here,
+      ## to ensure as by side effect that any argument syntax checks
+      ## will be performed on calls to the method.
+      mtd_lambda = lambda { |parser| }
+      whence.define_method(:configure_option_parser, &mtd_lambda)
+    }.call
+
+    ## create, configure, and return a new option parser for this
+    ## application
+    def make_option_parser()
+      OptionParser.new do |parser|
+        configure_option_parser(parser)
       end
+    end
 
-      ## return the value of #app_state_home,
-      ## ensuring the directory exists
-      def app_state_home!()
-        dir = app_state_home
-        PebblApp::Support::Files.mkdir_p(dir)
-        return dir
-      end
+    ## parse an array of command line arguments, using the option
+    ## parser for this application.
+    ##
+    ## the provided argv will be destructively modified by this method.
+    def parse_opts(argv = ARGV)
+      parser = make_option_parser()
+      parser.parse!(argv)
+    end
 
-      def app_cache_home()
-        using = PebblApp::Support::AppModule
-        File.join(using.cache_home, app_dirname)
-      end
+    ## configure this application
+    ##
+    ## the provided argv may be destructively modified by methods in
+    ##implementing modules/classes
+    def configure(argv: ARGV) ## FIXME interface method
+    end
 
-      ## return the value of #app_cache_home,
-      ## ensuring the directory exists
-      def app_cache_home!()
-        dir = app_cache_home
-        PebblApp::Support::Files.mkdir_p(dir)
-        return dir
-      end
+    ## return the set of parsed args for this application, or a new,
+    ## empty array if no value was previously bound
+    def parsed_args()
+      @parsed_args ||= []
+    end
 
-      def app_runtime_dir!()
-        using = PebblApp::Support::AppModule
-        basedir = using.runtime_dir!
-        dir = File.join(basedir, app_dirname)
-        if !File.exists(rundir)
-          PebblApp::Support::Files.mkdir_p(dir)
-          File.chmod(0o0700, dir)
-        end
-        return dir
-      end
+    ## set the array of parsed args for this application
+    def parsed_args=(value)
+      @parsed_args=value
+    end
 
-    end ## class << whence
-  end ## included
+    ## activate the application
+    ##
+    ## This default method should normally be overridden in any
+    ## implementing class. The method provided here will pass the
+    ## provided argv array to #configure, then returning.
+    ##
+    ## FIXME this docstring needs yard macros to ensure it's defined for
+    ## the activate(...) method defined in the next proc
+    proc {
+      ## similar to the previous instance, if activate(...) was defined
+      ## here with 'def', then it would by side effect shadow any
+      ## 'activate' method defined in any module extending this module.
+      ##
+      ## this has been verified via rspec tests for a class extending
+      ## PebblApp::GtkSupport::AppModule
+      ##
+      mtd_lambda = lambda { |argv: ARGV|
+        self.configure(argv: argv)
+      }
+      whence.define_method(:activate, &mtd_lambda)
+    }.call
+
+
+  end ## self.extended
 
 end
 

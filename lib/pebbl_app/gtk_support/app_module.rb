@@ -1,10 +1,10 @@
 ## Definition of PebblApp::GtkSupport::AppModule
 
-require 'pebbl_app/gtk_support'
 require 'pebbl_app/project/project_module'
-
 require 'pebbl_app/support/app_module'
+require 'pebbl_app/gtk_support'
 
+require 'optparse'
 require 'timeout'
 
 ## :nodoc: earlier protototype:
@@ -14,6 +14,7 @@ require 'timeout'
 ## [X] provide support for pathname handling for applications
 ##     [x] via rb_app-support.gemspec
 ## [x] provide support for args parsing for applications
+##     [ ] FIXME move to PebblApp::Support::AppModule (all to self.parsed_args)
 ## [x] ensure Gtk.init is not reached if no display is configured
 ## [ ] provide support for runtime configuration for applications,
 ##     [ ] under some YAML syntax for application configuration
@@ -26,7 +27,6 @@ require 'timeout'
 ## - provide support for application packaging
 ## - provide support for issue tracking for applications
 module PebblApp::GtkSupport::AppModule
-  include PebblApp::Support::AppModule
 
   ## using PebblApp::Support::AppModule @ config dirs, YAML suport
   ## 1. compute a timeout for Gtk.init
@@ -46,98 +46,73 @@ module PebblApp::GtkSupport::AppModule
     GTK_INIT_TIMEOUT_DEFAULT = 15
   end
 
-  def self.included(whence)
-    class << whence
-      def config
-        @config ||= {} ## FIXME app config previous to CLI args
-        ## - needs actual implementation, tests @ application config files
-      end
+  def self.extended(whence)
 
-      def display=(dpy)
-        ## set the display, independent of parse_opts
-        config[:display] = dpy
-      end
+    whence.extend PebblApp::Support::AppModule
 
-      def display()
-        self.config[:display] ||
-          ENV['DISPLAY']
-      end
+    ## NB defining this all in class scope may affect the availability
+    ## under nested include/extend - there is really no 'super' there.
 
-      def unset_display()
-        self.config.delete(:display)
-      end
+    def display=(dpy)
+      ## set the display, independent of parse_opts
+      config[:display] = dpy
+    end
 
-      def display?()
-        self.config.has_key?(:display) ||
-          ENV.has_key?('DISPLAY')
-      end
+    def display()
+      self.config[:display] ||
+        ENV['DISPLAY']
+    end
 
-      def configure_option_parser(parser)
-        parser.on("-d", "--display DISPLAY",
-                  "X Window System Display, overriding DISPLAY") do |dpy|
-          self.config[:display] = dpy
-        end
-      end
+    def unset_display()
+      self.config.delete(:display)
+    end
 
-      ## create, configure, and return a new option parser for this
-      ## application module
-      def make_option_parser()
-        OptionParser.new do |parser|
-          self.configure_option_parser(parser)
-        end
-      end
+    def display?()
+      self.config.has_key?(:display) ||
+        ENV.has_key?('DISPLAY')
+    end
 
-      ## parse an array of command line arguments, using the option
-      ## parser for this application module.
-      ##
-      ## the provided argv will be destructively modified by this method.
-      def parse_opts(argv = ARGV)
-        parser = self.make_option_parser()
-        parser.parse!(argv)
+    def configure_option_parser(parser)
+      parser.on("-d", "--display DISPLAY",
+                "X Window System Display, overriding DISPLAY") do |dpy|
+        self.config[:display] = dpy
       end
+    end
 
-      ## configure this application module
-      ##
-      ## the provided argv will be destructively modified by this method.
-      def configure(argv: ARGV)
-        config[:gtk_init_timeout] ||= Const::GTK_INIT_TIMEOUT_DEFAULT
-        self.parse_opts(argv)
-        self.parsed_args = argv
-      end
+    ## configure this application
+    ##
+    ## the provided argv will be destructively modified by this method.
+    def configure(argv: ARGV)
+      super(argv: argv)
+      config[:gtk_init_timeout] ||= Const::GTK_INIT_TIMEOUT_DEFAULT
+      self.parse_opts(argv)
+      self.parsed_args = argv
+    end
 
-      def parsed_args()
-        ## return a new array, which can accept any calls to push or unshift
-        @parsed_args ||= []
+    def gtk_args()
+      args = self.parsed_args.dup
+      if ! self.display?
+        raise PebblApp::GtkSupport::ConfigurationError.new("No display configured")
+      elsif self.config.has_key?(:display)
+        args.push(%(--display))
+        args.push(self.display)
       end
+      return args
+    end
 
-      def parsed_args=(value)
-        @parsed_args=value
+    def activate(argv: ARGV)
+      if (ENV['XAUTHORITY'].nil?)
+        Kernel.warn("No XAUTHORITY found in environment", uplevel: 0)
       end
+      self.configure(argv: argv)
+      ## preload GIR object definitions via Gtk.init
+      ## with timeout on the call to Gtk.init
+      time = config[:gtk_init_timeout]
+      Timeout::timeout(time, Timeout::Error, "Timeout in Gtk.init") do
+        require 'gtk3'
+        Gtk.init(* self.gtk_args)
+      end
+    end
 
-      def gtk_args()
-        args = self.parsed_args.dup
-        if ! self.display?
-          raise PebblApp::GtkSupport::ConfigurationError.new("No display configured")
-        elsif self.config.has_key?(:display)
-          args.push(%(--display))
-          args.push(self.display)
-        end
-        return args
-      end
-
-      def activate(argv: ARGV)
-        if (ENV['XAUTHORITY'].nil?)
-          Kernel.warn("No XAUTHORITY found in environment", uplevel: 0)
-        end
-        self.configure(argv: argv)
-        ## preload GIR object definitions via Gtk.init
-        ## with timeout on the call to Gtk.init
-        time = config[:gtk_init_timeout]
-        Timeout::timeout(time, Timeout::Error, "Timeout in Gtk.init") do
-          require 'gtk3'
-          Gtk.init(* self.gtk_args)
-        end
-      end
-    end  ## class << whence
-  end ## self.included
+  end ## self.extended
 end
