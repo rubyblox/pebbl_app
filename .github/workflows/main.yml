@@ -27,7 +27,8 @@ jobs:
       fail-fast: false
       matrix:
         ## FIXME note the output under build failure with ruby 'head'
-        ruby: ['2.7', '3.0', '3.1', head]
+        ## vis a vis psych as a default gem & bundler compat
+        ruby: ['2.7', '3.0', '3.1']
 
     steps:
     - name: Disable initramfs update
