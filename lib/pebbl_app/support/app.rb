@@ -211,131 +211,126 @@ class PebblApp::Support::App
 
   end ## class << self
 
-#  def self.extended(whence)
+  ## return the app name for this module
+  ##
+  ## If no app name has been configured as with app_name= then a
+  ## default app name will be initialized from the module's name
+  ## with each Ruby namespace string "::" translated to a full stop
+  ## character, ".".
+  ##
+  ## @return [String] an app name
+  ##
+  ## @see app_name=
+  def app_name
+    using = PebblApp::Project::ProjectModule
+    const = PebblApp::Support::App::Const
+    @app_name ||= using.s_to_filename(self.class, const::DOT)
+  end
 
-    ## return the app name for this module
-    ##
-    ## If no app name has been configured as with app_name= then a
-    ## default app name will be initialized from the module's name
-    ## with each Ruby namespace string "::" translated to a full stop
-    ## character, ".".
-    ##
-    ## @return [String] an app name
-    ##
-    ## @see app_name=
-    def app_name
-      using = PebblApp::Project::ProjectModule
-      const = PebblApp::Support::App::Const
-      @app_name ||= using.s_to_filename(self.class, const::DOT)
-    end
+  ## configure an app name for this module
+  ##
+  ## @param name [String] the app name to use
+  ##
+  ## @return [String] the provided name
+  ##
+  ## @see app_name
+  def app_name=(name)
+    @app_name = name
+  end
 
-    ## configure an app name for this module
-    ##
-    ## @param name [String] the app name to use
-    ##
-    ## @return [String] the provided name
-    ##
-    ## @see app_name
-    def app_name=(name)
-      @app_name = name
-    end
+  def app_dirname
+    app_name.downcase
+  end
 
-    def app_dirname
-      app_name.downcase
-    end
+  def app_data_dirs()
+    dirs = self.class.flatten_dirs(self.class.data_dirs)
+    ## FIXME this assumes that any of the dirs would be created
+    ## during install, if the dir was to exist and contain any files
+    ## for the app
+    self.class.flatten_dirs(self.class.map_join(self.app_dirname, dirs))
+  end
 
-    def app_data_dirs()
-      dirs = self.class.flatten_dirs(self.class.data_dirs)
-      ## FIXME this assumes that any of the dirs would be created
-      ## during install, if the dir was to exist and contain any files
-      ## for the app
-      self.class.flatten_dirs(self.class.map_join(self.app_dirname, dirs))
-    end
+  def app_config_dirs()
+    dirs = self.class.flatten_dirs(self.class.config_dirs)
+    ## FIXME this assumes that any of the dirs would be created
+    ## during install, if the dir was to exist and contain any files
+    ## for the app - siimlar to the data_dirs instance
+    self.class.flatten_dirs(self.class.map_join(self.app_dirname, dirs))
+  end
 
-    def app_config_dirs()
-      dirs = self.class.flatten_dirs(self.class.config_dirs)
-      ## FIXME this assumes that any of the dirs would be created
-      ## during install, if the dir was to exist and contain any files
-      ## for the app - siimlar to the data_dirs instance
-      self.class.flatten_dirs(self.class.map_join(self.app_dirname, dirs))
-    end
+  def app_menu_dirs()
+    dirs = self.class.flatten_dirs(using.config_dirs)
+    ## FIXME similar to the config_dirs instance, from which this derives
+    self.class.flatten_dirs(self.class.map_join(Const::MENUS, dirs))
+  end
 
-    def app_menu_dirs()
-      dirs = self.class.flatten_dirs(using.config_dirs)
-      ## FIXME similar to the config_dirs instance, from which this derives
-      self.class.flatten_dirs(self.class.map_join(Const::MENUS, dirs))
-    end
+  def app_config_home()
+    File.join(self.class.config_home, app_dirname)
+  end
 
-    def app_config_home()
-      File.join(self.class.config_home, app_dirname)
-    end
+  ## return the value of #app_config_home,
+  ## ensuring the directory exists
+  def app_config_home!()
+    dir = app_config_home
+    PebblApp::Support::Files.mkdir_p(dir)
+    return dir
+  end
 
-    ## return the value of #app_config_home,
-    ## ensuring the directory exists
-    def app_config_home!()
-      dir = app_config_home
+  def app_state_home()
+    File.join(self.class.state_home, app_dirname)
+  end
+
+  ## return the value of #app_state_home,
+  ## ensuring the directory exists
+  def app_state_home!()
+    dir = app_state_home
+    PebblApp::Support::Files.mkdir_p(dir)
+    return dir
+  end
+
+  def app_cache_home()
+    File.join(self.class.cache_home, app_dirname)
+  end
+
+  ## return the value of #app_cache_home,
+  ## ensuring the directory exists
+  def app_cache_home!()
+    dir = app_cache_home
+    PebblApp::Support::Files.mkdir_p(dir)
+    return dir
+  end
+
+  def app_runtime_dir!()
+    basedir = self.class.runtime_dir!
+    dir = File.join(basedir, app_dirname)
+    if !File.exists(rundir)
       PebblApp::Support::Files.mkdir_p(dir)
-      return dir
+      File.chmod(0o0700, dir)
     end
+    return dir
+  end
 
-    def app_state_home()
-      File.join(self.class.state_home, app_dirname)
-    end
+  ## return a configuration object for this application
+  def config
+    @config ||= PebblApp::Support::Config.new
+  end
 
-    ## return the value of #app_state_home,
-    ## ensuring the directory exists
-    def app_state_home!()
-      dir = app_state_home
-      PebblApp::Support::Files.mkdir_p(dir)
-      return dir
-    end
+  ## configure this application
+  ##
+  ## the provided argv may be destructively modified by this method
+  def configure(argv: ARGV)
+    config.configure(argv: ARGV)
+  end
 
-    def app_cache_home()
-      File.join(self.class.cache_home, app_dirname)
-    end
-
-    ## return the value of #app_cache_home,
-    ## ensuring the directory exists
-    def app_cache_home!()
-      dir = app_cache_home
-      PebblApp::Support::Files.mkdir_p(dir)
-      return dir
-    end
-
-    def app_runtime_dir!()
-      basedir = self.class.runtime_dir!
-      dir = File.join(basedir, app_dirname)
-      if !File.exists(rundir)
-        PebblApp::Support::Files.mkdir_p(dir)
-        File.chmod(0o0700, dir)
-      end
-      return dir
-    end
-
-    ## return a configuration object for this application
-    def config
-      @config ||= PebblApp::Support::Config.new
-    end
-
-    ## configure this application
-    ##
-    ## the provided argv may be destructively modified by this method
-    def configure(argv: ARGV)
-      config.configure(argv: ARGV)
-    end
-
-    ## activate the application
-    ##
-    ## The method provided here will pass the provided argv array to
-    ## #configure.
-    ##
-    ## the provided argv may be destructively modified by this method
-    def activate(argv: ARGV)
-      configure(argv: argv)
-    end
-
-
-#  end ## self.extended
+  ## activate the application
+  ##
+  ## The method provided here will pass the provided argv array to
+  ## #configure.
+  ##
+  ## the provided argv may be destructively modified by this method
+  def activate(argv: ARGV)
+    configure(argv: argv)
+  end
 
 end
 

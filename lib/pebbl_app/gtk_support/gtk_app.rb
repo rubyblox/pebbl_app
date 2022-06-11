@@ -41,25 +41,22 @@ class PebblApp::GtkSupport::GtkApp < PebblApp::Support::App
   ## NB this needs to access a configuration context from outside of
   ## any objects that would be initilized in the Ruby process with Gtk.init
 
-#  def self.extended(whence)
+  def config
+    @config ||= PebblApp::GtkSupport::GtkConfig.new
+  end
 
-    def config
-      @config ||= PebblApp::GtkSupport::GtkConfig.new
+  def activate(argv: ARGV)
+    if (ENV['XAUTHORITY'].nil?)
+      Kernel.warn("No XAUTHORITY found in environment", uplevel: 0)
     end
-
-    def activate(argv: ARGV)
-      if (ENV['XAUTHORITY'].nil?)
-        Kernel.warn("No XAUTHORITY found in environment", uplevel: 0)
-      end
-      self.configure(argv: argv)
-      ## preload GIR object definitions via Gtk.init
-      ## with timeout on the call to Gtk.init
-      time = self.config.option(:gtk_init_timeout)
-      Timeout::timeout(time, Timeout::Error, "Timeout in Gtk.init") do
-        require 'gtk3'
-        Gtk.init(* self.config.gtk_args)
-      end
+    self.configure(argv: argv)
+    ## preload GIR object definitions via Gtk.init
+    ## with timeout on the call to Gtk.init
+    time = self.config.option(:gtk_init_timeout)
+    Timeout::timeout(time, Timeout::Error, "Timeout in Gtk.init") do
+      require 'gtk3'
+      Gtk.init(* self.config.gtk_args)
     end
+  end
 
-#  end ## self.extended
 end
