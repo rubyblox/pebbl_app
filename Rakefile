@@ -2,6 +2,11 @@
 
 require 'fileutils'
 
+# ensure that this file is evaluted under e.g -I 'lib'
+if ! $LOAD_PATH.member?(File.join(__dir__, "lib"))
+  $LOAD_PATH.unshift(File.join(__dir__, "lib"))
+end
+
 ## Notes: The 'install' task
 
 ## This project defines more than one gemspec.
