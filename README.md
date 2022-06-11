@@ -13,14 +13,14 @@ This project provides central development tooling for a number of Ruby
 gems developed in this project.
 
 Reusable sections of this code have been bundled in the stand-alone
-gem, `thinkum_space-project`. This gem finds an application for
+gem, `pebbl_app-support`. This gem finds an application for
 development of this and other gems developed in this source repository.
 
 ### Primary Work Areas
 
 #### Project Tooling
 
-The `thinkum_space-project` gem provides some stand-alone development
+The `pebbl_app-support` gem provides some stand-alone development
 tooling for Ruby projects developed at Thinkum.Space. This support code
 has been organized under the module **PebblApp::Project**
 
