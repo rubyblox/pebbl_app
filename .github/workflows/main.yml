@@ -39,8 +39,10 @@ jobs:
       run: sudo sed -i.bak 's@yes@no@g' /etc/initramfs-tools/update-initramfs.conf
     - name: Disable man-db update
       run: sudo rm -f /var/lib/man-db/auto-update
-    - name: Install gem build dependencies (dpkg)
-      run: sudo apt-get install -V  -y libgirepository1.0-dev
+    - name: Install gem build dependencies, xvfb (dpkg)
+      ## the ruby-gnome dpkg should draw in all dependencies needed for the gems
+      ## including GIR typelib information for each GTK library used in Ruby-GNOME
+      run: sudo apt-get install -V -y ruby-gnome xvfb
     - uses: actions/checkout@v3
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
@@ -48,4 +50,4 @@ jobs:
         ruby-version: ${{ matrix.ruby }}
         bundler-cache: true
     - name: Run the default task
-      run: bundle exec rake
+      run: Xvfb :0; env DISPLAY=:0 bundle exec rake
