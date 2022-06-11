@@ -39,6 +39,8 @@ jobs:
       run: sudo sed -i.bak 's@yes@no@g' /etc/initramfs-tools/update-initramfs.conf
     - name: Disable man-db update
       run: sudo rm -f /var/lib/man-db/auto-update
+    - name: Install gem build dependencies (dpkg)
+      run: sudo apt-get install -V  -y libgirepository1.0-dev
     - uses: actions/checkout@v3
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
