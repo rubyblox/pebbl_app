@@ -2,13 +2,8 @@
 
 require 'fileutils'
 
-# ensure that this file is evaluted under e.g -I 'lib'
-if ! $LOAD_PATH.member?(File.join(__dir__, "lib"))
-  $LOAD_PATH.unshift(File.join(__dir__, "lib"))
-end
-
 ## Notes: The 'install' task
-
+##
 ## This project defines more than one gemspec.
 ##
 ## This project's Rakefile provides an 'install' task that operates
@@ -19,29 +14,7 @@ end
 ## gems are selected for the 'install' task, this also serves to
 ## mitigate the concern of the default 'install' task retrieving and
 ## installing gems such that have already been installed under the host
-## package management system. For the gtk4 gem and dependent gems, this
-## install task was considered to be particularly time-consuming
-##
-## FIXME This project has yet to provide any further workaround for that
-## original 'install' task. Ostensibly, the native-package-installer gem
-## may be used under 'rake install', with some integration for the gem
-## installation paths used under the original 'rake install' task in this
-## gemfile, primarily integrating with bundler.
-##
-## In the meanwhile, the `publish_gems' field in project.yaml has not
-## included any project gemspecs depending on the Ruby-GNOME gems and
-## their direct and system-level dependencies. For developing these gems
-## under this project, the 'bundle install' and 'bundle exec' shell
-## tools would be recommended. These project gemspecs have not yet been
-## tested under publish.
-##
-## FIXME: This project has not yet conducted any testing for the
-## behaviors of `bundle exec rake release' in this project. Under the
-## present Rakefile, it should publish only those gems denoted in the
-##`publish_gems` field as such, not until after conducting any source
-## code tests, documentation tests, and potentially any linitian tests.
-##
-## This not been tested for any more than one gem selected in 'publish_gems'
+## package management system
 ##
 if ENV['BUNDLE_GEMFILE'] &&
   ( File.dirname(ENV['BUNDLE_GEMFILE']) == __dir__ )
@@ -127,6 +100,10 @@ if ENV['BUNDLE_GEMFILE'] &&
   task realclean: [:clobber] do
     Rake::Cleaner.cleanup_files(realclean_files)
   end
+
+  ## if ENV['CI']
+  ##  require_relative 'Rakefile.ci'
+  ## end
 
 else
   ##
