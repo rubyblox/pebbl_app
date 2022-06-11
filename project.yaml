@@ -99,7 +99,7 @@ gems:
       - lib/pebbl_app/project/sandbox/spectool.rb
       - sandbox/lib/pebbl_app/project/ext_spec.rb
     depends:
-      - [psych, ">=4"]
+      - psych
 
   pebbl_app-gtk_support:
     module: PebblApp::GtkSupport
