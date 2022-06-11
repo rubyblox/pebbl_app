@@ -82,6 +82,7 @@ gems:
       - lib/pebbl_app.rb
       - lib/pebbl_app/project.rb
       - lib/pebbl_app/project/project_module.rb
+      - lib/pebbl_app/project/spec_finder.rb
       - lib/pebbl_app/project/y_spec.rb
       - lib/pebbl_app/support.rb
       - lib/pebbl_app/support/app_module.rb

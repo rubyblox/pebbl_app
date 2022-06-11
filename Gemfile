@@ -52,10 +52,12 @@ lambda {
 ##
 ## this might be useful for diagnosing any build failures for extensions
 ## ostensibly built in the gems, if if the at_exit proc added here
-## was even reached for the CI log output.
+## was reached for the CI log output after failure in bundle install
 ##
-## It may at least provide some dianostic output about the gem builds,
+## It may at least provide some diagnostic output about the gem builds,
 ## assuming any successful bundle install under GH actions
+##
+## FIXME move to a file ci.rb then require_relative here when CI
 # if ENV['CI']
 #   Kernel.warn("will use at_exit action for mkmf.log files", uplevel: 0)
 #   bdl_config_dir = File.join(__dir__, ".bundle")

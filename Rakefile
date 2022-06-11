@@ -86,7 +86,8 @@ if ENV['BUNDLE_GEMFILE'] &&
   ## "No type checker was installed!" ??
 
   desc 'Default tasks'
-  task default: %i[spec test]
+  # task default: %i[spec test] ## test : rbs
+  task default: %i[spec]
 
   #
   # task  :docs ... (needs test)
