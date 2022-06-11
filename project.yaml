@@ -99,7 +99,8 @@ gems:
       - lib/pebbl_app/project/sandbox/spectool.rb
       - sandbox/lib/pebbl_app/project/ext_spec.rb
     depends:
-      - psych
+## TBD add an internal_depends field for information purposes vis "built-in gems?"
+#      - psych
 
   pebbl_app-gtk_support:
     module: PebblApp::GtkSupport
