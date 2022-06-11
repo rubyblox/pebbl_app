@@ -28,6 +28,8 @@ module PebblApp::GtkSupport
   defautoloads({
     "gtk_support/app_module" =>
       %w(AppModule),
+    "gtk_support/exceptions" =>
+      %w(ConfigurationError),
     "gtk_support/logging" =>
       %w(LoggerDelegate LogManager LogModule),
     "gtk_support/threads" =>
