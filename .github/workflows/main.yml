@@ -51,3 +51,4 @@ jobs:
         bundler-cache: true
     - name: Run the default task
       run: Xvfb :0; env DISPLAY=:0 bundle exec rake
+      timeout-minutes: 5
