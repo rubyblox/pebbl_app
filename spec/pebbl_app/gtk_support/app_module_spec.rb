@@ -23,17 +23,38 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
       let!(:display_initial) { ENV['DISPLAY'] }
 
       it "fails if no display is available" do
-        initialized = false
-        passed = false
-        begin
-          ## FIXME this deadlocks in a way that Timeout::timeout will not interrupt
-          ## and such that the ruby process cannot be interrupted with SIGINT
-          # subject.activate
-          initialized = true
-        rescue Timeout::Error
-          passed = true
+        ENV.delete('DISPLAY')
+        expect { subject.activate }.to raise_error(
+          PebblApp::GtkSupport::ConfigurationError
+        )
+      end
+
+      it "parses arg --display DPY" do
+        subject.parse_opts(%w(--display :10))
+        expect(subject.display).to be == ":10"
+      end
+
+      it "parses arg --display=DPY" do
+        subject.parse_opts(%w(--display=:11))
+        expect(subject.display).to be == ":11"
+      end
+
+      it "parses arg -dDPY" do
+        subject.parse_opts(%w(-d:12))
+        expect(subject.display).to be == ":12"
+      end
+
+      it "overrides DISPLAY with args" do
+        if (initial_dpy = ENV['DISPLAY'])
+          ENV['DISPLAY']= initial_dpy + ".nonexistent"
+          subject.parse_opts(['--display', initial_dpy])
+          expect(subject.display).to be == initial_dpy
+          ## FIXME hangs uninterruptably whhen called via e.g
+          ## $ env DISPLAY=:0 bundle exec rspec
+          expect { subject.activate }.to_not raise_error
+        else
+          RSpec::Expectations.fail_with("No DISPLAY configured in test environment")
         end
-        expect(passed).to be true
       end
 
       after(:each) do
