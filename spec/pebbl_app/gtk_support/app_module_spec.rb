@@ -24,7 +24,9 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
 
       it "fails if no display is available" do
         ENV.delete('DISPLAY')
-        expect { subject.activate }.to raise_error(
+        null_argv = []
+        subject.configure(argv: null_argv)
+        expect { subject.activate(argv: null_argv) }.to raise_error(
           PebblApp::GtkSupport::ConfigurationError
         )
       end
@@ -34,9 +36,19 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
         expect(subject.display).to be == ":10"
       end
 
+      it "parses arg --display DPY to gtk_args" do
+        subject.parse_opts(%w(--display :10))
+        expect(subject.gtk_args).to include(":10")
+      end
+
       it "parses arg --display=DPY" do
         subject.parse_opts(%w(--display=:11))
         expect(subject.display).to be == ":11"
+      end
+
+      it "parses arg --display=DPY to gtk_args" do
+        subject.parse_opts(%w(--display=:11))
+        expect(subject.gtk_args).to include(":11")
       end
 
       it "parses arg -dDPY" do
@@ -44,13 +56,20 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
         expect(subject.display).to be == ":12"
       end
 
-      it "overrides DISPLAY with args" do
+      it "parses arg -dDPY to gtk_args" do
+        subject.parse_opts(%w(-d:12))
+        expect(subject.gtk_args).to include(":12")
+      end
+
+
+      it "overrides env DISPLAY with args" do
+        ## FIXME this requires a working DISPLAY to set in the module's
+        ## option parser args
         if (initial_dpy = ENV['DISPLAY'])
           ENV['DISPLAY']= initial_dpy + ".nonexistent"
           subject.parse_opts(['--display', initial_dpy])
           expect(subject.display).to be == initial_dpy
-          ## FIXME hangs uninterruptably whhen called via e.g
-          ## $ env DISPLAY=:0 bundle exec rspec
+          subject.config[:gtk_init_timeout] = 5
           expect { subject.activate }.to_not raise_error
         else
           RSpec::Expectations.fail_with("No DISPLAY configured in test environment")
