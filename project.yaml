@@ -85,7 +85,8 @@ gems:
       - lib/pebbl_app/project/spec_finder.rb
       - lib/pebbl_app/project/y_spec.rb
       - lib/pebbl_app/support.rb
-      - lib/pebbl_app/support/app_module.rb
+      - lib/pebbl_app/support/app.rb
+      - lib/pebbl_app/support/config.rb
     sandbox_files:
       ## not published with the gem. To define autoloads for these files e.g:
       ##    require 'thinkum_space/project'
@@ -114,7 +115,8 @@ gems:
       - pebbl_app-support
     source_files:
       - lib/pebbl_app/gtk_support.rb
-      - lib/pebbl_app/gtk_support/app_module.rb
+      - lib/pebbl_app/gtk_support/gtk_app.rb
+      - lib/pebbl_app/gtk_support/gtk_config.rb
       - lib/pebbl_app/gtk_support/exceptions.rb
       ## earlier prototype definitions:
       - lib/pebbl_app/gtk_support/logging.rb

@@ -1,4 +1,4 @@
-## Definition of PebblApp::Support::AppModule
+## Definition of PebblApp::Support::App
 
 require 'pebbl_app/project/project_module'
 require 'pebbl_app/support'
@@ -19,9 +19,9 @@ require 'optparse'
 ##
 ## More info:
 ## https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
-module PebblApp::Support::AppModule
+class PebblApp::Support::App
 
-  ## Constants for PebblApp::Support::AppModule
+  ## Constants for PebblApp::Support::App
   module Const
     NULL_ARRAY ||= [].freeze
     NS_DELIM ||= "::".freeze
@@ -211,7 +211,7 @@ module PebblApp::Support::AppModule
 
   end ## class << self
 
-  def self.extended(whence)
+#  def self.extended(whence)
 
     ## return the app name for this module
     ##
@@ -225,8 +225,8 @@ module PebblApp::Support::AppModule
     ## @see app_name=
     def app_name
       using = PebblApp::Project::ProjectModule
-      const = PebblApp::Support::AppModule::Const
-      @app_name ||= using.s_to_filename(self, const::DOT)
+      const = PebblApp::Support::App::Const
+      @app_name ||= using.s_to_filename(self.class, const::DOT)
     end
 
     ## configure an app name for this module
@@ -245,33 +245,29 @@ module PebblApp::Support::AppModule
     end
 
     def app_data_dirs()
-      using = PebblApp::Support::AppModule
-      dirs = using.flatten_dirs(using.data_dirs)
+      dirs = self.class.flatten_dirs(self.class.data_dirs)
       ## FIXME this assumes that any of the dirs would be created
       ## during install, if the dir was to exist and contain any files
       ## for the app
-      using.flatten_dirs(using.map_join(self.app_dirname, dirs))
+      self.class.flatten_dirs(self.class.map_join(self.app_dirname, dirs))
     end
 
     def app_config_dirs()
-      using = PebblApp::Support::AppModule
-      dirs = using.flatten_dirs(using.config_dirs)
+      dirs = self.class.flatten_dirs(self.class.config_dirs)
       ## FIXME this assumes that any of the dirs would be created
       ## during install, if the dir was to exist and contain any files
       ## for the app - siimlar to the data_dirs instance
-      using.flatten_dirs(using.map_join(self.app_dirname, dirs))
+      self.class.flatten_dirs(self.class.map_join(self.app_dirname, dirs))
     end
 
     def app_menu_dirs()
-      using = PebblApp::Support::AppModule
-      dirs = using.flatten_dirs(using.config_dirs)
+      dirs = self.class.flatten_dirs(using.config_dirs)
       ## FIXME similar to the config_dirs instance, from which this derives
-      using.flatten_dirs(using.map_join(using::Const::MENUS, dirs))
+      self.class.flatten_dirs(self.class.map_join(Const::MENUS, dirs))
     end
 
     def app_config_home()
-      using = PebblApp::Support::AppModule
-      File.join(using.config_home, app_dirname)
+      File.join(self.class.config_home, app_dirname)
     end
 
     ## return the value of #app_config_home,
@@ -283,8 +279,7 @@ module PebblApp::Support::AppModule
     end
 
     def app_state_home()
-      using = PebblApp::Support::AppModule
-      File.join(using.state_home, app_dirname)
+      File.join(self.class.state_home, app_dirname)
     end
 
     ## return the value of #app_state_home,
@@ -296,8 +291,7 @@ module PebblApp::Support::AppModule
     end
 
     def app_cache_home()
-      using = PebblApp::Support::AppModule
-      File.join(using.cache_home, app_dirname)
+      File.join(self.class.cache_home, app_dirname)
     end
 
     ## return the value of #app_cache_home,
@@ -309,8 +303,7 @@ module PebblApp::Support::AppModule
     end
 
     def app_runtime_dir!()
-      using = PebblApp::Support::AppModule
-      basedir = using.runtime_dir!
+      basedir = self.class.runtime_dir!
       dir = File.join(basedir, app_dirname)
       if !File.exists(rundir)
         PebblApp::Support::Files.mkdir_p(dir)
@@ -321,96 +314,28 @@ module PebblApp::Support::AppModule
 
     ## return a configuration object for this application
     def config
-      ## FIXME the 'config' object could be defined as of a distinct
-      ## class, such as to provide all of the args parsing support there
-      @config ||= {}
-    end
-
-    proc {
-      ## this defines a no-op method in the including class, providing a
-      ## receiver for other protocol methods defined here.
-      ##
-      ## if this method was defined with 'def' here, then it could
-      ## shadow any :configure_option_parser method defined in an
-      ## implementing class, such that the method in the implementing
-      ## class may not be reached by other protocol methods defined in
-      ## this 'extended' block in this source file. This has been
-      ## observed under rspec tests, when defining the method with 'def'
-      ## instead of define_method, in this source file.
-      ##
-      ## defining the method with define_method in this 'extended'
-      ## section, this will then provide a default protocol method that
-      ## can be overidden normally in the implementing class.
-      ##
-      ## the containing proc is used here, to prevent local args from
-      ## being bound in the including class.
-      ##
-      ## This method should be defined with a lambda proc such as here,
-      ## to ensure as by side effect that any argument syntax checks
-      ## will be performed on calls to the method.
-      mtd_lambda = lambda { |parser| }
-      whence.define_method(:configure_option_parser, &mtd_lambda)
-    }.call
-
-    ## create, configure, and return a new option parser for this
-    ## application
-    def make_option_parser()
-      OptionParser.new do |parser|
-        configure_option_parser(parser)
-      end
-    end
-
-    ## parse an array of command line arguments, using the option
-    ## parser for this application.
-    ##
-    ## the provided argv will be destructively modified by this method.
-    def parse_opts(argv = ARGV)
-      parser = make_option_parser()
-      parser.parse!(argv)
+      @config ||= PebblApp::Support::Config.new
     end
 
     ## configure this application
     ##
-    ## the provided argv may be destructively modified by methods in
-    ##implementing modules/classes
-    def configure(argv: ARGV) ## FIXME interface method
-    end
-
-    ## return the set of parsed args for this application, or a new,
-    ## empty array if no value was previously bound
-    def parsed_args()
-      @parsed_args ||= []
-    end
-
-    ## set the array of parsed args for this application
-    def parsed_args=(value)
-      @parsed_args=value
+    ## the provided argv may be destructively modified by this method
+    def configure(argv: ARGV)
+      config.configure(argv: ARGV)
     end
 
     ## activate the application
     ##
-    ## This default method should normally be overridden in any
-    ## implementing class. The method provided here will pass the
-    ## provided argv array to #configure, then returning.
+    ## The method provided here will pass the provided argv array to
+    ## #configure.
     ##
-    ## FIXME this docstring needs yard macros to ensure it's defined for
-    ## the activate(...) method defined in the next proc
-    proc {
-      ## similar to the previous instance, if activate(...) was defined
-      ## here with 'def', then it would by side effect shadow any
-      ## 'activate' method defined in any module extending this module.
-      ##
-      ## this has been verified via rspec tests for a class extending
-      ## PebblApp::GtkSupport::AppModule
-      ##
-      mtd_lambda = lambda { |argv: ARGV|
-        self.configure(argv: argv)
-      }
-      whence.define_method(:activate, &mtd_lambda)
-    }.call
+    ## the provided argv may be destructively modified by this method
+    def activate(argv: ARGV)
+      configure(argv: argv)
+    end
 
 
-  end ## self.extended
+#  end ## self.extended
 
 end
 

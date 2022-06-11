@@ -27,8 +27,10 @@ module PebblApp::Support
   end
 
   defautoloads({
-    "support/app_module" =>
-      %w(AppModule),
+    "support/app" =>
+      %w(App),
+    "support/config" =>
+      %w(Config),
     "support/exceptions" =>
       %w(EnvironmentError),
     "support/files" =>

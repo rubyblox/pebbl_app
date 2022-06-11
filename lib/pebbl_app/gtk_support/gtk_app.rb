@@ -1,10 +1,9 @@
 ## Definition of PebblApp::GtkSupport::AppModule
 
 require 'pebbl_app/project/project_module'
-require 'pebbl_app/support/app_module'
+require 'pebbl_app/support/app'
 require 'pebbl_app/gtk_support'
 
-require 'optparse'
 require 'timeout'
 
 ## :nodoc: earlier protototype:
@@ -26,7 +25,7 @@ require 'timeout'
 ## Far-term goals
 ## - provide support for application packaging
 ## - provide support for issue tracking for applications
-module PebblApp::GtkSupport::AppModule
+class PebblApp::GtkSupport::GtkApp < PebblApp::Support::App
 
   ## using PebblApp::Support::AppModule @ config dirs, YAML suport
   ## 1. compute a timeout for Gtk.init
@@ -42,62 +41,10 @@ module PebblApp::GtkSupport::AppModule
   ## NB this needs to access a configuration context from outside of
   ## any objects that would be initilized in the Ruby process with Gtk.init
 
-  module Const
-    GTK_INIT_TIMEOUT_DEFAULT = 15
-  end
+#  def self.extended(whence)
 
-  def self.extended(whence)
-
-    whence.extend PebblApp::Support::AppModule
-
-    ## NB defining this all in class scope may affect the availability
-    ## under nested include/extend - there is really no 'super' there.
-
-    def display=(dpy)
-      ## set the display, independent of parse_opts
-      config[:display] = dpy
-    end
-
-    def display()
-      self.config[:display] ||
-        ENV['DISPLAY']
-    end
-
-    def unset_display()
-      self.config.delete(:display)
-    end
-
-    def display?()
-      self.config.has_key?(:display) ||
-        ENV.has_key?('DISPLAY')
-    end
-
-    def configure_option_parser(parser)
-      parser.on("-d", "--display DISPLAY",
-                "X Window System Display, overriding DISPLAY") do |dpy|
-        self.config[:display] = dpy
-      end
-    end
-
-    ## configure this application
-    ##
-    ## the provided argv will be destructively modified by this method.
-    def configure(argv: ARGV)
-      super(argv: argv)
-      config[:gtk_init_timeout] ||= Const::GTK_INIT_TIMEOUT_DEFAULT
-      self.parse_opts(argv)
-      self.parsed_args = argv
-    end
-
-    def gtk_args()
-      args = self.parsed_args.dup
-      if ! self.display?
-        raise PebblApp::GtkSupport::ConfigurationError.new("No display configured")
-      elsif self.config.has_key?(:display)
-        args.push(%(--display))
-        args.push(self.display)
-      end
-      return args
+    def config
+      @config ||= PebblApp::GtkSupport::GtkConfig.new
     end
 
     def activate(argv: ARGV)
@@ -107,12 +54,12 @@ module PebblApp::GtkSupport::AppModule
       self.configure(argv: argv)
       ## preload GIR object definitions via Gtk.init
       ## with timeout on the call to Gtk.init
-      time = config[:gtk_init_timeout]
+      time = self.config.option(:gtk_init_timeout)
       Timeout::timeout(time, Timeout::Error, "Timeout in Gtk.init") do
         require 'gtk3'
-        Gtk.init(* self.gtk_args)
+        Gtk.init(* self.config.gtk_args)
       end
     end
 
-  end ## self.extended
+#  end ## self.extended
 end

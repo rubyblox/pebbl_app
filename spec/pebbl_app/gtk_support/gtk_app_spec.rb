@@ -24,8 +24,8 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
       let!(:display_initial) { ENV['DISPLAY'] }
 
       before(:each) do
-        subject.parsed_args=[]
-        subject.unset_display
+        subject.config.parsed_args=[]
+        subject.config.unset_display
         subject.config[:debug] = true
       end
 
@@ -33,47 +33,51 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
         ENV['DISPLAY'] = display_initial
       end
 
+      it "Uses a GtkConfig for config" do
+        expect(subject.config).to be_a PebblApp::GtkSupport::GtkConfig
+      end
+
       it "parses arg --display DPY" do
-        subject.parse_opts(%w(--display :10))
-        expect(subject.display).to be == ":10"
+        subject.config.parse_opts(%w(--display :10))
+        expect(subject.config.display).to be == ":10"
       end
 
       it "parses arg --display DPY to gtk_args" do
-        subject.parse_opts(%w(--display :10))
-        expect(subject.gtk_args).to be == %w(--display :10)
+        subject.config.parse_opts(%w(--display :10))
+        expect(subject.config.gtk_args).to be == %w(--display :10)
       end
 
       it "parses arg --display=DPY" do
-        subject.parse_opts(%w(--display=:11))
-        expect(subject.display).to be == ":11"
+        subject.config.parse_opts(%w(--display=:11))
+        expect(subject.config.display).to be == ":11"
       end
 
       it "parses arg --display=DPY to gtk_args" do
-        subject.parse_opts(%w(--display=:11))
-        expect(subject.gtk_args).to be == %w(--display :11)
+        subject.config.parse_opts(%w(--display=:11))
+        expect(subject.config.gtk_args).to be == %w(--display :11)
       end
 
       it "parses arg -dDPY" do
-        subject.parse_opts(%w(-d:12))
-        expect(subject.display).to be == ":12"
+        subject.config.parse_opts(%w(-d:12))
+        expect(subject.config.display).to be == ":12"
       end
 
       it "parses arg -dDPY to gtk_args" do
-        subject.parse_opts(%w(-d:12))
-        expect(subject.gtk_args).to be == %w(--display :12)
+        subject.config.parse_opts(%w(-d:12))
+        expect(subject.config.gtk_args).to be == %w(--display :12)
       end
 
       it "resets parsed args" do
-        subject.parsed_args=[]
-        subject.configure(argv: [])
-        expect(subject.parsed_args).to be == []
+        subject.config.parsed_args=[]
+        subject.config.configure(argv: [])
+        expect(subject.config.parsed_args).to be == []
       end
 
       it "indicates when no display is configured" do
         ENV.delete('DISPLAY')
         null_argv = []
-        subject.configure(argv: null_argv)
-        expect(subject.display?).to_not be_truthy
+        subject.config.configure(argv: null_argv)
+        expect(subject.config.display?).to_not be_truthy
       end
 
       it "fails in activate if no display is configured" do
@@ -87,8 +91,8 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
       it "overrides env DISPLAY with any display arg" do
         if (initial_dpy = ENV['DISPLAY'])
           ENV['DISPLAY']= initial_dpy + ".nonexistent"
-          subject.parse_opts(['--display', initial_dpy])
-          expect(subject.display).to be == initial_dpy
+          subject.config.parse_opts(['--display', initial_dpy])
+          expect(subject.config.display).to be == initial_dpy
         else
           RSpec::Expectations.fail_with("No DISPLAY configured in test environment")
         end
@@ -97,7 +101,7 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
       it "dispatches to Gtk.init" do
         ## this test spec will have side effects that may affect any
         ## later tests using GNOME components
-        subject.config[:gtk_init_timeout] = 5
+        subject.config.options[:gtk_init_timeout] = 5
         expect { subject.activate(argv: []) }.to_not raise_error
       end
 
