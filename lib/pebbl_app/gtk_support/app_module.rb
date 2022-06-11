@@ -59,7 +59,8 @@ module PebblApp::GtkSupport::AppModule
       end
 
       def display()
-        self.config[:display]
+        self.config[:display] ||
+          ENV['DISPLAY']
       end
 
       def unset_display()
