@@ -40,3 +40,38 @@ project_gems.each do |name|
   gemspec name: name
   STDERR.puts("Defined gem (gemspec): #{name}") if $DEBUG
 end
+## log processing for failure under bundler in GH actions
+if ENV['CI']
+  Kernel.warn("will use at_exit action for mkmf.log files", uplevel: 0)
+  bdl_config_dir = File.join(__dir__, ".bundle")
+  if File.exists?(bdl_config_dir)
+    bdl_config_file = File.join(bdl_config_dir, "config")
+    if File.exists?(bdl_config_file)
+      bdl_config = Psych.load_file(bdl_config_file)
+      bdl_path = File.expand_path(bdl_config['BUNDLE_PATH'], __dir__)
+      if File.exists?(bdl_path)
+        require 'rake'
+        require 'rake/file_list'
+        ## dianogstic logs
+        at_exit {
+          STDERR.puts "-- at_exit"
+          mkmf_logs = Rake::FileList.new(bdl_path + "/**/mkmf.log")
+          mkmf_logs.each do |f|
+            if File.exists?(f)
+              STDERR.puts "---- BEGIN: #{f}"
+              file = File.open(f)
+              begin
+                file.each_line do |txt|
+                  STDERR.puts(txt)
+                end
+                ensure
+                  file.close
+              end
+              STDERR.puts "---- END: #{f}"
+            end
+          end
+        }
+      end
+    end
+  end
+end
