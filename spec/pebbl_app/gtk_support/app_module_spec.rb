@@ -22,6 +22,16 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
     context "GTK support" do
       let!(:display_initial) { ENV['DISPLAY'] }
 
+      before(:each) do
+        subject.parsed_args=[]
+        subject.unset_display
+        subject.config[:debug] = true
+      end
+
+      after(:each) do
+        ENV['DISPLAY'] = display_initial
+      end
+
       it "fails if no display is available" do
         ENV.delete('DISPLAY')
         null_argv = []
@@ -38,7 +48,7 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
 
       it "parses arg --display DPY to gtk_args" do
         subject.parse_opts(%w(--display :10))
-        expect(subject.gtk_args).to include(":10")
+        expect(subject.gtk_args).to be == %w(--display :10)
       end
 
       it "parses arg --display=DPY" do
@@ -48,7 +58,7 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
 
       it "parses arg --display=DPY to gtk_args" do
         subject.parse_opts(%w(--display=:11))
-        expect(subject.gtk_args).to include(":11")
+        expect(subject.gtk_args).to be == %w(--display :11)
       end
 
       it "parses arg -dDPY" do
@@ -58,26 +68,34 @@ describe %(PebblApp::GtkSupport::AppModule implementation) do
 
       it "parses arg -dDPY to gtk_args" do
         subject.parse_opts(%w(-d:12))
-        expect(subject.gtk_args).to include(":12")
+        expect(subject.gtk_args).to be == %w(--display :12)
       end
 
+      it "resets parsed args" do
+        subject.parsed_args=[]
+        subject.configure(argv: [])
+        expect(subject.parsed_args).to be == []
+      end
 
       it "overrides env DISPLAY with args" do
         ## FIXME this requires a working DISPLAY to set in the module's
-        ## option parser args
+        ## option parser args. (Needs test with xvfb)
+        ##
+        ## FIXME this may be deadlocking under GH actions - needs log
+        ## review, after whenever the action exits.
         if (initial_dpy = ENV['DISPLAY'])
           ENV['DISPLAY']= initial_dpy + ".nonexistent"
           subject.parse_opts(['--display', initial_dpy])
           expect(subject.display).to be == initial_dpy
-          subject.config[:gtk_init_timeout] = 5
-          expect { subject.activate }.to_not raise_error
         else
           RSpec::Expectations.fail_with("No DISPLAY configured in test environment")
         end
       end
 
-      after(:each) do
-        ENV['DISPLAY'] = display_initial
+      it "calls Gtk.init" do
+        subject.config[:gtk_init_timeout] = 5
+        expect { subject.activate(argv: []) }.to_not raise_error
       end
+
     end
 end

@@ -55,26 +55,26 @@ module PebblApp::GtkSupport::AppModule
 
       def display=(dpy)
         ## set the display, independent of parse_opts
-        if self.instance_variable_defined?(:@display)
-          raise "Display already configured in #{self}. Cannot set display #{dpy}"
-        else
-          @display = dpy
-        end
+        config[:display] = dpy
       end
 
       def display()
-        if self.instance_variable_defined?(:@display)
-          @display
-        else
-          ENV['DISPLAY'] ||
-            ( raise PebblApp::GtkSupport::ConfigurationError.new("No display configured") )
-        end
+        self.config[:display]
+      end
+
+      def unset_display()
+        self.config.delete(:display)
+      end
+
+      def display?()
+        self.config.has_key?(:display) ||
+          ENV.has_key?('DISPLAY')
       end
 
       def configure_option_parser(parser)
         parser.on("-d", "--display DISPLAY",
                   "X Window System Display, overriding DISPLAY") do |dpy|
-          @display = dpy
+          self.config[:display] = dpy
         end
       end
 
@@ -89,21 +89,20 @@ module PebblApp::GtkSupport::AppModule
       ## parse an array of command line arguments, using the option
       ## parser for this application module.
       ##
-      ## the provided argv value will be destructively modified by this
-      ## method.
+      ## the provided argv will be destructively modified by this method.
       def parse_opts(argv = ARGV)
         parser = self.make_option_parser()
         parser.parse!(argv)
       end
 
-
       ## configure this application module
+      ##
+      ## the provided argv will be destructively modified by this method.
       def configure(argv: ARGV)
         config[:gtk_init_timeout] ||= Const::GTK_INIT_TIMEOUT_DEFAULT
         self.parse_opts(argv)
         self.parsed_args = argv
       end
-
 
       def parsed_args()
         ## return a new array, which can accept any calls to push or unshift
@@ -115,17 +114,20 @@ module PebblApp::GtkSupport::AppModule
       end
 
       def gtk_args()
-        parsed = self.parsed_args
-        if self.instance_variable_defined?(:@display) || !ENV['DISPLAY']
-          ## ensure this errs if no display is configured in env
-          dpy = parsed.push(self.display)
-          parsed.push(%(--display))
-          parsed.push(dpy)
+        args = self.parsed_args.dup
+        if ! self.display?
+          raise PebblApp::GtkSupport::ConfigurationError.new("No display configured")
+        elsif self.config.has_key?(:display)
+          args.push(%(--display))
+          args.push(self.display)
         end
-        return parsed
+        return args
       end
 
       def activate(argv: ARGV)
+        if (ENV['XAUTHORITY'].nil?)
+          Kernel.warn("No XAUTHORITY found in environment", uplevel: 0)
+        end
         self.configure(argv: argv)
         ## preload GIR object definitions via Gtk.init
         ## with timeout on the call to Gtk.init
@@ -135,7 +137,6 @@ module PebblApp::GtkSupport::AppModule
           Gtk.init(* self.gtk_args)
         end
       end
-
-    end ## class << whence
-  end
+    end  ## class << whence
+  end ## self.included
 end
