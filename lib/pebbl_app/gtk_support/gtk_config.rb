@@ -29,12 +29,13 @@ class PebblApp::GtkSupport::GtkConfig < PebblApp::Support::Config
   ## 'DISPLAY' value is configured in the process environment, return
   ## that value. Else, return false
   def display()
-    if self.option?(:display)
-      self.options[:display]
-    elsif ENV.has_key?(Const::DISPLAY_ENV)
-      ENV[Const::DISPLAY_ENV]
-    else
-      false
+    self.option(:display) do
+      ## fallback block
+      if ENV.has_key?(Const::DISPLAY_ENV)
+        ENV[Const::DISPLAY_ENV]
+      else
+        false
+      end
     end
   end
 
