@@ -10,6 +10,52 @@ module PebblApp::Support::Files
 
   class << self
 
+    ## return a pathname removed of any directory and removed of any
+    ## type component, i.e removed of any component including and after
+    ## any dot "." character other than the fist character in the file
+    ## basename.
+    ##
+    ## This method will operate similarly for file names and directory
+    ## names, returning a name removed of any type extension.
+    ##
+    ## This method will parse any "Dot file" or "Dot directory" similar
+    ## to an ordinary filename.
+    ##
+    ## Examples:
+    ## ~~~~
+    ## using = PebblApp::Support
+    ## using::Files.shortname("/etc/login.conf") => "login"
+    ## using::Files.shortname("#{Dir.home}/.login.conf") => ".login"
+    ## using::Files.shortname(".bashrc") => ".bashrc"
+    ## using::Files.shortname(".") => "."
+    ## using::Files.shortname("..") => ".."
+    ## using::Files.shortname("/") => ""
+    ## using::Files.shortname("/a/b/") => "b"
+    ## using::Files.shortname("/b/.c/") => ".c"
+    ## using::Files.shortname(".files.d") => ".files"
+    ## ~~~~
+    ##
+    ## @param name [String] a filename
+    ##
+    ## @return [String] the filename removed of any filename type
+    ## extension
+    ##
+    def shortname(filename)
+      name = File.basename(filename)
+      if (name == File::SEPARATOR)
+        return "".freeze
+      else
+        namelen = name.length
+        if (namelen > 1 && name[0] == ".".freeze)
+          ext = File.extname(name[1..])
+        else
+          ext = File.extname(name)
+        end
+        shortlen = namelen - ext.length - 1
+        return name[..shortlen]
+      end
+    end
+
     ## create a temporary File.
     ##
     ## If a string name is provided, this will be used as a filename

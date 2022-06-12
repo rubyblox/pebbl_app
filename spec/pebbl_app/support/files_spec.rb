@@ -5,6 +5,21 @@ require 'pebbl_app/support/files'
 
 describe PebblApp::Support::Files do
 
+  it "parses filenames in shortname" do
+    using = PebblApp::Support
+    expect(using::Files.shortname("/etc/login.conf")).to be == "login"
+    expect(using::Files.shortname(".login.conf")).to be  == ".login"
+    expect(using::Files.shortname(".bashrc")) .to be  == ".bashrc"
+    expect(using::Files.shortname(".")).to be  == "."
+    expect(using::Files.shortname("..")).to be  == ".."
+    expect(using::Files.shortname("/")).to be  == ""
+    expect(using::Files.shortname("/a/b/")).to be  == "b"
+    expect(using::Files.shortname("/b/.c/")).to be  == ".c"
+    expect(using::Files.shortname(".files.d")).to be  == ".files"
+    expect(using::Files.shortname(".a.b.c.d.e.f")).to be  == ".a.b.c.d.e"
+    expect(using::Files.shortname("m.n.o")).to be  == "m.n"
+  end
+
   it "provides the temporary file to a block in mktmp" do
     described_class.mktmp do |f|
       expect(f).to_not be nil
