@@ -4,6 +4,9 @@
 require 'pebbl_app/gtk_support/gtk_config'
 
 describe PebblApp::GtkSupport::GtkConfig do
+  subject {
+    described_class.new(described_class)
+  }
 
   ## tests specs defined here may modify DISPLAY in the test
   ## environment. The initial value should be restored after

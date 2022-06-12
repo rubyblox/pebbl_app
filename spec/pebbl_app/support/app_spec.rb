@@ -121,7 +121,7 @@ describe PebblApp::Support::App do
         expect(described_class.username).to be == "whoami:#{stored_user}"
       end
 
-      it "fails or username when no user name is configured and the whoami call fails" do
+      it "fails in username when no user name is configured and the whoami call fails" do
         ## ensure that the local whomai mock is not in PATH
         ENV['PATH'] = "/nonexistent"
         ## ensure that no USER string is present in the process environment

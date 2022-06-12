@@ -311,7 +311,7 @@ class PebblApp::Support::App
 
   ## return a configuration object for this application
   def config
-    @config ||= PebblApp::Support::Config.new
+    @config ||= PebblApp::Support::Config.new(self)
   end
 
   ## configure this application

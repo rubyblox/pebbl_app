@@ -8,6 +8,7 @@ require 'forwardable'
 
 class PebblApp::Support::Config
 
+  ## Constants for PebblApp::Support::Config
   module Const
     GTK_INIT_TIMEOUT_DEFAULT = 15
   end
@@ -18,7 +19,10 @@ class PebblApp::Support::Config
   def_delegators(:@options, :[], :[]=, :delete_field, :delete_field!,
                  :each_pair, :to_enum, :enum_for)
 
-  def initialize(options = nil)
+  attr_reader :for_app
+
+  def initialize(for_app, options = nil)
+    @for_app = for_app
     @options = options ? OpenStruct.new(options) : OpenStruct.new
   end
 

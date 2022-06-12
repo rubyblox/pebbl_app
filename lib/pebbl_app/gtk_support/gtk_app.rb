@@ -42,10 +42,15 @@ class PebblApp::GtkSupport::GtkApp < PebblApp::Support::App
   ## any objects that would be initilized in the Ruby process with Gtk.init
 
   def config
-    @config ||= PebblApp::GtkSupport::GtkConfig.new
+    @config ||= PebblApp::GtkSupport::GtkConfig.new(self)
   end
 
   def activate(argv: ARGV)
+    super(argv: argv)
+    ## reduce memory usage, clearing the module's original autoloads
+    ## definitions
+    PebblApp::GtkSupport.freeze unless self.config.option(:defer_freeze)
+
     if (ENV['XAUTHORITY'].nil?)
       Kernel.warn("No XAUTHORITY found in environment", uplevel: 0)
     end
