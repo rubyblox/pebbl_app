@@ -3,6 +3,7 @@
 ## define modules, autoloads
 require 'pebbl_app/support'
 
+require 'forwardable'
 require 'tempfile'
 
 ## Filesystem Support
