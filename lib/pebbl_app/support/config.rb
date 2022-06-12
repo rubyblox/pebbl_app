@@ -44,7 +44,7 @@ class PebblApp::Support::Config
   def option(name, default = false, &fallback)
     opt = name.to_sym
     if self.option?(opt)
-      return self.options.send(opt)
+      return self.options[opt]
     elsif block_given?
       fallback.yield(opt)
     else

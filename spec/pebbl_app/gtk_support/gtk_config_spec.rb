@@ -78,13 +78,17 @@ describe PebblApp::GtkSupport::GtkConfig do
   end
 
   it "configures gtk_args from a provided argv" do
-    initial = ARGV
+    initial = ARGV.dup
     begin
-      ARGV=["--anti-option"]
+      ARGV.clear
+      ARGV.push("--anti-option")
       subject.configure(argv: ["other.filename"])
       expect(subject.gtk_args).to be == ["other.filename"]
     ensure
-      ARGV = initial
+      ARGV.clear
+      initial.each do |arg|
+        ARGV.push arg
+      end
     end
   end
 

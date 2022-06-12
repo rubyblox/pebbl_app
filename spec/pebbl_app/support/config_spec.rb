@@ -11,6 +11,36 @@ describe PebblApp::Support::Config do
     described_class.new(app)
   }
 
+  it "sets an option" do
+    expect(subject.option?(:option)).to be false
+    subject[:option] = true
+    expect(subject.option?(:option)).to be true
+  end
+
+  it "deconfigures an option" do
+    subject[:option] = true
+    expect(subject.option?(:option)).to be true
+    subject.deconfigure(:option)
+    expect(subject.option?(:option)).to be false
+  end
+
+  it "stores an option value" do
+    subject[:option] = "value"
+    expect(subject.option?(:option)).to be true
+    expect(subject[:option]).to be == "value"
+    subject.deconfigure(:option)
+  end
+
+  it "uses a block for option value fallback" do
+    expect(subject.option(:nonexistent, false) do |name|
+             :fallback
+           end).to be == :fallback
+  end
+
+  it "returns a default option value" do
+    expect(subject.option(:nonexistent, :not_found)).to be == :not_found
+  end
+
   it "sets the app cmd name as the option parser's program name" do
     parser = subject.make_option_parser
     expect(app.app_cmd_name).to be == parser.program_name
@@ -32,13 +62,17 @@ describe PebblApp::Support::Config do
 
 
   it "configures parsed args from a provided argv" do
-    initial = ARGV
+    initial = ARGV.dup
     begin
-      ARGV=["--anti-option"]
+      ARGV.clear
+      ARGV.push("--anti-option")
       subject.configure(argv: ["other.filename"])
       expect(subject.parsed_args).to be == ["other.filename"]
     ensure
-      ARGV = initial
+      ARGV.clear
+      initial.each do |arg|
+        ARGV.push arg
+      end
     end
   end
 end

@@ -6,6 +6,11 @@ require 'optparse'
 
 class PebblApp::GtkSupport::GtkConfig < PebblApp::Support::Config
 
+  ## Constants for PebblApp::GtkSupport::GtkConfig
+  module Const
+    DISPLAY_ENV ||= 'DISPLAY'.freeze
+  end
+
   ## set a display option for this instance
   ##
   ## This method will not modify the process environment.
@@ -26,8 +31,8 @@ class PebblApp::GtkSupport::GtkConfig < PebblApp::Support::Config
   def display()
     if self.option?(:display)
       self.options[:display]
-    elsif (dpy = ENV['DISPLAY'])
-      dpy
+    elsif ENV.has_key?(Const::DISPLAY_ENV)
+      ENV[Const::DISPLAY_ENV]
     else
       false
     end
@@ -46,7 +51,7 @@ class PebblApp::GtkSupport::GtkConfig < PebblApp::Support::Config
   ## environment
   def display?()
     self.option?(:display) ||
-      ENV.has_key?('DISPLAY')
+      ENV.has_key?(Const::DISPLAY_ENV)
   end
 
   ## configure an argv options parser for this instance
