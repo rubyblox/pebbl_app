@@ -330,6 +330,9 @@ class PebblApp::Support::App
   ## the provided argv may be destructively modified by this method
   def activate(argv: ARGV)
     configure(argv: argv)
+    ## reduce memory usage, clearing the module's original autoloads
+    ## definitions
+    PebblApp::Support.freeze unless self.config.option(:defer_freeze)
   end
 
 end

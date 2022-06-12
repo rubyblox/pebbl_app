@@ -561,6 +561,25 @@ module PebblApp::Project::ProjectModule
       end
     end
 
+    ## reduce memory usage for this module, removing each element of the
+    ## autoloads table and freezing the autoloads table, before calling
+    ## the method super
+    ##
+    ## This method will freeze definitions for classes and modules
+    ## defined within the module's namespace. Applications should ensure
+    ## that all source files required for this module at runtime will
+    ## have been evaluted, moreover that all runtime class amd module
+    ## definitions for this module and for any classes or modules
+    ## referencing this module will have been completed before calling
+    ## this method.
+    def freeze()
+      self.autoloads.keys.each do |name|
+        self.autoloads.delete(name)
+      end
+      self.autoloads.freeze
+      super()
+    end
+
     end ## class << whence
 end
 

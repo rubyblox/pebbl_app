@@ -10,6 +10,7 @@ describe PebblApp::GtkSupport::GtkApp do
     ENV.delete('DISPLAY')
     null_argv = []
     begin
+      subject.config.options[:defer_freeze] = true
       expect { subject.activate(argv: null_argv) }.to raise_error(
         PebblApp::GtkSupport::ConfigurationError
       )
@@ -22,6 +23,7 @@ describe PebblApp::GtkSupport::GtkApp do
     ## this test spec will have side effects that may affect any
     ## later tests using GNOME components
     subject.config.options[:gtk_init_timeout] = 5
+    subject.config.options[:defer_freeze] = true
     expect { subject.activate(argv: []) }.to_not raise_error
   end
 

@@ -25,6 +25,59 @@ shared_examples_for 'a project module' do |conf|
       end
     end
   end
+
+  it "clears autoloads table on freeze" do
+    ## This test forks the active Ruby process. This is in order to
+    ## conduct the test without modifications to the initial test
+    ## environment such that would prevent succesful evaluation of later
+    ## tests within this rspec process.
+    if (subpid = Process.fork)
+      Process.waitpid(subpid)
+      status = $?
+      ## The exit status will be an encoded bitmask value, such that
+      ## should provide some diagnostic information as to which tests
+      ## failed in the forked process.
+      ##
+      ## Each condition as indicated in the exit status will be added to
+      ## a single message string for the failed instance.
+      if ! (status.exitstatus.eql?(0))
+        failcode = status.exitstatus
+        reasons = []
+        if (failcode & 1) != 0
+          reasons.push "exception during freeze"
+        elsif (failcode & 2) != 0
+          reasons.push "autoloads non-empty after freeze"
+        end
+        if (failcode & 4) != 0
+          reasons.push "autoloads not frozen after freeze"
+        end
+        RSpec::Expectations.fail_with reasons.join(", ")
+      end
+    else
+      ## running in the subproces, where the testing will be conducted
+      ##
+      ## this will exit the subprocess with a bitmask value indicating
+      ## which tests failed, after printing any captured exception in
+      ## the tested method to STDERR
+      ex = 0
+      begin
+        begin
+          ns.freeze
+        rescue
+          ex = 1
+          STDERR.puts $!
+        end
+        if (! ns.autoloads.length.eql?(0))
+          ex = ex + 2
+        end
+        if (! ns.autoloads.frozen?)
+          ex = ex + 4
+        end
+      ensure
+        exit(ex)
+      end
+    end
+  end ## freeze test
 end
 
 describe PebblApp::Support do
