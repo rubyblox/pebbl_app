@@ -19,7 +19,9 @@ require 'optparse'
 ##
 ## More info:
 ## https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
-class PebblApp::Support::App
+module PebblApp::Support
+
+class App
 
   ## Constants for PebblApp::Support::App
   module Const
@@ -92,25 +94,25 @@ class PebblApp::Support::App
 
     def data_home
       envdir(Const::XDG_DATA_HOME_ENV) do
-        return (File.join(self.home, Const::XDG_DATA_SUBDIR))
+        return (Files.join(self.home, Const::XDG_DATA_SUBDIR))
       end
     end
 
     def config_home
       envdir(Const::XDG_CONFIG_HOME_ENV) do
-        return (File.join(self.home, Const::XDG_CONFIG_SUBDIR))
+        return (Files.join(self.home, Const::XDG_CONFIG_SUBDIR))
       end
     end
 
     def cache_home
       envdir(Const::XDG_CACHE_HOME_ENV) do
-        return (File.join(self.home, Const::XDG_CACHE_SUBDIR))
+        return (Files.join(self.home, Const::XDG_CACHE_SUBDIR))
       end
     end
 
     def state_home
       envdir(Const::XDG_STATE_HOME_ENV) do
-        return File.join(self.home, Const::XDG_STATE_SUBDIR)
+        return Files.join(self.home, Const::XDG_STATE_SUBDIR)
       end
     end
 
@@ -126,7 +128,7 @@ class PebblApp::Support::App
       ## FIXME offer a pedantic mode to check file permissions before
       ## returning any existing directory path
       envd = ENV[Const::XDG_RUNTIME_DIR_ENV]
-      if envd && File.exists?(envd) && File.owned?(envd)
+      if envd && Files.exists?(envd) && Files.owned?(envd)
         return envd
       else
         ## produce a reasonable workaround, assuming that the directory
@@ -138,15 +140,15 @@ class PebblApp::Support::App
         ## single uptime session on the host. This should be generally
         ## portable, regardless.
         run_subdir = format("run-%d", Process.uid)
-        rundir = File.join(self.tmpdir, run_subdir)
+        rundir = Files.join(self.tmpdir, run_subdir)
         n = 0
-        while File.exists(rundir) && !File.owned?(rundir)
+        while Files.exists(rundir) && !Files.owned?(rundir)
           rundir = rundir + Const::DOT + n
           n = n + 1
         end
-        if !File.exists(rundir)
-          PebblApp::Support::Files.mkdir_p(rundir)
-          File.chmod(0o0700, rundir)
+        if !Files.exists(rundir)
+          Files.mkdir_p(rundir)
+          Files.chmod(0o0700, rundir)
         end
         return rundir
       end
@@ -167,7 +169,7 @@ class PebblApp::Support::App
             ##
             ## FIXME this needs test with ruby under mingw, where ideally a
             ## POSIX-like 'whoami' would be available under PATH
-            return File.basename(who_str.chomp)
+            return Files.basename(who_str.chomp)
           else
             raise PebblApp::Support::EnvironmentError.new(
               "Unable to determine username. Shell command %p failed (%d): %p" % [
@@ -194,13 +196,13 @@ class PebblApp::Support::App
 
     def map_join(name, dirs)
       dirs.map do |p|
-        File.join(p, name)
+        Files.join(p, name)
       end
     end
 
     def flatten_dirs(dirs)
       dirs.flat_map do |d|
-        if File.directory?(d)
+        if Files.directory?(d)
           d
         else
           self::Const::NULL_ARRAY
@@ -268,47 +270,47 @@ class PebblApp::Support::App
   end
 
   def app_config_home()
-    File.join(self.class.config_home, app_dirname)
+    Files.join(self.class.config_home, app_dirname)
   end
 
   ## return the value of #app_config_home,
   ## ensuring the directory exists
   def app_config_home!()
     dir = app_config_home
-    PebblApp::Support::Files.mkdir_p(dir)
+    Files.mkdir_p(dir)
     return dir
   end
 
   def app_state_home()
-    File.join(self.class.state_home, app_dirname)
+    Files.join(self.class.state_home, app_dirname)
   end
 
   ## return the value of #app_state_home,
   ## ensuring the directory exists
   def app_state_home!()
     dir = app_state_home
-    PebblApp::Support::Files.mkdir_p(dir)
+    Files.mkdir_p(dir)
     return dir
   end
 
   def app_cache_home()
-    File.join(self.class.cache_home, app_dirname)
+    Files.join(self.class.cache_home, app_dirname)
   end
 
   ## return the value of #app_cache_home,
   ## ensuring the directory exists
   def app_cache_home!()
     dir = app_cache_home
-    PebblApp::Support::Files.mkdir_p(dir)
+    Files.mkdir_p(dir)
     return dir
   end
 
   def app_runtime_dir!()
     basedir = self.class.runtime_dir!
-    dir = File.join(basedir, app_dirname)
-    if !File.exists(rundir)
-      PebblApp::Support::Files.mkdir_p(dir)
-      File.chmod(0o0700, dir)
+    dir = Files.join(basedir, app_dirname)
+    if !Files.exists?(rundir)
+      Files.mkdir_p(dir)
+      Files.chmod(0o0700, dir)
     end
     return dir
   end
@@ -341,3 +343,4 @@ class PebblApp::Support::App
 end
 
 
+end

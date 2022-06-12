@@ -10,6 +10,27 @@ module PebblApp::Support::Files
 
   class << self
 
+    extend Forwardable
+
+    ## class methods on File other than for stream I/O in Ruby
+    %w(ctime birthtime utime chmod chown lchmod lchown lutime link
+       symlink readlink lstat unlink rename umask truncate expand_path
+       mkfifo absolute_path? absolute_path realdirpath realpath dirname
+       basename fnmatch empty? path extname fnmatch? size split join
+       delete directory? exist? exists? readable? readable_real?
+       world_readable? writable? writable_real? world_writable?
+       executable? executable_real? file? size? owned? grpowned? pipe?
+       symlink? socket? zero? blockdev? chardev? setuid? sticky?
+       identical? setgid? stat ftype atime mtime).each do |name|
+      def_delegator(File, name.to_sym)
+    end
+
+    ## a subset of class methods on Dir
+    %w(tmpdir each_child children chdir pwd chroot mkdir rmdir
+       home glob empty?).each do |name|
+      def_delegator(Dir, name.to_sym)
+    end
+
     ## return a pathname removed of any directory and removed of any
     ## type component, i.e removed of any component including and after
     ## any dot "." character other than the fist character in the file
