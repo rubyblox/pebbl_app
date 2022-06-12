@@ -54,7 +54,7 @@ shared_examples_for 'a project module' do |conf|
         RSpec::Expectations.fail_with reasons.join(", ")
       end
     else
-      ## running in the subproces, where the testing will be conducted
+      ## running in the subprocess, where the testing will be conducted
       ##
       ## this will exit the subprocess with a bitmask value indicating
       ## which tests failed, after printing any captured exception in

@@ -24,7 +24,6 @@ class PebblApp::Support::App
   ## Constants for PebblApp::Support::App
   module Const
     NULL_ARRAY ||= [].freeze
-    NS_DELIM ||= "::".freeze
     DOT ||= ".".freeze
     MENUS ||= "menus".freeze
     HOME_ENV ||= "HOME".freeze

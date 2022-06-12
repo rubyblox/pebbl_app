@@ -176,7 +176,6 @@ module PebblApp::Project::ProjectModule
 
   class << self
 
-
     ## return a string filename for a symbol or string S
     ##
     ## For any uppercase character after the first index in the string
