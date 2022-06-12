@@ -331,11 +331,11 @@ class RIViewApp < PebblApp::GtkSupport::GBuilderApp
       ## instead operate across all installed gems w/ an avaialble RI
       ## documentation store
       begin
-        st = RIKit::StoreTool.gem_storetool(s)
+        st = RIKit::StoreTool.gem_storetool(s.name)
         h[st.path]=st
       rescue RIKit::QueryError, ArgumentError => e
-        ## NOP case
-        Kernel.warn("Ignoring exception during app initialization: #{e}",
+        ## API needs update @ "No RDoc storag found" here (RIKit::QueryError)
+        Kernel.warn("Ignoring exception during app initialization ({#{e.class}): #{e}",
                     uplevel: 1)
       end
     }
