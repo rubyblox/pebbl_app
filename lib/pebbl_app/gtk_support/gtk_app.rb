@@ -62,7 +62,6 @@ class PebblApp::GtkSupport::GtkApp < PebblApp::Support::App
     if (ENV['XAUTHORITY'].nil?)
       Kernel.warn("No XAUTHORITY found in environment", uplevel: 0)
     end
-    self.configure(argv: argv)
     ## preload GIR object definitions via Gtk.init
     ## with timeout on the call to Gtk.init
     time = self.config.option(:gtk_init_timeout, Const::GTK_INIT_TIMEOUT_DEFAULT)

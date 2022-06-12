@@ -77,6 +77,17 @@ describe PebblApp::GtkSupport::GtkConfig do
     expect(subject.parsed_args).to be == []
   end
 
+  it "configures gtk_args from a provided argv" do
+    initial = ARGV
+    begin
+      ARGV=["--anti-option"]
+      subject.configure(argv: ["other.filename"])
+      expect(subject.gtk_args).to be == ["other.filename"]
+    ensure
+      ARGV = initial
+    end
+  end
+
   it "indicates when no display is configured" do
     ENV.delete('DISPLAY')
     null_argv = []

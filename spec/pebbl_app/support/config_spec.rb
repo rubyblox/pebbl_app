@@ -30,4 +30,15 @@ describe PebblApp::Support::Config do
     expect(usage_lines).to include("-h")
   end
 
+
+  it "configures parsed args from a provided argv" do
+    initial = ARGV
+    begin
+      ARGV=["--anti-option"]
+      subject.configure(argv: ["other.filename"])
+      expect(subject.parsed_args).to be == ["other.filename"]
+    ensure
+      ARGV = initial
+    end
+  end
 end

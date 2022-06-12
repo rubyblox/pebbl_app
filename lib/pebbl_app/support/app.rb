@@ -325,7 +325,7 @@ module PebblApp::Support
     ##
     ## the provided argv may be destructively modified by this method
     def configure(argv: ARGV)
-      config.configure(argv: ARGV)
+      config.configure(argv: argv)
     end
 
     ## activate the application
