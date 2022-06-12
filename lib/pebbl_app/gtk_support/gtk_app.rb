@@ -27,6 +27,14 @@ require 'timeout'
 ## - provide support for issue tracking for applications
 class PebblApp::GtkSupport::GtkApp < PebblApp::Support::App
 
+  ## Constants for PebblApp::GtkSupport::GtkApp
+  module Const
+    ## default timeout for Gtk.init, measured in seconds. This value
+    ## will be used if no :gtk_init_timeout was configured as a
+    ## GtkApp#config.option for the GtkApp
+    GTK_INIT_TIMEOUT_DEFAULT = 15
+  end
+
   ## using PebblApp::Support::AppModule @ config dirs, YAML suport
   ## 1. compute a timeout for Gtk.init
   ## 2. compute a default display for Gtk.init
@@ -57,7 +65,7 @@ class PebblApp::GtkSupport::GtkApp < PebblApp::Support::App
     self.configure(argv: argv)
     ## preload GIR object definitions via Gtk.init
     ## with timeout on the call to Gtk.init
-    time = self.config.option(:gtk_init_timeout)
+    time = self.config.option(:gtk_init_timeout, Const::GTK_INIT_TIMEOUT_DEFAULT)
     Timeout::timeout(time, Timeout::Error, "Timeout in Gtk.init") do
       require 'gtk3'
       Gtk.init(* self.config.gtk_args)

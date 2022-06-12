@@ -60,6 +60,17 @@ describe PebblApp::GtkSupport::GtkConfig do
     expect(subject.gtk_args).to be == %w(--display :12)
   end
 
+  it "parses arg --gtk-init-timeout TIME to gtk_args" do
+    subject.parse_opts(%w(--gtk-init-timeout 5))
+    expect(subject.option(:gtk_init_timeout)).to be == 5
+  end
+
+  it "parses arg -tTIME to gtk_args" do
+    subject.parse_opts(%w(-t10))
+    expect(subject.option(:gtk_init_timeout)).to be == 10
+  end
+
+
   it "resets parsed args" do
     subject.parsed_args=[]
     subject.configure(argv: [])

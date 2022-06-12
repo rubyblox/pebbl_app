@@ -241,6 +241,10 @@ class PebblApp::Support::App
     app_name.downcase
   end
 
+  def app_cmd_name
+    return $0
+  end
+
   def app_data_dirs()
     dirs = self.class.flatten_dirs(self.class.data_dirs)
     ## FIXME this assumes that any of the dirs would be created

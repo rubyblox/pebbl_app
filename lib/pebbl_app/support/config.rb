@@ -8,11 +8,6 @@ require 'forwardable'
 
 class PebblApp::Support::Config
 
-  ## Constants for PebblApp::Support::Config
-  module Const
-    GTK_INIT_TIMEOUT_DEFAULT = 15
-  end
-
   include Enumerable
   extend Forwardable
   ## FIXME test each delegaged method
@@ -46,8 +41,15 @@ class PebblApp::Support::Config
     end
   end
 
-  def option(name)
-    return self.options.send(name.to_sym)
+  def option(name, default = false, &fallback)
+    opt = name.to_sym
+    if self.option?(opt)
+      return self.options.send(opt)
+    elsif block_given?
+      fallback.yield(opt)
+    else
+      return default
+    end
   end
 
   ## create, configure, and return a new option parser for this
@@ -58,31 +60,48 @@ class PebblApp::Support::Config
     end
   end
 
+  ## configure an argv options parser for this instance
+  ##
+  ## @param parser [OptionParser] the parser to configure
   def configure_option_parser(parser)
-    ## FIME add a default -h / --help parser => usage docs from the parser
+    cmd = self.for_app.app_cmd_name
+    parser.program_name = cmd
+    parser.banner = "Usage: #{cmd} [options]".freeze
+    parser.separator "".freeze
+    parser.separator "Options:".freeze
+    parser.on_head("-h", "--help", "Show this help") do
+      puts parser
+      exit unless self.option[:persist]
+    end
   end
 
-  ## parse an array of command line arguments, using the option
-  ## parser for this application.
+  ## configure any default options for this instance and parse
+  ## the array of command line arguments as using the option parser for
+  ## this instance.
   ##
   ## the provided argv will be destructively modified by this method.
   def parse_opts(argv = ARGV)
-    self.options[:gtk_init_timeout] ||= Const::GTK_INIT_TIMEOUT_DEFAULT
     parser = self.make_option_parser()
     parser.parse!(argv)
   end
 
-  ## return the set of parsed args for this application, or a new,
+  ## return the set of parsed args for this instance, or a new
   ## empty array if no value was previously bound
   def parsed_args()
     @parsed_args ||= []
   end
 
-  ## set the array of parsed args for this application
+  ## set the array of parsed args for this instance
   def parsed_args=(value)
     @parsed_args=value
   end
 
+  ## configure this instance, parsing any options provided in argv
+  ## then setting this instance's parsed_args field to the resulting
+  ## value of argv
+  ##
+  ## @param argv [Array<String>] options for this instance, using a
+  ##        shell command string syntax for the set of options
   def configure(argv: ARGV)
     self.parse_opts(argv)
     self.parsed_args = argv

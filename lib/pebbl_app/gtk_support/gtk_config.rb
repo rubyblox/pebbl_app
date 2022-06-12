@@ -57,6 +57,10 @@ class PebblApp::GtkSupport::GtkConfig < PebblApp::Support::Config
               "X Window System Display, overriding DISPLAY") do |dpy|
       self.display = dpy
     end
+    parser.on("-t", "--gtk-init-timeout TIMEOUT",
+              "Timeout in seconds for Gtk.init") do |timeout|
+      self.options[:gtk_init_timeout] = timeout.to_r
+    end
   end
 
   ## return an array of arguments for Gtk.init, as initialized under
