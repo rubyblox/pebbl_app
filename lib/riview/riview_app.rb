@@ -18,7 +18,17 @@ require 'pebbl_app/gtk_support'
 require 'rikit'
 require 'gtk3'
 
-Gtk.init()
+require 'timeout'
+
+success = false
+Timeout::timeout(5) {
+  ## Gtk.init_with_args will call Gtk.init intrinsically
+  success, args = Gtk.init_with_args(ARGV, "riview", [], nil)
+}
+if ! success
+  raise "Gtk.init_with_args failed"
+end
+
 
 module RIView
 
