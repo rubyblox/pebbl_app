@@ -71,7 +71,6 @@ publish_gems:
 #  - pebbl_app-gtk_support
 gems:
   pebbl_app-support:
-    version: 1.0.4
     modules:
       - PebblApp::Project
       - PebblApp::Support
@@ -86,7 +85,12 @@ gems:
       - lib/pebbl_app/project/y_spec.rb
       - lib/pebbl_app/support.rb
       - lib/pebbl_app/support/app.rb
+      - lib/pebbl_app/support/app_prototype.rb
       - lib/pebbl_app/support/config.rb
+      - lib/pebbl_app/support/const.rb
+      - lib/pebbl_app/support/exceptions.rb
+      - lib/pebbl_app/support/file_manager.rb
+      - lib/pebbl_app/support/files.rb
     sandbox_files:
       ## not published with the gem. To define autoloads for these files e.g:
       ##    require 'thinkum_space/project'
@@ -115,7 +119,7 @@ gems:
       - pebbl_app-support
     source_files:
       - lib/pebbl_app/gtk_support.rb
-      - lib/pebbl_app/gtk_support/gtk_app.rb
+      - lib/pebbl_app/gtk_support/gtk_app_prototype.rb
       - lib/pebbl_app/gtk_support/gtk_config.rb
       - lib/pebbl_app/gtk_support/exceptions.rb
       ## earlier prototype definitions:

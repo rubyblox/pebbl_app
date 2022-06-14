@@ -26,8 +26,8 @@ module PebblApp::GtkSupport
   end
 
   defautoloads({
-    "gtk_support/gtk_app" =>
-      %w(GtkApp),
+    "gtk_support/gtk_app_prototype" =>
+      %w(GtkAppPrototype),
     "gtk_support/gtk_config" =>
       %w(GtkConfig),
     "gtk_support/exceptions" =>

@@ -30,9 +30,29 @@ $ sudo zypper install gobject-introspection-devel
 ~~~~
 
 GTK and other GNOME libraries may typically be installed as part of a
-desktop environment on the host. These libraries should be installed
-separately along with any corresponding typelib data, previous to
-installing the [Ruby-GNOME][ruby-gnome] gems.
+desktop environment on the host.
+
+These libraries should be installed separately, along with any
+corresponding typelib data, previous to installing the
+[Ruby-GNOME][ruby-gnome] gems.
+
+For openSUSE Tumbleweed platforms, the set of package dependencies for
+this project includes:
+
+> libatk-1_0-0 libcairo-gobject2 libcairo-script-interpreter2 libcairo2
+> libfontconfig1 libfreetype6 libgdk_pixbuf-2_0-0 libgio-2_0-0
+> libgirepository-1_0-1 libglib-2_0-0 libgobject-2_0-0 libgthread-2_0-0
+> libgtk-3-0 libharfbuzz-gobject0 libharfbuzz-icu0 libharfbuzz-subset0
+> libharfbuzz0 libpango-1_0-0 gobject-introspection-devel
+
+This is in addition to typelib information on SUSE platforms, for each
+library.
+
+If the Cinnamon desktop platform or gnome-builder is installed in
+addition to `gobject-introspection-devel`, this should serve to ensure
+that all dependencies for Ruby-GNOME are installed, including any
+library and typelib dependencies.
+
 
 **Debian-Based Distributions**
 
@@ -40,8 +60,8 @@ On Debian hosts, the set of installation dependencies for
 [Ruby-GNOME][ruby-gnome] can be resolved by installing the
 `ruby-gnome` Debian package.
 
-The corresponding '-dev' package should be installed, to ensure that
-extensions can be built for the Ruby installation on the host.
+The corresponding '-dev' package should also be installed, to ensure
+that extensions can be built for the Ruby installation.
 
 ~~~~
 $ sudo bash -c 'apt-get update && apt-get install ruby-gnome ruby-gnome-dev'
@@ -53,14 +73,16 @@ On FreeBSD hosts, the set of installation dependencies for
 [Ruby-GNOME][ruby-gnome] can be resolved by installing the
 `rubygem-gnome` FreeBSD package.
 
-Similar to the approach with Debian hosts, this will install the latest
-[Ruby-GNOME][ruby-gnome] packages for the Ruby version used in building
-the package repository configured on the host. This will ensure that the
-gems are installed, along with depdendencies for each.
-
 ~~~~
 $ sudo pkg install rubygem-gnome
 ~~~~
+
+Similar to the approach with Debian hosts, this will install the latest
+[Ruby-GNOME][ruby-gnome] packages for the distribution's default Ruby
+version. Independent of whether this specific Ruby version will be used
+for Pebbl App development, installing the `rubygem-gnome` pkg will also
+serve to ensure that all dependencies are installed for
+[Ruby-GNOME][ruby-gnome] support on FreeBSD.
 
 **All Platforms**
 
@@ -76,8 +98,12 @@ This will serve to ensure that the gems are configured and built
 independent of any gems installed from the host package management
 system or **gem(1)**.
 
+Once the build dependencies for any Gem extensions have been installed,
+installation under a _bundle path_ will typically not require superuser
+credentials.
+
 When installing under a _bundle path_, bundler will use the latest
-gem versions available from [Ruby Gems][rubygems] and within the set of
+gem versions available from [Ruby Gems][rubygems], limited to the set of
 gem version requirements in this project.
 
 **Compiler Toolchain**
@@ -99,35 +125,17 @@ irb(main):002:0> RbConfig::CONFIG['CC_VERSION_MESSAGE'].split("\n")[0]
 => "gcc (SUSE Linux) 12.1.0"
 ~~~
 
-**Alternative: Using Locally Installed Gems for Dependencies**
-
-If all of the dependencies for the Pebbl App project are available and
-installed, such as installed from the host package management system and
-`gem install`, then bundler can be configured for local installation
-only.
-
-For a clean installation using only the locally installed gems:
-
-~~~
-$ cd source_tree
-$ for OBJ in Gemfile.lock .bundle/config vendor/bundle ; do
-   if [ -e ${OBJ} ]; then mv ${OBJ} ${OBJ}.bak; fi; done
-$ bundle install --local --with=development
-~~~~
-
-When all gem dependencies for the project can be met from gems that are
-already installed, then this provides an alternative to fetching,
-building, and installing the gems for this project only.
-
 **Development Dependencies**
 
-This project's development dependencies can be installed separately.
+This project's _development_ dependencies can be installed
+separately. These dependencies would normally be required for Pebbl App
+development, e.g **rake**, installed under the configured bundle path.
 
-For example, selecting development dependencies during
+For example, selecting _development_ dependencies before
 **bundle-install(1)**:
 
 ~~~~
-$ cd source_tree && bundle install --with=development
+$ cd source_tree && bundle config set --local with development && bundle install
 ~~~~
 
 ## Running the Tests
@@ -151,6 +159,26 @@ $ Xvfb :10 & env DISPLAY=:10 bundler exec rspec
 * **Debian:** `xvfb`
 * **FreeBSD:** `xorg-vfbserver` (`x11-servers/xorg-vfbserver`)
 
+
+**Interactive Evaluation**
+
+Following `bundle install` with development dependencies enabled under
+`bundle config`, an interactive console can be initialized for `irb`
+
+~~~~
+$ bundle exec irb
+~~~~
+
+For `pry`, the `pry` gem can be added as a development dependency in
+`Gemfile.local`. This file, if it exists, will be included from the main
+project `Gemfile`.
+
+~~~~
+$ cd source_tree
+$ echo 'gem "pry", group: :development' >> Gemfile.local
+$ bundle config set --local with development
+$ bundle exec pry
+~~~~
 
 ### Primary Work Areas
 

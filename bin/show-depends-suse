@@ -1,0 +1,39 @@
+#!/bin/sh
+
+## utility script for showing library dependencies from the host
+## packaging system, on SUSE platforms
+##
+## this integrates with the show_depends_libs task in the project's
+## Rakefile.
+##
+## this script should be run from the project's working directory
+##
+## usage: ./bin/show-depends-suse
+##
+## Rationale:
+## - Illustrates library => package dependencies, after a succesful
+##   bundler installation on SUSE platforms
+## - Utility script, pusuant towards documentation updates
+##
+## Assumptions:
+## - that this shell script is run after 'bundle install'
+##   from within the project working directory
+## - that all dependencies are installed on the host
+## - that the host is running a SUSE Linux OS
+
+
+#set -x
+set -e
+
+LIBS=$(bundle exec rake show_depends_libs 2>/dev/null |
+           awk 'BEGIN {FS=":[[:space:]]"} $1 == "LIBS" { print $2; exit }')
+
+
+if [ "x${LIBS}" != "x" ]; then
+   zypper --no-refresh search --match-words --provides ${LIBS} |
+       awk 'BEGIN {ORS=" " } $1 ~ "^i" && $3 ~ "^lib" { print $3 }'
+else
+    echo "$0: no dependencies found" 1>&2
+    exit 1
+fi
+

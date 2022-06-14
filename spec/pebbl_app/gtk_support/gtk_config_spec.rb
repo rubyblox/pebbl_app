@@ -31,42 +31,42 @@ describe PebblApp::GtkSupport::GtkConfig do
   end
 
   it "parses arg --display DPY" do
-    subject.parse_opts(%w(--display :10))
+    subject.parse_opts!(%w(--display :10))
     expect(subject.display).to be == ":10"
   end
 
   it "parses arg --display DPY to gtk_args" do
-    subject.parse_opts(%w(--display :10))
+    subject.parse_opts!(%w(--display :10))
     expect(subject.gtk_args).to be == %w(--display :10)
   end
 
   it "parses arg --display=DPY" do
-    subject.parse_opts(%w(--display=:11))
+    subject.parse_opts!(%w(--display=:11))
     expect(subject.display).to be == ":11"
   end
 
   it "parses arg --display=DPY to gtk_args" do
-    subject.parse_opts(%w(--display=:11))
+    subject.parse_opts!(%w(--display=:11))
     expect(subject.gtk_args).to be == %w(--display :11)
   end
 
   it "parses arg -dDPY" do
-    subject.parse_opts(%w(-d:12))
+    subject.parse_opts!(%w(-d:12))
     expect(subject.display).to be == ":12"
   end
 
   it "parses arg -dDPY to gtk_args" do
-    subject.parse_opts(%w(-d:12))
+    subject.parse_opts!(%w(-d:12))
     expect(subject.gtk_args).to be == %w(--display :12)
   end
 
   it "parses arg --gtk-init-timeout TIME to gtk_args" do
-    subject.parse_opts(%w(--gtk-init-timeout 5))
+    subject.parse_opts!(%w(--gtk-init-timeout 5))
     expect(subject.option(:gtk_init_timeout)).to be == 5
   end
 
   it "parses arg -tTIME to gtk_args" do
-    subject.parse_opts(%w(-t10))
+    subject.parse_opts!(%w(-t10))
     expect(subject.option(:gtk_init_timeout)).to be == 10
   end
 
@@ -102,7 +102,7 @@ describe PebblApp::GtkSupport::GtkConfig do
   it "overrides env DISPLAY with any display arg" do
     if (initial_dpy = ENV['DISPLAY'])
       ENV['DISPLAY']= initial_dpy + ".nonexistent"
-      subject.parse_opts(['--display', initial_dpy])
+      subject.parse_opts!(['--display', initial_dpy])
       expect(subject.display).to be == initial_dpy
     else
       RSpec::Expectations.fail_with("No DISPLAY configured in test environment")

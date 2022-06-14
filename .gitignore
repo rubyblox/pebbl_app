@@ -5,6 +5,7 @@
 *.bak
 *.log
 Gemfile.lock
+Gemfile.local
 *.gem
 ## tools dirs
 /.bundle/

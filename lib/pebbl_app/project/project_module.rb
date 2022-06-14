@@ -536,6 +536,9 @@ module PebblApp::Project::ProjectModule
           ## see alternately: logging in Rails
           Kernel.warn("autoloading #{self}::#{name} path #{usepath.inspect}",
                       uplevel: 1) if $DEBUG
+          ## FIXME the simple presence of the autoload call in this
+          ## source file may affect the const_source_location for the
+          ## autoloaded name.
           self.autoload(name, usepath)
         else
           Kernel.warn(

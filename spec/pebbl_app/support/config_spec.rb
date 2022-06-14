@@ -3,12 +3,14 @@
 ## the library to test
 require 'pebbl_app/support/config'
 
+## API used in tests
+require 'optparse'
+require 'securerandom'
+
 describe PebblApp::Support::Config do
-  let(:app) {
-    PebblApp::Support::App.new
-  }
+  let!(:name) { described_class.to_s }
   subject {
-    described_class.new(app)
+    described_class.new(name)
   }
 
   it "sets an option" do
@@ -41,11 +43,6 @@ describe PebblApp::Support::Config do
     expect(subject.option(:nonexistent, :not_found)).to be == :not_found
   end
 
-  it "sets the app cmd name as the option parser's program name" do
-    parser = subject.make_option_parser
-    expect(app.app_cmd_name).to be == parser.program_name
-  end
-
   it "adds help text to the option parser" do
     parser = subject.make_option_parser
     usage_lines = []
@@ -58,6 +55,53 @@ describe PebblApp::Support::Config do
       usage_lines.push l
     end
     expect(usage_lines).to include("-h")
+  end
+
+  it "accepts a cmd_name" do
+    name = Random.uuid
+    inst = described_class.new(name)
+    expect(inst.cmd_name).to be == name
+  end
+
+  it "applies a block for deferred cmd_name access" do
+    time = nil
+    inst = described_class.new() do
+      time = Time.new
+    end
+    expect(inst.instance_variable_defined?(:@cmd_name)).to be false
+    expect(inst.instance_variable_defined?(:@cmd_name_block)).to_not be false
+    expect(inst.cmd_name).to_not be false
+    expect(inst.instance_variable_defined?(:@cmd_name)).to be true
+    expect(time).to_not be nil
+    expect(inst.cmd_name).to be == time.to_s
+  end
+
+
+  it "sets the cmd_name as the option parser's program name" do
+    parser = subject.make_option_parser
+    expect(parser.program_name).to be == subject.cmd_name
+  end
+
+
+  it "accepts and applies an option parser configuration in an extending class" do
+    class ConfigTest < described_class
+      attr_reader :test_str
+      def configure_option_parser(parser)
+        parser.on("-t", "--test STR", "Option test") do |str|
+          @test_str = str
+        end
+      end
+    end
+    opts = %w(-t defined)
+    opts_initial = opts.dup
+    inst = ConfigTest.new
+    expect { inst.parse_opts!(opts) }.to_not raise_error
+    expect(opts).to_not be == opts_initial
+    expect(opts).to be_empty
+    expect(inst.test_str).to be == "defined"
+  end
+
+  it "destructively modifies argv in parse_opts!" do
   end
 
 

@@ -1,7 +1,7 @@
 ## Definition of PebblApp::GtkSupport::AppModule
 
 require 'pebbl_app/project/project_module'
-require 'pebbl_app/support/app'
+require 'pebbl_app/support/app_prototype'
 require 'pebbl_app/gtk_support'
 
 require 'timeout'
@@ -25,7 +25,7 @@ require 'timeout'
 ## Far-term goals
 ## - provide support for application packaging
 ## - provide support for issue tracking for applications
-class PebblApp::GtkSupport::GtkApp < PebblApp::Support::App
+module PebblApp::GtkSupport
 
   ## Constants for PebblApp::GtkSupport::GtkApp
   module Const
@@ -35,7 +35,10 @@ class PebblApp::GtkSupport::GtkApp < PebblApp::Support::App
     GTK_INIT_TIMEOUT_DEFAULT = 15
   end
 
-  ## using PebblApp::Support::AppModule @ config dirs, YAML suport
+  module GtkAppPrototype
+
+  include(PebblApp::Support::AppPrototype)
+
   ## 1. compute a timeout for Gtk.init
   ## 2. compute a default display for Gtk.init
   ##    and emit a warning if no display can be determined
@@ -53,11 +56,24 @@ class PebblApp::GtkSupport::GtkApp < PebblApp::Support::App
     @config ||= PebblApp::GtkSupport::GtkConfig.new(self)
   end
 
+
+  def handle_args(args)
+    ## prototype method, should be overridden in implementing classes
+    ##
+    ## args: as returned by Gtk.init_with_args
+    ##       and as may be used under "handle open" typically
+  end
+
+
   def activate(argv: ARGV)
-    super(argv: argv)
+    configure(argv: argv)
+
     ## reduce memory usage, clearing the module's original autoloads
     ## definitions
-    PebblApp::GtkSupport.freeze unless self.config.option(:defer_freeze)
+    ##
+    ## FIXME call the freeze during app startup if deferred here
+    # PebblApp::GtkSupport.freeze unless self.config.option(:defer_freeze)
+
 
     if (ENV['XAUTHORITY'].nil?)
       Kernel.warn("No XAUTHORITY found in environment", uplevel: 0)
@@ -65,10 +81,52 @@ class PebblApp::GtkSupport::GtkApp < PebblApp::Support::App
     ## preload GIR object definitions via Gtk.init
     ## with timeout on the call to Gtk.init
     time = self.config.option(:gtk_init_timeout, Const::GTK_INIT_TIMEOUT_DEFAULT)
+    init = false
+    args = self.config.gtk_args
+    next_args = args
     Timeout::timeout(time, Timeout::Error, "Timeout in Gtk.init") do
       require 'gtk3'
-      Gtk.init(* self.config.gtk_args)
+      ## This calls Gtk.init_with_args, such that may not be initially defined.
+      ##
+      ## In the first instance, this will call through to Gtk.init
+      ##
+      ## In subsequent instances, this method will still be available
+      ##
+      ## FIXME after Gtk.init and before initializing the application's
+      ## GTK code, pre-load any classes named with string values under
+      ## a config parameter, config.options[:preload_classes] (Array)
+      ##
+      if Gtk.respond_to?(:init)
+        Gtk.init(*args)
+        init = true
+      else
+        ## calling Gtk.init_with_args here, e.g after Gtk.init has
+        ## removed the method Gtk.init
+        ##
+        ## The behaviors of Gtk.init_with_args may not entirely match
+        ## the behaviors of the initial Gtk.init e.g for some args
+        ## processed by GTK such as "--display"
+        ##
+        ## This at least provides a consistently reachable method
+        ## for initialization onto GTK
+        init, next_args = Gtk.init_with_args(args, self.app_cmd_name, [].freeze, nil)
+      end
+    end
+    if init
+      nm = self.app_name
+      GLib::set_application_name(nm)
+      GLib::Log::set_log_domain(nm)
+      self.handle_args(next_args)
+    else
+      ## TBD whether and how this may be reached
+      ## TBD error codes under GTK via Ruby
+      raise "Gtk initialization failed"
     end
   end
+
+
+#  end ## included(whence)
+
+end
 
 end

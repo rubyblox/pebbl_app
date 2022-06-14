@@ -74,7 +74,10 @@ shared_examples_for 'a project module' do |conf|
           ex = ex + 4
         end
       ensure
-        exit(ex)
+        ## exit without on_exit calls, to avoid any confusing output
+        ## during exit from rpsec, while the foreground process is still
+        ## conducting a test session
+        exit!(ex)
       end
     end
   end ## freeze test

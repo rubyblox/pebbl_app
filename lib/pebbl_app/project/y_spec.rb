@@ -68,7 +68,7 @@ class PebblApp::Project::YSpec
     ## metadta fields for general iteration
     ##
     ## FIXME this will discard some custom YAML data
-    METADATA_DEFAULT ||= %w(module homepage_uri source_code_uri
+    METADATA_DEFAULT ||= %w(homepage_uri source_code_uri
                             changelog_uri allowed_push_host
                            ).map { |name| name.freeze }.freeze
 
@@ -481,9 +481,12 @@ class PebblApp::Project::YSpec
     ## gemspec encoding for deps:
     Const::ALLDEPS_FIELDS.map do |field|
       callback_enumerable(field) do |value|
-        ## FIXME document this in the YSpec YAML schema docs :
-        ## first dep overides any later, in the gemspec encoding for a
-        ## gem dependency of a provided name
+        ## FIXME if a gem is listed more than once, add each subsequent
+        ## version requirements to local storage for that dependency,
+        ## then apply when configuring the gemspec.
+        ##
+        ## Presently: First dep overides any later, in the gemspec
+        ## encoding for a gem dependency of a provided name
         ##
         ## In this API, data in the gemspec scope is parsed first
         case value
@@ -504,20 +507,24 @@ class PebblApp::Project::YSpec
             ## dependencies.
             ##
             ## for purposes of gemspec initialization from project.yaml:
-            ## If a build dependency is configured for a gem,
-            ## then it will indicate a runtime dependency for the gem,
-            ## there being no singular distinction of "build" or "run"
-            ## stages in this context.
+            ## If a build dependency is configured for a gem, then it
+            ## will indicate a runtime dependency for the gem, there
+            ## being no singular distinction of "build" and "run" stages
+            ## in the gemspec scope.
             ##
-            ## To provide information for host package developement tasks,
-            ## each build dependency should be declared separate to each
-            ## application runtime dependency in project.yaml
+            ## To provide information for host package developement
+            ## tasks, each build dependency should be declared separate
+            ## to each application runtime dependency in project.yaml.
+            ##
+            ## The list of build dependencies for each gem will be
+            ## stored in a YAML string encoded in gemspec metadata for
+            ## each configured gemspec.
             ##
             ## The conditional form above may simply serve to prevent
             ## that any misleading warning message would be emitted
             ## under any duplication in the interpretation of
-            ## application build dependencies and runtime
-            ## dependencies both as gemspec runtime dependencies.
+            ## application build dependencies and runtime dependencies
+            ## both as gemspec runtime dependencies.
             ##
             unparsed = alldeps[depname][1].to_s
             msg_warn("Skipping duplicate %s dependency (%s): %p | \
@@ -557,20 +564,7 @@ first declared under %s as %p",
         bdeps << gemdep
       end
     end
-    ## FIXME revise the handling for build_depends here
-    ## - add build_depends to the runtime dependencies only under some
-    ##   conditional configuration in the environment
-    ## - retain the behavior of not warning on runtime deps
-    ##   duplicationg build deps
-    ## - for gappkit and extensionss, define a class extending Gem::Specification
-    ##   - extend #activate and extend #to_yaml
-    ##   - for #activate under a "Building" environment ... TBD
-    ##   - in #to_yaml : ensure that a 'require' call is added for the extending
-    ##     Ruby source file (using the definition location of the gemspec's class,
-    ##     for the filename relative to the first match in $LOAD_PATH e.g)
-    ##     and ensure that the spec's actual class is used in the output source text
-    ##
-    ## for now ... store YAML in a metadata string (does not use an extension class)
+    ## storing YAML in a metadata string (build depends)
     set_direct_metadata(Const::BDEPS_FIELD, bdeps.to_yaml(header: true), spec) if ! bdeps.length.eql?(0)
 
     ##
@@ -584,11 +578,6 @@ first declared under %s as %p",
     append_enumerable(Const::REQUIRE_ENUM_FIELD, :require_paths, spec)
 
   end
-
-  ##
-  ## internal implementation methods
-  ##
-  protected
 
   ## raise an error, with a message string calculated from the provided
   ## str applied as a format string with the provided args
@@ -783,7 +772,7 @@ first declared under %s as %p",
   ## @param specfield [String, Symbol] name of an enumerable gem
   ##        specification field
   ## @param spec [Gem::Specification] a Gem specification object
-  ## @see #call_enumerable
+  ## @see #callback_enumerable
   def append_enumerable(field, specfield, spec)
     readmtd = reader_for(specfield)
     data = spec.send(readmtd)
@@ -799,58 +788,18 @@ first declared under %s as %p",
     end
   end
 
-  ## append any data from an enumerable field value as configured in gem
-  ## and project data, using a single callout method onto an enumerable
-  ## value in the provided gemspec.
+  ## for any data from an enumerable field value as configured in gem
+  ## and project data, yield each element of the value successively to a
+  ## provided callback proc.
   ##
   ## This method will be applied for each element for the named field in
-  ## configured gem and project data. If non-nil, the value for the
-  ## named field must be provided as an enumerable value in either or
-  ## both of the gem and project scopes in the configuration data.
-  ##
-  ## e.g usage
-  ##
-  ## > `call_enumerable(Const::DEPS_FIELD, :add_runtime_dependency, spec)`
-  ## >
-  ## > `call_enumerable(Const::DEVO_FIELD, :add_development_dependency, spec)`
-  ##
-  ## **Known Limitations**
-  ##
-  ## This method may be suitable for storing literal values from some
-  ## enumerable field to the provided gemspec.
-  ##
-  ## For any method call on the gemspec that must receive more than one
-  ## parameter from each element in the enumerable field, TBD (FIXME)
-  ##
-  ## Alternately, for any value from the configured project data that
-  ## must be applied to the gemspec via some non-field callback method,
-  ## e.g `Gem::Specification#add_runtime_dependency` TBD (FIXME)
-  ##
-  ## **Deprecation**
-  ##
-  ## This method is now unused in YSpec. Refer to #callback_enumerable
+  ## configured project data, subsequently in configured gem data for
+  ## the last initialized gem.
   ##
   ## @param field [String] field name for gem and project data
-  ## @param speccall [String, Symbol] name of the callout method for the
-  ##        provided gem specification. The named method should return
-  ##        an enumerable value in that gemspec. A symbol speccall is
-  ##        preferred.
-  ## @param spec [Gem::Specification] a Gem specification object
+  ## @param callback [Proc] a block that may recieve each successive
+  ##        value from the enumerable field
   ## @see #append_enumerable
-  def call_enumerable(field, speccall, spec, &transform)
-    callmtd  = speccall.to_sym
-    if (configured = @proj_data[field])
-      configured.each do |value|
-        spec.send(callmtd, value)
-      end
-    end
-    if (configured = @gem_data[field])
-      configured.each do |value|
-        spec.send(callmtd, value)
-      end
-    end
-  end
-
   def callback_enumerable(field, &callback)
     raise "No callback provided for field #{field.inspect}" unless callback
     if (configured = @proj_data[field])

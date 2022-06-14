@@ -20,7 +20,7 @@ class PebblApp::GtkSupport::GtkConfig < PebblApp::Support::Config
   ## for connecting to the display will be configured and available to
   ## the application, at runtime.
   def display=(dpy)
-    ## set the display, independent of parse_opts
+    ## set the display, independent of parse_opts!
     self.options[:display] = dpy
   end
 
