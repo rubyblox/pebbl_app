@@ -201,8 +201,8 @@ BUNDLE_WITH ||= (ENV['BUNDLE_WITH'] || "development:gtk:irb")
 
 ## create a default bundler config, if no config exists
 file '.bundle/config' do
-  sh %(bundle config --local set path "#{BUNDLE_PATH}")
-  sh %(bundle config --local set with "#{BUNDLE_WITH.join(":")}")
+  sh %(bundle config set --local path "#{BUNDLE_PATH}")
+  sh %(bundle config set --local with "#{BUNDLE_WITH.join(":")}")
 end
 
 ## a bundle install task

@@ -22,8 +22,8 @@ all: test
 ##
 ## for custom configurations, the file can be created independent of this Makefile
 .bundle/config:
-	bundle config --local set path ${BUNDLE_CONFIG_PATH}
-	bundle config --local set with ${BUNDLE_CONFIG_WITH}
+	bundle config set --local path ${BUNDLE_CONFIG_PATH}
+	bundle config set --local with ${BUNDLE_CONFIG_WITH}
 
 ## install gems for the project, using the existing bundle config,
 ## after the Gemfile or .bundle/config is updated
