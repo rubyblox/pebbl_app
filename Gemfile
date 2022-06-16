@@ -78,6 +78,30 @@ if File.exist?(local_gemfile)
   end
 end
 
+##
+## source configuration for gems from Ruby-GNOME
+##
+
+gem "yard-gobject-introspection", github: "ruby-gnome/yard-gobject-introspection"
+
+rg_packages = %w(atk cairo-gobject clutter clutter-gdk clutter-gstreamer
+                 clutter-gtk gdk3 gtk3 gtksourceview3 gdk_pixbuf2 gegl
+                 gio2 glib2 gobject-introspection gsf gstreamer libsecret
+                 pango poppler vte3 webkit2-gtk wnck3)
+## TBD
+#  gdk4
+#  gtk4
+#  gtksourceview4
+#  gnumeric
+#  goffice
+#  rsvg2
+ # webkit-gtk
+
+git 'https://github.com/ruby-gnome/ruby-gnome.git' do
+  rg_packages.each do |pkg|
+    gem pkg, glob: "#{pkg}/*.gemspec" ## ??
+  end
+end
 
 ## TBD configuring steep, rbs for type checking under the rake 'test' task (rbs)
 gem 'steep', group: :development

@@ -211,14 +211,17 @@ end
 ## - does not depend on bundler having the latest dependencies
 ##   available, when using rake from the host pkg mangement
 ##   system or from gem install
-file 'Gemfile.lock': %w(.bundle/config Gemfile) do |task|
+file 'Gemfile.lock': %w(.bundle/config Gemfile) do
   sh %(bundle install --verbose)
   File.utime(File.atime('Gemfile.lock'), Time.now, 'Gemfile.lock')
 end
 
 ## the task as visible under rake -T
 desc %(update bundler installation for project)
-task update: %w(Gemfile.lock)
+task update: %w(.bundle/config Gemfile) do
+  sh %(bundle update --verbose)
+  File.utime(File.atime('Gemfile.lock'), Time.now, 'Gemfile.lock')
+end
 
 require 'rake/clean'
 ## rake clean:
