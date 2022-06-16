@@ -37,7 +37,9 @@ module PebblApp::Support
     "support/exceptions" =>
       %w(EnvironmentError),
     "support/files" =>
-      %w(Files)
+      %w(Files),
+    "support/sh_proc" =>
+      %w(ShProc)
   })
 
 end

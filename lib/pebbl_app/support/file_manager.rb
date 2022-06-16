@@ -22,51 +22,92 @@ module PebblApp::Support
   class FileManager
 
     class << self
+
+      ## return an array of strings for the value of the XDG_DATA_DIRS
+      ## environment variable, if configured, else using a default value
+      ## for that variable
+      ##
+      ## @return [Array<String>] an array of directory names
       def data_dirs
         envdir(Const::XDG_DATA_DIRS_ENV) do
+          ## fallback block, env var not bound
           Const::DATA_DIRS_DEFAULT
         end.split(File::PATH_SEPARATOR)
       end
 
+      ## return an array of strings for the value of the XDG_CONFIG_DIRS
+      ## environment variable, if configured, else using a default value
+      ## for that variable
+      ##
+      ## @return [Array<String>] an array of directory names
       def config_dirs
         envdir(Const::XDG_CONFIG_DIRS_ENV) do
+          ## fallback block
           Const::CONFIG_DIRS_DEFAULT
         end.split(File::PATH_SEPARATOR)
       end
 
+      ## return the value of the HOME environment variable, if
+      ## configured, else raise error.
+      ##
+      ## @return [String] the directory name
       def home
-        envdir = ENV[Const::HOME_ENV]
-        if envdir
-          return envdir
+        dir = ENV[Const::HOME_ENV]
+        if dir
+          return dir
         else
           raise PebblApp::Support::EnvironmentError.new("No HOME available in environment")
         end
       end
 
+      ## return the value of the XDG_DATA_HOME environment variable, if
+      ## configured, else a default value for that variable
+      ##
+      ## @return [String] the directory name
       def data_home
         envdir(Const::XDG_DATA_HOME_ENV) do
+          ## fallback block
           return (Files.join(self.home, Const::XDG_DATA_SUBDIR))
         end
       end
 
+      ## return the value of the XDG_CONFIG_HOME environment variable, if
+      ## configured, else a default value for that variable
+      ##
+      ## @return [String] the directory name
       def config_home
         envdir(Const::XDG_CONFIG_HOME_ENV) do
+          ## fallback block
           return (Files.join(self.home, Const::XDG_CONFIG_SUBDIR))
         end
       end
 
+      ## return the value of the XDG_CACHE_HOME environment variable, if
+      ## configured, else a default value for that variable
+      ##
+      ## @return [String] the directory name
       def cache_home
         envdir(Const::XDG_CACHE_HOME_ENV) do
+          ## fallback block
           return (Files.join(self.home, Const::XDG_CACHE_SUBDIR))
         end
       end
 
+      ## return the value of the XDG_STATE_HOME environment variable, if
+      ## configured, else a default value for that variable
+      ##
+      ## @return [String] the directory name
       def state_home
         envdir(Const::XDG_STATE_HOME_ENV) do
+          ## fallback block
           return Files.join(self.home, Const::XDG_STATE_SUBDIR)
         end
       end
 
+      ## return the value of the TMPDIR environment variable, if
+      ## configured, else a default value for that variable
+      ##
+      ## @return [String] the directory name
       def tmpdir
         envdir(Const::TMPDIR_ENV) do
           return Const::TMPDIR
@@ -105,6 +146,13 @@ module PebblApp::Support
         end
       end
 
+      ## If a 'USER' value is configured in the process environment,
+      ## return that value as a string, Else, return the file basename
+      ## of the value produced by the 'whomai' shell command.
+      ##
+      ## If no 'USER' value is configured in the environment and the
+      ## call to the 'whomai' shell command fails, this method will
+      ## raise an EnvironmentError
       def username
         if envname = ENV[Const::USER_ENV]
           return envname
@@ -113,13 +161,13 @@ module PebblApp::Support
           begin
             who_str, err_str, st = Open3::capture3(Const::WHOAMI_CMD)
             if st.exitstatus.eql?(0)
-              ## on MS Windows, 'whoami' with no args produces a name of a
-              ## syntax e.g "domain\user". On this same platform, "/" is
+              ## MS Windows/DOS 'whoami' with no args produces a name of a
+              ## syntax e.g "domain\user". On this same platform, "\" is
               ## typically the file pathname separator, so calling basename
-              ## here should serve to return the actual username
+              ## here may serve to return the actual username.
               ##
               ## FIXME this needs test with ruby under mingw, where ideally a
-              ## POSIX-like 'whoami' would be available under PATH
+              ## POSIX-like 'whoami' cmd would be available under PATH
               return Files.basename(who_str.chomp)
             else
               raise PebblApp::Support::EnvironmentError.new(
@@ -164,12 +212,22 @@ module PebblApp::Support
     end ## class << self
 
 
+    ## relative directory name for this FileManager
     attr_reader :app_dirname
 
+    ## create a FileManager, using the provided value as the app_driname
+    ##
+    ## @param app_dirname [String] the pathname for the app_dirname attribute
     def initialize(app_dirname)
-      @app_dirname = app_dirname
+      @app_dirname = app_dirname.to_s
     end
 
+    ## for the set of subdirectories of the class' data_dirs that exists
+    ## for the configured app_dirname, return that list of directories
+    ## as an array of strings
+    ##
+    ## @return [Array<String>] The list of app subdirs of data_dirs, if
+    ##         existing
     def app_data_dirs()
       dirs = self.class.flatten_dirs(self.class.data_dirs)
       ## FIXME this assumes that any of the dirs would be created
@@ -178,6 +236,13 @@ module PebblApp::Support
       self.class.flatten_dirs(self.class.map_join(self.app_dirname, dirs))
     end
 
+
+    ## for the set of subdirectories of the class' config_dirs that exists
+    ## for the configured app_dirname, return that list of directories
+    ## as an array of strings
+    ##
+    ## @return [Array<String>] The list of app subdirs of config_dirs, if
+    ##         existing
     def app_config_dirs()
       dirs = self.class.flatten_dirs(self.class.config_dirs)
       ## FIXME this assumes that any of the dirs would be created
@@ -186,12 +251,8 @@ module PebblApp::Support
       self.class.flatten_dirs(self.class.map_join(self.app_dirname, dirs))
     end
 
-    def app_menu_dirs()
-      dirs = self.class.flatten_dirs(using.config_dirs)
-      ## FIXME similar to the config_dirs instance, from which this derives
-      self.class.flatten_dirs(self.class.map_join(Const::MENUS, dirs))
-    end
-
+    ## return a pathname for the class' config_home with the app_dirname
+    ## appended to the path, as a string.
     def app_config_home()
       Files.join(self.class.config_home, app_dirname)
     end
@@ -204,6 +265,8 @@ module PebblApp::Support
       return dir
     end
 
+    ## return a pathname for the class' state_home with the app_dirname
+    ## appended to the path, as a string.
     def app_state_home()
       Files.join(self.class.state_home, app_dirname)
     end
@@ -216,6 +279,8 @@ module PebblApp::Support
       return dir
     end
 
+    ## return a pathname for the class' cache_home with the app_dirname
+    ## appended to the path, as a string.
     def app_cache_home()
       Files.join(self.class.cache_home, app_dirname)
     end
@@ -228,6 +293,13 @@ module PebblApp::Support
       return dir
     end
 
+    ## Ensure that a directory exists for the class' runtime_dir, with
+    ## the app_dirname appended to the path, as a string.
+    ##
+    ## If the directory does not exist, it will be created, then configured
+    ## with a permissions mask (octal) 0700
+    ##
+    ## @return [String] an app subdir onto the class' runtime_dir
     def app_runtime_dir!()
       basedir = self.class.runtime_dir!
       dir = Files.join(basedir, app_dirname)

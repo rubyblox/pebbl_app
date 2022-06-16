@@ -2,42 +2,33 @@
 
 require 'fileutils'
 
-## Notes: The 'install' task
-##
-## This project defines more than one gemspec.
-##
-## This project's Rakefile provides an 'install' task that operates
-## only on a set of gems denoted in the project.yaml file, under the
-## field 'publish_gems' (array)
-##
-## In addition to providing a manner of project-level control over which
-## gems are selected for the 'install' task, this also serves to
-## mitigate the concern of the default 'install' task retrieving and
-## installing gems such that have already been installed under the host
-## package management system
-##
 if ENV['BUNDLE_GEMFILE'] &&
-  ( File.dirname(ENV['BUNDLE_GEMFILE']) == __dir__ )
+    ( File.dirname(ENV['BUNDLE_GEMFILE']) == __dir__ )
+
   ##
-  ## project tasks, accessible for `bundle exec rake`
+  ## project tasks, accessible under bundle exec
   ##
+  ## e.g for `bundle exec rake`
+  ##
+
+  task default: %i(spec)
 
   gem 'bundler'
   require "bundler/gem_helper"
-  ## initialize Rake tasks for all project gems
-  ##
   require 'pebbl_app/project/y_spec'
-  yspec = PebblApp::Project::YSpec.new(
-    ENV['PROJECT_YAML'] || File.join(__dir__, "project.yaml")
-  )
+  ##
+  ## configure gem tasks for all published gems
+  ##
+  conf = File.join(__dir__, "project.yaml")
+  yspec = PebblApp::Project::YSpec.new(conf)
   yspec.load_config
-  ## FIXME this set of gems should only be used for publish
   publish_gems =
     yspec.project_field_value('publish_gems') do
+      ##
       ## fallback block
       ##
-      ## if no publish_gems field is configured for the project, use all
-      ## gems defined in project.yaml
+      ## if no publish_gems field is configured for the project,
+      ## use all gems defined in project.yaml
       ##
       yspec.gems
     end
@@ -47,50 +38,82 @@ if ENV['BUNDLE_GEMFILE'] &&
 
   gem 'rspec'
   require "rspec/core/rake_task"
+  require 'pebbl_app/support/sh_proc' ## local file
 
+  ## Some rspec tests in this project's Gtk support will require an
+  ## active X Window System display.
+  ##
+  ## If Xvfb is installed and available in the runtime PATH and no
+  ## DISPLAY is configured for the rspec environment, this project's
+  ## spec_helper.rb will initialize an Xvfb process to provide a
+  ## DISPLAY for the tests. An at_exit proc will be initialized, to
+  ## ensure that the XVfb process will exit on normal exit from the Ruby
+  ## process under rspec.
+  ##
+  ## To prevent the tests from interacting with any active X Window
+  ## System display environment, if Xvfb is available under the runtime
+  ## PATH, then in the 'spec' task: This Rakefile will ensure that any
+  ## DISPLAY environment variable is removed for this Rake process,
+  ## hence for the rspec environment under rake.
+  ##
+  ## TBD providing an ENV hash to the rspec subprocess for the
+  ## initialized spec task, without modifying the environment for the
+  ## calling rake process - ideally, reusing existing rake support in rspec
+  task spec: [] do
+    ## when configured first, this task should be run before the :spec
+    ## task from RSpec
+    cmd = PebblApp::Support::ShProc.which('Xvfb')
+    this = File.basename($0)
+    ## unset DISPLAY in the rake environment, only if Xvfb is available
+    if cmd
+      STDERR.puts "#{this}: Unsetting display for rspec tests"
+      ENV['DISPLAY']=nil
+    else
+      Kernel.warn("#{this}: could not find Xvfb: #{err.chomp}")
+    end
+  end
   RSpec::Core::RakeTask.new(:spec)
-
+  Rake::Task[:spec].clear_comments
+  Rake::Task[:spec].add_description "Run RSpec tests"
 
   ENV['RBS_TEST_LOGLEVEL'] ||='debug'
-  ENV['RBS_TEST_TARGET'] ||= 'Project::*'
+  ENV['RBS_TEST_TARGET'] ||= 'PebblApp::*'
 
   gem 'rbs'
   require 'rbs/test/setup'
-  ## "No type checker was installed!" ??
+  ## TBD "No type checker was installed!"
+  ## - presumably via rbs, tbd to be configured for steep
 
-  desc 'Default tasks'
-  # task default: %i[spec test] ## test : rbs
-  task default: %i[spec]
-
-  #
-  # task  :docs ... (needs test)
-  #
+  desc 'update documentation products'
+  task doc: [] do
+    ## FIXME integrate with GH actions, e.g when ENV['CI']
+    ## => publish docs (after some review)
+    sh %(bundle exec yardoc "lib/**/*.rb")
+  end
 
   ## if ENV['CI']
-  #### include additional tasks for evaluation under GitHub actions
-  ##  require_relative 'Rakefile.ci'
+  #### additional tasks for evaluation under GitHub actions
   ## end
 
   desc 'show bundled mkmf.log files (verbose output)'
   task show_mkmf_logs: [] do
     ## verbsose dianogstic logs for extensions - display every mkmf.log
-    ## undler the bundle path extensions dir
+    ## under the bundle path's extensions dir
     ##
-    ## if this task is evaluated under a GitHub action, the diagnostic
+    ## If this task is evaluated under a GitHub action, the diagnostic
     ## log output produced from this task may be available via web-based
-    ## Gith Actions reivew or GitHub CLI, e,g
-    ##
+    ## GH Actions review at GitHub, or GitHub CLI tools, e.g:
     ## $ gh run view
     ##
-    ## This may be useful as in order to debug any failed extension
-    ## installation wihout direct access to the build host.
+    ## This may be helpful if in order to debug any failed installations
+    ## for gem extensions, wihout direct access to the build host.
     ##
     ## Known Limitations
     ##
-    ## If ran without 'bundle config set path vendor/bundle' e.g in the
-    ## project root directory, this may illustrate every mkmf.log
-    ## installed under the gems extension directory in the host package
-    ## mangaement system and/or local gems. (not tested)
+    ## If ran without a configured bundle path for bundler, this may
+    ## illustrate every mkmf.log installed under the gems extension
+    ## directory in the host mangaement system and/or local gems.
+    ## (not tested)
     ##
     logs = Rake::FileList.new("#{ENV['GEM_HOME']}/extensions/**/mkmf.log")
     logs.each do |f|
@@ -114,13 +137,14 @@ if ENV['BUNDLE_GEMFILE'] &&
     ##
     ## usasge: This task may be used with local shell scripting, to
     ## evaluate what dependencies should be installed from the host
-    ## package management system
-    ##
-    ## this assumes that dependencies have been installed under vendor/bundle
-    ## and assumes that bundler will have set GEM_HOME in ENV, to match
-    ## the pathname for installed gems
+    ## package management system. if for any new installation on a
+    ## single operating system platform. This information can be used
+    ## for documentation updates.
     ##
     ## example: see ./bin/show-depends-suse
+    ##
+    ## bundler must already have installed all gem dependencies, or this
+    ## task defnition would not be reached
     ##
     makefiles = Rake::FileList.new("#{ENV['GEM_HOME']}/gems/*/ext/**/Makefile")
     libs = {}
@@ -132,7 +156,9 @@ if ENV['BUNDLE_GEMFILE'] &&
           fields = mktxt.split
           if (fields[0] == "LIBS".freeze)
             fields.each do |field|
-              if field.match?(/^-l/)
+              if field.match?(/^-l/.freeze)
+                ## add the library name as a substring
+                ## after the "-l" linker flag
                 own_libs.push(field[2..])
               end
             end
@@ -146,76 +172,88 @@ if ENV['BUNDLE_GEMFILE'] &&
   end
 
 else
-  ##
-  ## development bootstrap tasks, for rake outside of bundler
-  ##
+  ## non-bundler-env tasks for rake
 
-  task %q(init:pkg) do |task, args|
-    ## pseudocode for this task - see also:
-    ## https://rubygems.org/gems/native-package-installer
-    ##
-    ## require psych because it's a build dependency here
-    ##
-    ## for each gem in gems from project.yaml ...
-    ## ... traverse dependencies ...
-    ##    ... for each dep not defined in this project ...
-    ##        ... ensure each dep will be installed from a host pkg if available ...
-    ##            ... using some su-exec method (sudo) that does not ask for
-    ##                user credentials for every single pkg install
-    ##        ... else use bundler for installing all the deps (FIXME)
+  task default: %i(subrake)
+
+  desc 'run rake under bundler'
+  ## By side effect corresponding to the deps of this task, this task
+  ## should serve to ensure that bundler will have installed the deps
+  ## for this project, before rake will call the default task under a
+  ## rake subprocess via bundler.
+  ##
+  ## To pass args to the subrake, e.g -T:
+  ## $ rake subrake -- -T
+  ##
+  task subrake: ['Gemfile.lock'] do
+    sh %(bundle exec rake ) + ARGV.difference(%w(subrake --)).join(" ")
   end
 
 end
 
 ##
-## tasks accessible within or without bundler
+## tasks accessible within or without a bundler environment
 ##
 
-task %q(test:name) do |task|
-  STDERR.puts(%q(Reached test:name))
+## does not modify the environment for rake:
+BUNDLE_PATH ||= (ENV['BUNDLE_PATH'] || "vendor/bundle")
+BUNDLE_WITH ||= (ENV['BUNDLE_WITH'] || "development:gtk:irb")
+
+## create a default bundler config, if no config exists
+file '.bundle/config' do
+  sh %(bundle config --local set path "#{BUNDLE_PATH}")
+  sh %(bundle config --local set with "#{BUNDLE_WITH.join(":")}")
 end
 
-# task %q(init:bundle) do |task, args|
-#   sh %q(bundle install) # TBD cmd args pass-thru to here
-# end
+## a bundle install task
+## - may be useful after updating the Gemfile, project.yaml,
+##   or addng Gemfile.local
+## - does not depend on bundler having the latest dependencies
+##   available, when using rake from the host pkg mangement
+##   system or from gem install
+file 'Gemfile.lock': %w(.bundle/config Gemfile) do |task|
+  sh %(bundle install --verbose)
+  File.utime(File.atime('Gemfile.lock'), Time.now, 'Gemfile.lock')
+end
 
-# task %q(update:bundle) do |task, args|
-#   ## FIXME if running a bundler(1) of a newer version than in
-#   ## Gemfile.lock and BUNDLE_PATH is  (?) unset,
-#   ## then clobber Gemfile.lock and init:bundle here
-# end
+## the task as visible under rake -T
+desc %(update bundler installation for project)
+task update: %w(Gemfile.lock)
 
 require 'rake/clean'
-
-## bundle exec rake clean:
+## rake clean:
 ##
 ## Remove files generated from local rake tasks
 ##
 ## editor backup files will be included in CLOBBER
-CLEAN.exclude %q(*~)
-CLEAN.include %w(pkg/** tmp/**)
+CLEAN.exclude %(*~)
+CLEAN.include %w(pkg/** tmp/** doc/**)
 Rake::Task[:clean].clear_comments
 Rake::Task[:clean].add_description "Remove generated files"
 
-## bundle exec rake clobber:
+## rake clobber:
 ##
-## Clean all cleanfiles; Remove local toolchain state data, editor
-## backup files, and bundler path files
+## Clean all cleanfiles; Remove local bundler state data, bundler path
+## files, and editor backup files
 ##
-CLOBBER.include %w(*~ Gemfile.lock)
-CLOBBER.include(
-  ## removing installed bundler path files with clobber
-  Bundler::configured_bundle_path.
-    base_path_relative_to_pwd.join("**").join("**")
+CLOBBER.include %w(*~ .#* *# *.bak *.rej Gemfile.lock)
+if Kernel.const_defined?(:Bundler)
+  CLOBBER.include(
+    ## removing any installed bundler path files with clobber
+    Bundler::configured_bundle_path.
+      base_path_relative_to_pwd.join("**").join("**")
 )
-Rake::Task[:clobber].clear_comments
-Rake::Task[:clobber].add_description "Clean, and remove local toolchain state data"
+end
 
-desc 'Remove all untracked files'
+Rake::Task[:clobber].clear_comments
+Rake::Task[:clobber].add_description "Clean, remove local toolchain state data"
+
+desc 'Remove all untracked files (git)'
 task realclean: [:clobber] do
   if File.exist?(File.join(__dir__,".git"))
     sh "git ls-files -o -z | xargs -0 rm -f"
   else
-    Kernel.warn("Not a git repository: #{__dir__}", uplevel: 0)
+    Kernel.warn("#{File.dirname($0)}: Not a git repository: #{__dir__}",
+                uplevel: 0)
   end
 end

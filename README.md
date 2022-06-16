@@ -138,54 +138,61 @@ For example, selecting _development_ dependencies before
 $ cd source_tree && bundle config set --local with development && bundle install
 ~~~~
 
-## Running the Tests
-
-Once all dependencies are installed, tests can be evaluated using **rspec**
-
-~~~~
-$ bundler exec rspec
-~~~~
-
-If **Xvfb** is installed, this virtual X server can be used to provide a
-display environment for the tests.
-
-~~~~
-$ Xvfb :10 & env DISPLAY=:10 bundler exec rspec
-~~~~
-
-**Xvfb** may typically be available via the host package management system
-
-* **openSUSE:** `xorg-x11-server-Xvfb`
-* **Debian:** `xvfb`
-* **FreeBSD:** `xorg-vfbserver` (`x11-servers/xorg-vfbserver`)
-
-
 **Interactive Evaluation**
 
-Following `bundle install` with development dependencies enabled under
-`bundle config`, an interactive console can be initialized for `irb`
+With the `Gemfile` configuration in the Pebbl App project, **bundler**
+can be configured to install gem support for pry and/or irb together
+with the main project gem dependencies.
+
+e.g for pry
+> `$ bundle config set with development:pry`
+
+or for irb
+> `$ bundle config set with development:pry`
+
+or for both
+> `$ bundle config set with development:pry:irb`
+
+and lastly
+> `$ bundle install`
+
+or simply
+> `$ env BUNDLE_WITH="development:pry:irb" bundle install`
+
+to an effect
+> `$ bundle exec pry`
+or
+> `$ bundle exec irb`
+
+**Debugging**
+
+When **bundler** is configured for development dependencies in this
+project, the [`debug` gem][gem-debug] will be available after `bundle
+install`.
+
+Once the shell `PATH` environment variable has been configured to
+include the exec path for an installation of the [`debug`
+gem][gem-debug]:
+
+> `$ rdbg -c bundle exec ruby`
+
+To use the `rdbg` shell command installed by bundler, configuring the
+shell `PATH` at runtime:
 
 ~~~~
-$ bundle exec irb
-~~~~
-
-For `pry`, the `pry` gem can be added as a development dependency in
-`Gemfile.local`. This file, if it exists, will be included from the main
-project `Gemfile`.
-
-~~~~
-$ cd source_tree
-$ echo 'gem "pry", group: :development' >> Gemfile.local
-$ bundle config set --local with development
-$ bundle exec pry
+$ PATH="$(bundle exec ruby -e 'puts ENV[%(GEM_HOME)]')/bin${PATH:+:}${PATH}"
+$ which rdbg
+$ rdbg -c bundle exec ruby
 ~~~~
 
 ### Primary Work Areas
 
 #### Project Tooling
 
-The `pebbl_app-support` gem provides some generic support for projects.
-This support code has been organized under the **PebblApp::Project**
+The `pebbl_app-support` gem provides some generic support for
+projects and applications, independent of Gtk support.
+
+The project support code has been organized under the **PebblApp::Project**
 module, available with the gem `pebbl_app-support`
 
 - **PebblApp::Project::YSpec** providing support for a YAML-based
@@ -204,22 +211,62 @@ module, available with the gem `pebbl_app-support`
 
 #### Application Support
 
-The `pebbl_app-support` gem  provides reusable code for Pebbl App
-applications, within the **PebblApp::Support** module. This includes the
-generic **PebblApp::Support::App** class, which can be extended
-individually. This class is used in **PebblApp::GtkSupport::GtkApp**.
+The `pebbl_app-support` gem  provides reusable code for applications
+using Pebbl App. This support code is organized within the
+**PebblApp::Support** module.
+
+This includes the generic **PebblApp::Support::App** class, which can be
+extended individually, and the **PebllApp::Support::AppPrototype**
+module, which can be applied via `include` in the definition of any
+application class in Ruby.
 
 #### GTK Applications (Prototyping)
 
 The `pebbl_app-gtk_support` and `riview` gems serve as a combined work
-area for GNOME application support in Ruby.
+area for development of GNOME application support in Ruby, in the Pebbl
+App project.
+
+(Documentation should be available here, after further testing for Gtk
+application support in Pebbl App.)
 
 The `riview` gem may serve as a proof of concept for Glade/UI builder
-support with GTK and [Ruby-GNOME][ruby-gnome]. This gem uses `rikit` in
-a prototype for a documentation browser in Ruby.
+support with GTK and [Ruby-GNOME][ruby-gnome]. This gem uses the local
+`rikit` codebase, in a prototype for a documentation browser in
+Ruby. The prototype is an early stage of development.
 
-The `pebbl_app-gtk_support` gem provides an application class for GTK
-applications in Ruby, **PebblApp::GtkSupport::GtkApp**
+## Tests
+
+The `pebbl_app-support` and `pebbl_app-gtk_support` gems are accompanied
+with RSpec tests, available in this project's source tree under the path,
+[spec/](./spec/)
+
+Assuming that Bundler has installed the development dependencies for
+this project, the status of the tests may be viewed with the following
+shell command:
+
+> `bundle exec rake spec`
+
+**Tests Requiring Gtk/Gdk X11 Support**
+
+Some of the tests for this project will require the availability of an X
+Window System display, mainly at and after any call to `Gtk.init`.
+
+If **Xvfb** is installed and no `DISPLAY` environment is configured, the
+project's primary `spec_helper.rb` will initialize an **Xvfb** process
+for the duration of the rspec tests.
+
+In the project Rakefile, the `spec` task will ensure that `DISPLAY`
+is unset - by side effect, ensuring that **Xvfb** will be used for the
+test environment - when **Xvfb** is installed.
+
+**Xvfb** may typically be available via the host package management system.
+
+* **openSUSE:** `xorg-x11-server-Xvfb`
+* **Debian:** `xvfb`
+* **FreeBSD:** `xorg-vfbserver` (port `x11-servers/xorg-vfbserver`)
+
+If **Xvfb** cannot be installed, the same rspec tests can be run
+directly, using any active X11 display, via `bundle exec rspec`
 
 ## History
 
@@ -236,7 +283,7 @@ centralized project at Thinkum.Space.
 [pebblapp]: https://github.com/rubyblox/pebbl_app
 [rubygems]: https://www.rubygems.org/
 [ruby-gnome]: https://github.com/ruby-gnome/ruby-gnome
-
+[gem-debug]: https://rubygems.org/gems/debug
 
 <!--  LocalWords:  Pebbl Thinkum GTK openSUSE GObject pkgconfig zypper -->
 <!--  LocalWords:  gobject devel sudo typelib dev FreeBSD rubygem cd mv -->

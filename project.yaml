@@ -24,45 +24,23 @@ spec_files:
   - spec/spec_helper_spec.rb
 ## common development dependencies
 devo_depends:
-  ## NB always quote the version-bounds strings when using any version-bounded
+  ## common development dependencies for all project gemspecs,
+  ## to be published with each gemspec.
+  ##
+  ## gems for any tool dependencies may be configured in the project Gemfile,
+  ## e.g irb, pry, or in the optional, non-version-controlled Gemfile.local
+  ##
+  ## Usage note: always quote the version-bounds strings when using any version-bounded
   ## syntax for dependencies in project.yaml
-  ##
-  ## Usage note: When setting version bounds on these tool dependencies,
-  ## it may serve to ensure that bundler will not try to install
-  ## the latest version from the Web, such that may fail if no
-  ## bundle path has been set for the Gemfile project.
-  ##
-  ## With a version bounds set on each dependency, then if that
-  ## gem is available of a compatible version from gems installed
-  ## via the host package management system (and no bundle path is set)
-  ## then Bundler may allow that the installed gem would be used.
-  ##
-  ## Without a version bounds set, Bundler may by try to install
-  ## the newest version from the Web e.g under bundle-install(1).
-  ## When no bundle path is set and the user will not be installing
-  ## gems from bundler with sudo, then this may result in an error.
-  ##
-  ## TBD if this may be a configurable behavior in bundler (needs test)
-  ## given any set of gems already installed on the host.
-  ##
-  ##
-  ## If a bundle path is configured for the Gemfile project, then it
-  ## seems bundler will not use any gems installed on the host, but
-  ## will install all gems from the Web (FIXME needs test, this also
-  ## should be a configurable behavior, to allow for using host gems
-  ## when matching the version bounds, then installing from web
-  ## only for gems that are not already available on the host)
-  ## (should be configurable per each Gemfile project / bundler config context)
-  ##
-  ## Workaround: Set a version bounds on each third-party dep
-  ##
-  ## TBD this may not be sufficient for all gems (yard specifically, here?)
   - [rbs, ">=2"]
   - [rake, ">=13"]
   - [rspec, ">=3"]
   - [debug, ">=1"]
-  - [irb, ">=1"]
   - [yard, ">=0.9"]
+  ## bundler can install the latest version of bundler,
+  ## which may be needed for resolving built-in gems with
+  ## newer Ruby 3.1 releases
+  - [bundler, ">= 2.3"]
 required_ruby_version: ">= 2.7.0"
 require_paths:
   - lib
@@ -91,6 +69,7 @@ gems:
       - lib/pebbl_app/support/exceptions.rb
       - lib/pebbl_app/support/file_manager.rb
       - lib/pebbl_app/support/files.rb
+      - lib/pebbl_app/support/sh_proc.rb
     sandbox_files:
       ## not published with the gem. To define autoloads for these files e.g:
       ##    require 'thinkum_space/project'

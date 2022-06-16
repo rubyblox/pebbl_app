@@ -21,12 +21,13 @@ end ## $DEBUG
 
 ##
 ## configure bundler for all project gemspecs
+## corresponding to each <name>.gemspec file
+## limited to the set of gems defined in project.yaml
 ##
 require 'pebbl_app/project/y_spec'
 
-yspec = PebblApp::Project::YSpec.new(
-  ENV['PROJECT_YAML'] || File.join(__dir__, "project.yaml")
-)
+conf = File.join(__dir__, "project.yaml")
+yspec = PebblApp::Project::YSpec.new(conf)
 project_gems = yspec.load_config.gems
 
 source 'https://rubygems.org'
@@ -39,37 +40,45 @@ project_gems.each do |name|
   STDERR.puts("Defining gem (gemspec): #{name}") if $DEBUG
   gemspec name: name
   STDERR.puts("Defined gem (gemspec): #{name}") if $DEBUG
-
 end
 
-## configuration for modules including PebblApp::Support::AppModule
-lambda {
-    if (gemfile = ENV['BUNDLE_GEMFILE'])
-      ENV['XDG_DATA_HOME']=File.join(File.dirname(gemfile), "config")
-    end
-}.call
+## configuration for modules using PebblApp::Support::FileManager
+## - XDG_DATA_HOME usage: FileManager.new(<app_dirname>).data_home
+if (gemfile = ENV['BUNDLE_GEMFILE'])
+  ENV['XDG_DATA_HOME'] = File.join(File.dirname(gemfile), "config")
+end
 
-## additional dependencies can be added to Gemfile.local.
+
+## IRB, Pry support for bundle exec
 ##
-## This file will not be added to version control
+## e.g configuration
+## $ bundle config --local set path vendor/bundle
+## $ bundle config --local set with development:irb:pry
 ##
-## This allows for e.g using pry via bundle exec, once pry has been
-## added to the set of development dependencies for this project
-## (see README)
-##
+%w(irb pry).each do |name|
+  group name.to_sym, optional: true do
+    gem name
+  end
+end
+
+
+## local dependencies can be configured in Gemfile.local. This file will
+## not be added to project version control.
 local_gemfile = File.join(__dir__, 'Gemfile.local')
 if File.exist?(local_gemfile)
-  ## to in effect include Gemfile.local within this gemfile, per how
-  ## this gemfile itself is evaluated, each line of the included file
-  ## will be evaluated directly
+  ## to in effect include Gemfile.local within this gemfile, the
+  ## included file will be evaluated directly
   begin
-    File.open(local_gemfile) do |io|
-      io.each_line do |txt|
-        eval(txt)
-      end
-    end
+    eval (File.read(local_gemfile))
   rescue
+    ## handling any exception in the parse/eval for Gemfile.local as a
+    ## continuable error for purposes of bundler eval
     Kernel.warn("Failed to include #{local_gemfile}: #{$!}",
                 uplevel: 0)
   end
 end
+
+
+## TBD configuring steep, rbs for type checking under the rake 'test' task (rbs)
+gem 'steep', group: :development
+

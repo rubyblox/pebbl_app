@@ -182,5 +182,26 @@ module PebblApp::Support::Files
       return lastdir
     end
 
+    ## Update the last access time and/or last modified time for a file,
+    ## dereferencing the file if a symbolic link.
+    ##
+    ## @param file [String] the filename
+    ## @param atime [Time] timestamp for last access time
+    ## @param mtime [Time] timestamp for last modified time
+    ## @see ltouch
+    def touch(file, atime = File.atime(file), mtime = Time.now)
+      File.utime(atime, mtime, file)
+    end
+
+    ## Update the last access time and/or last modified  for a file
+    ## or symbolic link
+    ##
+    ## @param file [String] the filename
+    ## @param atime [Time] timestamp for last access time
+    ## @param mtime [Time] timestamp for last modified time
+    ## @see touch
+    def ltouch(file, atime = File.atime(file), mtime = Time.now)
+      File.lutime(atime, mtime, file)
+    end
   end
 end

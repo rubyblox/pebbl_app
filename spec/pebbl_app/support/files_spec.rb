@@ -3,7 +3,12 @@
 ## the library to test
 require 'pebbl_app/support/files'
 
+## tools for the tests
+require 'securerandom'
+
 describe PebblApp::Support::Files do
+  let(:t_zero) { Time.new(0) }
+  let(:t_start) { Time.now }
 
   it "parses filenames in shortname" do
     using = PebblApp::Support
@@ -90,5 +95,31 @@ describe PebblApp::Support::Files do
       end
     end
   end
+
+  it "updates file atime, mtime in touch" do
+    described_class.mktmp do |f|
+      described_class.touch(f, t_zero, t_start)
+      expect(File.atime(f)).to be == t_zero
+      expect(File.mtime(f)).to be == t_start
+    end
+  end
+
+  it "updates link atime, mtime in ltouch" do
+    described_class.mktmp do |f|
+      whence = File.dirname(f) ## tmpdir
+      lnk = File.join(whence, SecureRandom.uuid)
+      begin
+        File.symlink(f, lnk) ## may fail with NotImplementedError
+        described_class.touch(lnk, t_zero, t_start)
+        expect(File.atime(lnk)).to be == t_zero
+        expect(File.mtime(lnk)).to be == t_start
+      rescue NotImplementedError => e
+        RSpec::Expectations.fail_with("Unable to provide test: #{e}")
+      ensure
+        File.unlink(lnk)
+      end
+    end
+  end
+
 
 end

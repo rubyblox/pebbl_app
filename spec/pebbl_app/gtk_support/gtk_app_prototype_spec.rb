@@ -1,17 +1,28 @@
 ## rspec tests for PebblApp::GtkSupport::GtkApp
 
 ## the library to test:
-require 'pebbl_app/gtk_support/gtk_app'
+require 'pebbl_app/gtk_support/gtk_app_prototype'
 
-describe PebblApp::GtkSupport::GtkApp do
+require 'timeout'
+
+describe PebblApp::GtkSupport::GtkAppPrototype do
+  subject {
+    class GtkTestProtoApp
+      include PebblApp::GtkSupport::GtkAppPrototype
+    end
+  }
+  let(:instance) {
+    subject.new
+  }
+
 
   it "fails in activate if no display is configured" do
     dpy_initial = ENV['DISPLAY']
     ENV.delete('DISPLAY')
     null_argv = []
     begin
-      subject.config.options[:defer_freeze] = true
-      expect { subject.activate(argv: null_argv) }.to raise_error(
+      instance.config.options[:defer_freeze] = true
+      expect { instance.activate(argv: null_argv) }.to raise_error(
         PebblApp::GtkSupport::ConfigurationError
       )
     ensure
@@ -26,9 +37,17 @@ describe PebblApp::GtkSupport::GtkApp do
     ## it does not appear to work out to try to run this test under
     ## fork, as the Gtk.init call may then deadlock in the forked
     ## process.
-    subject.config.options[:gtk_init_timeout] = 5
-    subject.config.options[:defer_freeze] = true
-    expect { subject.activate(argv: []) }.to_not raise_error
+    instance.config.options[:gtk_init_timeout] = 5
+    instance.config.options[:defer_freeze] = true
+      expect {
+        begin
+          instance.activate(argv: [])
+        rescue Timeout::Error
+          ## this error may indicate a misconfiguration
+          ## in the testing environment
+          RSpec::Expectations.fail_with("Timeout during Gtk.init")
+        end
+      }.to_not raise_error
   end
 
 end

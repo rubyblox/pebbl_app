@@ -9,8 +9,6 @@ module PebblApp
       DOT ||= ".".freeze
       ## a frozen empty array
       NULL_ARRAY ||= [].freeze
-      ## subdirectory name for desktop menu paths
-      MENUS ||= "menus".freeze
       ## environment variable name
       HOME_ENV ||= "HOME".freeze
       ## environment variable name

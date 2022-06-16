@@ -9,6 +9,10 @@
 ##
 ## TBD conditional selection of irb or pry, in this gtkconsole file
 
+if ! ENV['DISPLAY']
+  Kernel.warn("No display defined", uplevel: 0)
+end
+
 require %q(bundler/setup)
 
 require %q(irb)
@@ -19,9 +23,17 @@ require %q(pebbl_app/project/y_spec)
 yspec = PebblApp::Project::YSpec.new(
   File.expand_path('project.yaml', File.dirname(ENV['BUNDLE_GEMFILE']))
 )
-
 yspec.load_config.gems.each do |name|
   gem(name)
 end
+
+require %q(gtk3)
+##
+## Gtk.init returns a map of method names under Gtk
+## onto GObjectIntrospection::Loader::Invoker objects,
+## probably the value of Gtk.singleton_class::INVOKERS
+##
+Gtk.init
+
 
 IRB.start(__FILE__)
