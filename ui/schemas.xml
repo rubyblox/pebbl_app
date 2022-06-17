@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<!--
+rng schema locating file for the GTK UI builder schema
+
+for use with Emacs nxml-mode and other editors supporting the
+schema locatingRules syntax
+
+to fetch gtkbuilder.rnc, in shell:
+$ rake -C ../ uischema
+
+Assuming:
+1) that the Emacs Lisp variable `rng-schema-locating-files' includes
+   the string "schemas.xml" or an absolute pathname to this file
+2) that the file gtkbuilder.rnc has been retrieved
+
+... then Emacs should be able to locate gtkbuilder.rnc
+    for all GtkBuilder UI files in this directory
+
+This may be useful for Emacs users, when editing GTk menu definitions
+outside of the Glade UI builder, or for custom edits on GtkBuilder UI
+files edited with the Glade UI builder.
+
+-->
+<locatingRules xmlns="http://thaiopensource.com/ns/locating-rules/1.0">
+
+  <documentElement localName="interface" uri="./gtkbuilder.rnc" />
+  <uri pattern="*.ui" uri="./gtkbuilder.rnc" />
+
+</locatingRules>

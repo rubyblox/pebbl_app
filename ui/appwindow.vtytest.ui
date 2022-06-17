@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated with glade 3.38.2 -->
+<interface>
+  <requires lib="gtk+" version="3.24"/>
+  <requires lib="vte-2.91" version="0.68"/>
+  <object class="GtkMenu" id="vtwin_vty_menu">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <child>
+      <object class="GtkMenuItem" id="vtapp_new">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">app.newvty</property>
+        <property name="label" translatable="yes">New VTY</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="vtwin_savetext">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">win.savetext</property>
+        <property name="label" translatable="yes">Save Transcript Text</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="vtwin_savedata">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">win.savedata</property>
+        <property name="label" translatable="yes">Save Transcript Data</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="vtapp_prefs">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">app.prefs</property>
+        <property name="label" translatable="yes">Preferences</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="vtwin_close">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">win.quit</property>
+        <property name="label" translatable="yes">Close</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="vtapp_exit">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">app.quit</property>
+        <property name="label" translatable="yes">Exit VtyTest</property>
+      </object>
+    </child>
+  </object>
+  <object class="GtkMenu" id="vty_app_menu">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <child>
+      <object class="GtkMenuItem" id="vty_about">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes">About</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+  </object>
+  <object class="GtkMenu" id="vty_menu">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <child>
+      <object class="GtkMenuItem" id="vty_menu_reset">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes">Reset Terminal</property>
+        <property name="use-underline">True</property>
+        <signal name="activate" handler="vty_reset" object="VtyAppWindow" swapped="no"/>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="vty_menu_eof">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label" translatable="yes">Send EOF</property>
+        <property name="use-underline">True</property>
+        <signal name="activate" handler="vty_eof" object="VtyAppWindow" swapped="no"/>
+      </object>
+    </child>
+  </object>
+  <template class="VtyAppWindow" parent="GtkApplicationWindow">
+    <property name="can-focus">False</property>
+    <property name="icon-name">utilities-terminal-symbolic</property>
+    <property name="startup-id">space.thinkum.vtytest</property>
+    <child>
+      <object class="GtkBox" id="vtwin_box">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkHeaderBar" id="vtwin_header">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="subtitle" translatable="yes">vtytest</property>
+            <child>
+              <object class="GtkMenuButton" id="File">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="focus-on-click">False</property>
+                <property name="receives-default">True</property>
+                <property name="tooltip-text" translatable="yes">Vty Window</property>
+                <property name="popup">vtwin_vty_menu</property>
+                <child>
+                  <object class="GtkImage">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="icon-name">utilities-terminal-symbolic</property>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkMenuButton">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="focus-on-click">False</property>
+                <property name="receives-default">True</property>
+                <property name="tooltip-text" translatable="yes">Vty Application</property>
+                <property name="halign">end</property>
+                <property name="popup">vty_app_menu</property>
+                <child>
+                  <object class="GtkImage">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="icon-name">open-menu-symbolic</property>
+                    <property name="use-fallback">True</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="pack-type">end</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="VteTerminal" id="vty">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="vexpand">True</property>
+            <property name="hscroll-policy">natural</property>
+            <property name="vscroll-policy">natural</property>
+            <property name="cursor-shape">ibeam</property>
+            <property name="encoding">UTF-8</property>
+            <property name="scroll-on-keystroke">True</property>
+            <property name="scroll-on-output">False</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkBox" id="vty_modeline">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <child>
+              <object class="GtkButton" id="vty_send">
+                <property name="label" translatable="yes">send</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="tooltip-text" translatable="yes">Send to Process</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="vty_entry">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="tooltip-text" translatable="yes">Input</property>
+                <property name="hexpand">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkMenuButton" id="vty_menu_btn">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="focus-on-click">False</property>
+                <property name="receives-default">True</property>
+                <property name="tooltip-text" translatable="yes">Vty Menu</property>
+                <property name="popup">vty_menu</property>
+                <property name="direction">up</property>
+                <child>
+                  <object class="GtkImage" id="vty_send_icon">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="icon-name">emblem-system</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">2</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

@@ -2,6 +2,8 @@
 
 require 'fileutils'
 
+$THIS = File.basename($0)
+
 if ENV['BUNDLE_GEMFILE'] &&
     ( File.dirname(ENV['BUNDLE_GEMFILE']) == __dir__ )
 
@@ -195,6 +197,23 @@ end
 ## tasks accessible within or without a bundler environment
 ##
 
+
+desc %(fetch ui/gtkbuilder.rnc)
+task uischema: %w(ui/gtkbuilder.rnc)
+
+file 'ui/gtkbuilder.rnc' do |task|
+  require 'net/http'
+  schema_origin =
+    URI(%(https://gitlab.gnome.org/GNOME/gtk/-/raw/gtk-3-24/gtk/gtkbuilder.rnc))
+  STDERR.puts("#{$THIS}: fetching #{schema_origin}")
+  schema_io = Net::HTTP.get(schema_origin)
+  out = task.name
+  File.open(out, 'wb') do |io|
+    io.write(schema_io)
+  end
+  STDERR.puts("#{$THIS}: wrote #{out}")
+end
+
 ## does not modify the environment for rake:
 BUNDLE_PATH ||= (ENV['BUNDLE_PATH'] || "vendor/bundle")
 BUNDLE_WITH ||= (ENV['BUNDLE_WITH'] || "development:gtk:irb")
@@ -221,6 +240,11 @@ desc %(update bundler installation for project)
 task update: %w(.bundle/config Gemfile) do
   sh %(bundle update --verbose)
   File.utime(File.atime('Gemfile.lock'), Time.now, 'Gemfile.lock')
+end
+
+desc %(update/clean (bundler))
+task refresh: [:update] do
+  sh %(bundle clean --verbose)
 end
 
 require 'rake/clean'
@@ -256,7 +280,7 @@ task realclean: [:clobber] do
   if File.exist?(File.join(__dir__,".git"))
     sh "git ls-files -o -z | xargs -0 rm -f"
   else
-    Kernel.warn("#{File.dirname($0)}: Not a git repository: #{__dir__}",
+    Kernel.warn("#{$THIS}: Not a git repository: #{__dir__}",
                 uplevel: 0)
   end
 end

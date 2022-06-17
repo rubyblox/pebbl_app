@@ -1,0 +1,44 @@
+#!/usr/bin/env ruby
+
+## For this project, the availability of IRB under bundler will require
+## that bundler was configured with irb
+##
+## e.g for a shell in the project source root
+##
+## $ bundle config --local with development:irb
+##
+## TBD conditional selection of irb or pry, in this gtkconsole file
+
+if ! ENV['DISPLAY']
+  Kernel.warn("No display defined", uplevel: 0)
+end
+
+require %q(bundler/setup)
+
+require %q(irb)
+require %q(irb/completion)
+
+require %q(pebbl_app/project/y_spec)
+
+yspec = PebblApp::Project::YSpec.new(
+  File.expand_path('project.yaml', File.dirname(ENV['BUNDLE_GEMFILE']))
+)
+yspec.load_config.gems.each do |name|
+  gem(name)
+end
+
+# require %q(gtk3)
+##
+## Gtk.init returns a map of method names under Gtk
+## onto GObjectIntrospection::Loader::Invoker objects,
+## probably the value of Gtk.singleton_class::INVOKERS
+##
+# Gtk.init
+# IRB.start(__FILE__)
+
+$DEBUG = true
+
+require_relative(%(../sandbox/vtytest.rb))
+
+$APP = VtyApp.new
+$APP.run
