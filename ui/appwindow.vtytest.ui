@@ -10,24 +10,24 @@
       <object class="GtkMenuItem" id="vtapp_new">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="action-name">app.newvty</property>
-        <property name="label" translatable="yes">New VTY</property>
+        <property name="label" translatable="yes">New Vty</property>
+        <signal name="activate" handler="vtwin_new" object="VtyAppWindow" swapped="no"/>
       </object>
     </child>
     <child>
       <object class="GtkMenuItem" id="vtwin_savetext">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="action-name">win.savetext</property>
         <property name="label" translatable="yes">Save Transcript Text</property>
+        <signal name="activate" handler="vtwin_save_text" object="VtyAppWindow" swapped="no"/>
       </object>
     </child>
     <child>
       <object class="GtkMenuItem" id="vtwin_savedata">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="action-name">win.savedata</property>
         <property name="label" translatable="yes">Save Transcript Data</property>
+        <signal name="activate" handler="vtwin_save_data" object="VtyAppWindow" swapped="no"/>
       </object>
     </child>
     <child>
@@ -40,8 +40,8 @@
       <object class="GtkMenuItem" id="vtapp_prefs">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="action-name">app.prefs</property>
         <property name="label" translatable="yes">Preferences</property>
+        <signal name="activate" handler="vtwin_show_prefs" object="VtyAppWindow" swapped="no"/>
       </object>
     </child>
     <child>
@@ -54,8 +54,8 @@
       <object class="GtkMenuItem" id="vtwin_close">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="action-name">win.quit</property>
         <property name="label" translatable="yes">Close</property>
+        <signal name="activate" handler="vtwin_close" object="VtyAppWindow" swapped="no"/>
       </object>
     </child>
     <child>
@@ -76,9 +76,14 @@
         <property name="can-focus">False</property>
         <property name="label" translatable="yes">About</property>
         <property name="use-underline">True</property>
+        <signal name="activate" handler="vtwin_show_about" object="VtyAppWindow" swapped="no"/>
       </object>
     </child>
   </object>
+  <object class="GtkEntryBuffer" id="vty_entry_buff">
+    <property name="text" translatable="yes">Dir.pwd</property>
+  </object>
+  <object class="GtkEntryCompletion" id="vty_entry_completion"/>
   <object class="GtkMenu" id="vty_menu">
     <property name="visible">True</property>
     <property name="can-focus">False</property>
@@ -179,6 +184,8 @@
             <property name="encoding">UTF-8</property>
             <property name="scroll-on-keystroke">True</property>
             <property name="scroll-on-output">False</property>
+            <signal name="child-exited" handler="vtwin_received_exit" object="VtyAppWindow" swapped="no"/>
+            <signal name="eof" handler="vtwin_received_eof" object="VtyAppWindow" swapped="no"/>
           </object>
           <packing>
             <property name="expand">False</property>
@@ -197,6 +204,7 @@
                 <property name="can-focus">True</property>
                 <property name="receives-default">True</property>
                 <property name="tooltip-text" translatable="yes">Send to Process</property>
+                <signal name="activate" handler="vtwin_send" object="VtyAppWindow" swapped="no"/>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -210,6 +218,9 @@
                 <property name="can-focus">True</property>
                 <property name="tooltip-text" translatable="yes">Input</property>
                 <property name="hexpand">True</property>
+                <property name="buffer">vty_entry_buff</property>
+                <property name="completion">vty_entry_completion</property>
+                <property name="input-purpose">terminal</property>
               </object>
               <packing>
                 <property name="expand">False</property>
