@@ -1,11 +1,5 @@
 ##
 
-## TBD the testing framework itself may not be higly reliable here
-##
-## These are each independent tests, and yet they may demonstrate
-## some peculiar side effects to each, after a change in the
-## implementation of any other.
-
 ## the library to test
 require 'pebbl_app/support/data_locker'
 
@@ -15,7 +9,7 @@ describe PebblApp::Support::DataLocker do
   subject { nil }
 
   it "locks data mtx in block" do
-    inst = PebblApp::Support::DataLocker.new
+    inst = described_class.new
     thr_a_gotlock = false
     thr_a_eval = false
     thr_b_gotlock = false
@@ -33,7 +27,6 @@ describe PebblApp::Support::DataLocker do
         thr_b_gotlock = inst.data_mtx.owned?
       }
     }
-    thr_a.join
     thr_b.join
     expect(thr_a_eval).to be true
     expect(thr_b_eval).to be true
@@ -42,7 +35,7 @@ describe PebblApp::Support::DataLocker do
   end
 
   it "enables conditional data access" do
-    inst = PebblApp::Support::DataLocker.new()
+    inst = described_class.new()
     token = nil
     thr_a = Thread.new {
       inst.with_conditional_access {
@@ -56,15 +49,14 @@ describe PebblApp::Support::DataLocker do
         token = 0
       }
     }
-    thr_a.join
+    # thr_a.join
     thr_b.join
     expect(token).to be == 0
   end
 
-  ## FIXME untested: the timeout condition in with_conditional_access
 
   it "enables conditional data access in time" do
-    inst = PebblApp::Support::DataLocker.new
+    inst = described_class.new
     token = nil
     thr_a = Thread.new {
       inst.with_conditional_access {
@@ -77,7 +69,6 @@ describe PebblApp::Support::DataLocker do
         token = 0
       }
     }
-    thr_a.join
     thr_b.join
     ## this test fails when the conditional/timeout test above
     ## is not defined? how is that now?
