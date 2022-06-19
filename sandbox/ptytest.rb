@@ -41,7 +41,11 @@ if (pid = Process.fork)
 
   p_out = ctl_io
   p_in = ctl_io
+
+  pty_io.close
+
   p_err = err_pipe_rd
+  err_pipe_wr.close
 
 else
   ## subprocess setup section
@@ -58,12 +62,10 @@ else
   STDERR.close_on_exec = true
   STDOUT.close_on_exec = true
   STDIN.close_on_exec = true
-  ## flushing these streams here may cause a peculiar scheduling behavior
-  ## for read from the err_pipe_rd && ctl_io streams in the calling process
-  ## seen with Ruby 3.1 on FreeBSD 13.1 (amd64)
-  # STDOUT.flush
-  # STDERR.flush
-  # STDIN.flush
+  STDOUT.flush
+  STDERR.flush
+  STDIN.flush
+  pty_io.flush
   err_pipe_wr.puts "In: #{Process.pid}"
   err_pipe_wr.puts "Starting shell ..."
   ## flush any streams accessed directly
@@ -72,9 +74,6 @@ else
   ## with or without flushing other streams here,
   ## or simply the concern as to whether the err reader or out reader
   ## displays its output first in the calling process
-  # pty_io.flush
-  # STDERR.flush
-  # STDOUT.flush
   ## using an exit status that can be set in any exec_error handler
   ## FIXME once implemented, store this in an instance attr/ivar
   $EXITSTATUS = -1
@@ -101,71 +100,49 @@ else
   end
 end
 
-
-sched_mtx = Mutex.new
-cv = ConditionVariable.new
-out_mtx = Mutex.new
+## async i/o for separate output (pty) and error (pipe) streams in the subprocess
+##
+## orthogonal to the process fork=>exec implementation
 
 Thread.new {
-  while ! p_err.closed?
-    if IO.select([p_err], nil, nil, 0)
-      begin
-        ## TBD make the readpartial extent a configurable field
-        text = p_err.readpartial(512)
-      rescue EOFError, IOError => e
-        Kernel.warn(e)
-        Thread.current.exit
-      end
-      sched_mtx.synchronize {
-        begin
-          cv.wait(sched_mtx) if ! out_mtx.try_lock
-          Kernel.warn("Read from err #{p_err}: #{text}")
-          cv.signal
-          text = "".freeze
-        ensure
-          out_mtx.unlock
+  begin
+    while ! p_err.closed?
+      readable = nil
+      if (readable = IO.select([p_err, p_out], nil, nil, 0))
+        readable.each do |tbd|
+          ## arrays encapsulating arrays. iterate on each ..
+          ##
+          ## this should result in a predictable order of I/O
+          ## via Kernel.warn
+          tbd.each do  |io|
+          ## TBD make the readpartial extent a configurable field
+          text = io.readpartial(512)
+          Kernel.warn("Read from #{io}: #{text}")
+          end
         end
-      }
+      end
     end
+  rescue EOFError, IOError => e
+    ## FIXME use any mapped handlers in the implementation
+    Kernel.warn(e)
+    Thread.current.exit
+  ensure
+    pty_io.close
+    ctl_io.close
+    err_pipe_wr.close
+    err_pipe_rd.close
+    Process.kill("TERM", pid)
   end
   Kernel.warn("err closed")
 }
 
 
-Thread.new {
-  while ! p_out.closed?
-    ## FIXME the EOFError, IOError handler
-    ## needs to be applicable also for IO.select
-    if IO.select([p_out], nil, nil, 0)
-      begin
-        text = p_out.readpartial(512)
-      rescue EOFError, IOError => e
-        ## will any partial read before EOFError be lost here?
-        ## or would readpartial return normally at eof
-        ## if there was any data read?
-        Kernel.warn(e)
-        Thread.current.exit
-      end
-      sched_mtx.synchronize {
-        begin
-          cv.wait(sched_mtx) if ! out_mtx.try_lock
-          Kernel.warn("Read from out #{p_out}: #{text}")
-          cv.signal
-          text = "".freeze
-        ensure
-          out_mtx.unlock
-        end
-        }
-    end
-  end
-  Kernel.warn("out closed")
-}
-
 Kernel.warn("Write to #{p_in}")
 p_in.puts 'echo bash ${BASH_VERSION}'
 p_in.flush ## this
 
-## needed until fixing the threaded readers' error handling (FIXME)
+## a pause is needed in this test,
+## to prevent loosing the i/o to/from the subprocess
 sleep 0.1
 
 Kernel.warn("close")

@@ -72,53 +72,68 @@ cv = ConditionVariable.new
 out_mtx = Mutex.new
 
 
+## async i/o for separate output (pty) and error (pipe) streams in the subprocess
+##
+## orthogonal to the process fork=>exec implementation
+##
+## FIXME this implementation may ilustrate nondeterministic behaviors,
+## as to which reader thread will display its output first.
+##
+## at least, each reader thread should have independent access to the
+## primary output (here, warn => stderr) in this implementation
+##
+## alternate approach: Use one thread, select on err and out
+## - cf ./ptytest.rb
+
 Thread.new {
-  while ! p_err.closed?
-    if IO.select([p_err], nil, nil, 0)
-      begin
-        text = p_err.readpartial(2048)
-      rescue EOFError, IOError => e
-        Kernel.warn(e)
-        Thread.current.exit
-      end
-      sched_mtx.synchronize {
+  begin
+    while ! p_err.closed?
+      if IO.select([p_err], nil, nil, 0)
         begin
-          out_mtx.try_lock || cv.wait(sched_mtx)
-          Kernel.warn("Read from err #{p_err}: #{text}")
-          cv.signal
-          text = "".freeze
-        ensure
-          out_mtx.unlock
+          text = p_err.readpartial(2048)
+          sched_mtx.synchronize {
+            begin
+              out_mtx.try_lock || cv.wait(sched_mtx)
+              Kernel.warn("Read from err #{p_err}: #{text}")
+              cv.signal
+              text = "".freeze
+            ensure
+              out_mtx.unlock
+            end
+          }
         end
-      }
+      end
     end
+  rescue EOFError, IOError => e
+    Kernel.warn(e)
+    Thread.current.exit
   end
   Kernel.warn("err closed")
 }
 
 Thread.new {
-  while ! p_out.closed?
-    if IO.select([p_out], nil, nil, 0)
-      begin
+  begin
+    while ! p_out.closed?
+      if IO.select([p_out], nil, nil, 0)
         text = p_out.readpartial(2048)
-      rescue EOFError, IOError => e
-        ## TBD will any partial read before EOFError be lost here?
-        ## or would IO#readpartial return normally at eof,
-        ## if there was any data read?
-        Kernel.warn(e)
-        Thread.current.exit
-      end
-      sched_mtx.synchronize {
-        begin
-          out_mtx.try_lock || cv.wait(sched_mtx)
-          Kernel.warn("Read from out #{p_out}: #{text}")
-          cv.signal
-          text = "".freeze
-        ensure
-          out_mtx.unlock
-        end
+        sched_mtx.synchronize {
+          begin
+            out_mtx.try_lock || cv.wait(sched_mtx)
+            Kernel.warn("Read from out #{p_out}: #{text}")
+            cv.signal
+            text = "".freeze
+          ensure
+            out_mtx.unlock
+          end
         }
+      end
     end
+  rescue EOFError, IOError => e
+    ## TBD will any partial read before EOFError be lost here?
+    ## or would IO#readpartial return normally at eof,
+    ## if there was any data read?
+    Kernel.warn(e)
+    Thread.current.exit
   end
   Kernel.warn("out closed")
 }
