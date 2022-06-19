@@ -1,4 +1,8 @@
 ## pipe-mode IO with GLib::Spawn
+##
+## Prototype for
+## PebblApp::Support::PtyCmd
+## and subsq PebblApp::GtkSupport::VtyCmd
 
 require 'gtk3'
 
@@ -8,6 +12,13 @@ Gtk.init if Gtk.respond_to?(:init)
 
 require 'pty'
 ctl_io, pty_io = PTY.open
+
+## FIXME the ctl_io stream can accept input. For the calling process,
+## this should be integrated with scheduling for reading subprocess
+## output from the pty channel or the error pipe, blocking the read
+## internally until output has completed, and blocking the write until
+## any input has completed within the calling process
+
 
 ## with Gtk support now ..
 require 'vte3'
@@ -30,23 +41,24 @@ err_pipe_rd, err_pipe_wr = IO.pipe
 
 sub_env = ENV
 
-## marker for an instance variable
+## marker for an instance variable,
+## initialized here for any usage
+## in the subprocess, on exec fail
 $EXITSTATUS = 0
 
 if (pid = Process.fork)
   ## in the calling process
-
   Kernel.warn("Forked process #{pid}")
-  ## Vte::Terminal...watch_proc(pid)
-
+  ## configure some local variables for the pty channel
+  ## and error pipe streams
   p_out = ctl_io
   p_in = ctl_io
-
-  pty_io.close
-
   p_err = err_pipe_rd
+  ## cleanups for streams
+  pty_io.close
   err_pipe_wr.close
-
+  ### handler for post-exec in the calling process
+  ## Vte::Terminal...watch_proc(pid)
 else
   ## subprocess setup section
   ## - simlar to the setup function for GLib::Spawn.async* via Ruby-GNOME GLib
@@ -55,7 +67,9 @@ else
   ## betwen fork and exec in portable applications
   ##
   ## FIXME this API could support a user-provided setup block here,
-  ## additional to any user-provided "error in exec" block.
+  ## additional to any user-provided "error in exec" block,
+  ## and any user-provided post-exec block for the calling process
+  ## and any user-provided IO handling blocks in the calling process
   ##
   pty_io.close_on_exec = false
   err_pipe_wr.close_on_exec = false
@@ -79,25 +93,23 @@ else
   $EXITSTATUS = -1
   begin
     Process.exec(sub_env, "bash", in: pty_io, out: pty_io, err: err_pipe_wr)
-  ensure
-    ## FIXME call any exec_error handler initialized before fork,
-    ## ... yielding Process.pid to the exec_error handler here
-    ## ... in an additional begin/rescue block,
-    ##     no-op under the rescue section
-    ##
-    ## then clean up & exit
-    err_pipe_wr.flush
-    err_pipe_wr.close
-    pty_io.flush
-    pty_io.close
-    STDERR.flush
-    STDERR.close
-    STDOUT.flush
-    STDOUT.close
-    STDIN.flush
-    STDIN.close
-    exit($EXITSTATUS)
+  rescue
+    Kernel.warn($!, uplevel: 0)
   end
+  ## exec failed, or this would not be reached
+  ##
+  ## clean up & exit with any configured exit status code
+  err_pipe_wr.flush
+  err_pipe_wr.close
+  pty_io.flush
+  pty_io.close
+  STDERR.flush
+  STDERR.close
+  STDOUT.flush
+  STDOUT.close
+  STDIN.flush
+  STDIN.close
+  exit($EXITSTATUS)
 end
 
 ## async i/o for separate output (pty) and error (pipe) streams in the subprocess
