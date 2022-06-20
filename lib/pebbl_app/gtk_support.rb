@@ -32,6 +32,8 @@ module PebblApp::GtkSupport
       %w(GtkConfig),
     "gtk_support/exceptions" =>
       %w(ConfigurationError),
+    "gtk_support/gir_proxy" =>
+      %w(InvokerP FuncInfo),
     "gtk_support/logging" =>
       %w(LoggerDelegate LogManager LogModule),
     "gtk_support/threads" =>

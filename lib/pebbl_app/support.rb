@@ -39,7 +39,9 @@ module PebblApp::Support
     "support/files" =>
       %w(Files),
     "support/sh_proc" =>
-      %w(ShProc)
+      %w(ShProc),
+    "support/attrs" =>
+      %w(IvarUnbound AttrProxy)
   })
 
 end
