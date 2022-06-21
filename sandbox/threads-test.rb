@@ -92,16 +92,21 @@ class MainDispatch
     STDERR.puts "Configure dispatch for work"
     dispatch_work(context, data)
 
+    ## Initialize and hold a mutex during application runtime
+    main_mtx = Mutex.new
+
     STDERR.puts "Call for main thread"
-    main_thr = context_main(context, data)
+    main_thr = context_main(context, data, main_mtx)
 
     ## simulating a duration in application runtime, before return
-    sleep 5
-    STDERR.puts "Done"
-    time = Time.now
-    ## log the event, for data review
-    data.quit = time
-    data.work_log[time] = :quit
+    main_mtx.synchronize {
+      sleep 5
+      STDERR.puts "Done"
+      time = Time.now
+      ## log the event, for data review
+      data.quit = time
+      data.work_log[time] = :quit
+    }
     # context.unref # n/a
     main_thr.join
     return data
@@ -148,7 +153,7 @@ class MainDispatch
     ostruct.work_log[Time.now] = :dispatched
     src = GLib::Idle.source_new
     src.set_callback do
-      ## tcalled in each main loop iteration
+      ## called in each main loop iteration
       STDERR.puts "In callback => do_work"
       ostruct.work_log[Time.now] = :callback
       do_work(ostruct)
@@ -173,7 +178,7 @@ class MainDispatch
   ## called under #main
   ##
   ## returns the new thread
-  def context_main(context, ostruct)
+  def context_main(context, ostruct, main_mtx)
     thr = Thread.new do
       ostruct.work_log[Time.now] = :main_run
       STDERR.puts "... main thread begins"
@@ -185,15 +190,25 @@ class MainDispatch
         ## FIXME could use a mutex and cv wait, here,
         ## rather than spinning in a wait loop ...
       end
+
+      ## Iterate in the event loop until the mutex provided by the
+      ## caller can be held in the dispatch loop.
+      ##
+      ## Once the mutex can be held here: Cleanup (quit main),
+      ## release the mutex and return
       ostruct.work_log[Time.now] = :main_iterate
       STDERR.puts "... dispatched" unless ostruct.dispatched
-      while ! ostruct.quit
+      while ! main_mtx.try_lock
         context.iteration(true)
       end
-      ostruct.work_log[Time.now] = :main_quit
-      STDERR.puts ".. quit main context"
-      main.quit
-      #main.unref # n/a
+      begin
+        ostruct.work_log[Time.now] = :main_quit
+        STDERR.puts ".. quit main context"
+        main.quit
+        #main.unref # n/a
+      ensure
+        main_mtx.unlock
+      end
     end
     return thr
   end
