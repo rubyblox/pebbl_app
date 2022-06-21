@@ -17,22 +17,30 @@ end
 ##
 ## Example
 ## ~~~~
-## test = ThreadTest.new
+## test = MainDispatch.new
 ## data = test.main
 ## data.work_log.to_a
 ## ~~~~
 ##
 ## Notes
 ##
-## - ThreadTest#main can be called more than once, within one calling thread
+## - MainDispatch#main can be called more than once, within one calling thread
 ##
 ## - Due to the present implementation of the #data `quit` field and an
 ##   internal flag as #data `dispatched`, the protected methods on each
-##   ThreadTest should not be accessed outside of the thread in which
-##   ThreadTest#main was called
+##   MainDispatch, and the 'quit' and 'dispatched' flags on the #data
+##   object should not be accessed outside of the thread in which
+##   MainDispatch#main was called
 ##
-
-class ThreadTest
+## FIXME/TBD
+##
+## - Define an internal class for the #data field
+##
+## - Integration with GTK
+##
+## - Application with FD polling for vtytest
+##
+class MainDispatch
 
   attr_reader :data
 
@@ -106,7 +114,7 @@ class ThreadTest
   ## https://developer.gnome.org/documentation/tutorials/main-contexts.html#
   ##
   ## add to the ostruct.work_log, dependent on the ostruct.quit flag
-  ## ih the ostruct
+  ## in the ostruct
   ##
   ## called under a callback initialized in #dispatch_work
   ##
