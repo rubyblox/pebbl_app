@@ -1,14 +1,65 @@
-## vtytest.rb
+## vtytest.rb - prototyping for a Vte::Terminal app after Emacs comint
+##
+## installation: from the project root directory
+## $ rake bundle:install
+##
+## usage: from the project root directory
+## $ ./bin/vtytest
+##
+## This application requires a working X11 display.
+##
+## The shell environment should also have been configured for
+## xauth support, if required for the X11 display server.
+##
+## UI files for Glade: from the project root directory
+## ./ui/appwindow.vtytest.ui
+## ./ui/prefs.vtytest.ui
+##
 
 require 'pebbl_app/gtk_support/gtk_app_prototype'
 
 require 'gtk3'
+
+if ! ENV['DISPLAY']
+  ## try to prevent a Gtk::InitError if no DISPLAY is available
+  ##
+  ## Gtk.init may accept a --display arg, unused for purposes of this test
+  Kernel.warn("#(File.basename($0)}: No X11 display found in environment", uplevel: 0)
+  exit(-1)
+end
+
+begin
+  Gtk.init(*ARGV)
+  rescue Gtk::InitError => e
+    this = File.basename($0)
+    STDERR.puts "[DEBUG] #{this}: Failed in Gtk.init"
+    STDERR.puts e.full_message
+    ## FIXME could initialize either pry or irb here, if found
+    begin
+      irb = Gem::Specification.find_by_name("irb")
+    rescue
+      STDERR.puts "irb not found"
+      exit(-1)
+    end
+    ## drop into irb and disable $DEBUG
+    ## - Some $DEBUG output may interfere with tty i/o under IRB
+    irb.activate
+    $DEBUG = false
+    $INIT_ERROR = e
+    require %q(bundler/setup)
+    require %q(irb)
+    require %q(irb/completion)
+    STDERR.puts "[DEBUG] #{this}: Gtk::InitError stored as $INIT_ERROR"
+    IRB.start(__FILE__)
+end
+
 require 'vte3'
 require 'shellwords'
 
-
+## Prototype for GLib type extension support in PebblAPp
 module BoxedProto
   def self.extended(whence)
+    ## register the class, at most once
     if ! whence.class_variable_defined?(:@@registered)
       ## FIXME does not detect duplcate registrations
       ## of differing implmentation classes
@@ -18,6 +69,7 @@ module BoxedProto
   end
 end
 
+## Base module for template support in this prototype
 module CompositeProto
   def self.extended(whence)
     whence.extend BoxedProto
@@ -38,8 +90,9 @@ module CompositeProto
   end ## self.extended
 end
 
-## prototype module for classes deriving a Gtk Builder template
-## definition directly from a UI file source
+## prototype module for classes using a template definition with
+## GTK Builder, when the template is initialized directly from a
+## UI file source
 ##
 module CompositeFileProto
   def self.extended(whence)
@@ -78,10 +131,7 @@ end
 
 ## configuration support for VtyApp
 ##
-## an instance of this class is returned from VtyApp#config. The
-## instance will have been initialized for the application command name
-## of the calling VtyApp
-##
+## an instance of this class is returned from VtyApp#config
 class VtyConfig < PebblApp::GtkSupport::GtkConfig
 
   ## command line options parsing vor VtyApp
@@ -94,8 +144,9 @@ class VtyConfig < PebblApp::GtkSupport::GtkConfig
 
 end
 
-
-
+##
+## preferences window for VtyApp
+##
 class VtyPrefsWindow < Gtk::Dialog
   TEMPLATE ||=
     File.expand_path("../ui/prefs.vtytest.ui", __dir__)
@@ -156,6 +207,9 @@ class VtyPrefsWindow < Gtk::Dialog
 end
 
 
+##
+## Main application window class, VtyApp
+##
 class VtyAppWindow < Gtk::ApplicationWindow
   TEMPLATE ||=
     File.expand_path("../ui/appwindow.vtytest.ui", __dir__)
@@ -178,15 +232,15 @@ class VtyAppWindow < Gtk::ApplicationWindow
     ## bind actions, signals ...
   end
 
-
   ###########################################3
   ## signal receiver methods
   ## - configured e.g via the 'signals' tab in the Glade UI editor
   ## - the "handler" there may represent a method name,
   ##   while the "user data" widget selected there may represent
   ##   the recipient of the method
-  ## - if receiver method is defined as name(obj) then the obj may represent
-  ##   the "active widget" of the signal's activation, e.g a menu item
+  ## - receiver method args may vary by signal type,
+  ##   typically including at least one arg representing
+  ##   the active widget when the signal is sent
 
   def vtwin_close
     self.close
@@ -200,21 +254,13 @@ class VtyAppWindow < Gtk::ApplicationWindow
     self.vty.reset(false, false)
   end
 
+  ## present an application preferences window, creating a new
+  ## preferences window if not already initialized for the VtyApp
   def vtwin_show_prefs(obj)
-    ## ... map a prefs window, attached to the active window for this
-    ## window's application, if no prefs window already exists,
-    ## else raise the prefs window
-
     Kernel.warn("Prefs method received data: #{obj.inspect}",
                 uplevel: 0)
     app = self.application
-    app.prefs_window ||= app.create_prefs_window(app.active_window || self)
-    # if (! apps.prefs_window.visible?)
-    #   app.prefs_window.show
-    # end
-    # app.prefs_window.raise
-    ## or (??)
-    app.prefs_window.present
+    app.ensure_prefs_window(app.active_window || self).present
   end
 
   def vtwin_show_about(obj)
@@ -251,10 +297,9 @@ class VtyApp < Gtk::Application
   include PebblApp::GtkSupport::GtkAppPrototype
 
   class << self
-
+    ## internal instance tracking for VtyApp
+    ## - not integrated with dbus
     def started
-      ## TBD state recording for instances of this app class
-      ## onto Gtk dbus conventions
       if class_variable_defined?(:@@started)
         @@started
       else
@@ -272,7 +317,8 @@ class VtyApp < Gtk::Application
   end
 
   def default_shell
-    ## TBD - should be a configurable property of the app and/or window
+    ## TBD - should be implemented as a configurable property
+    ## of the app and/or window
     if instance_variable_defined?(:@default_shell)
       return @default_shell
     elsif self.config.option?(:shell)
@@ -284,23 +330,18 @@ class VtyApp < Gtk::Application
 
 
   def action_group_name()
-    ## TBD - this is a hack for map_simple_action
+    ## a hack for map_simple_action
     ##
-    ## Absent of any apparent way to retrieve the name for any action
-    ## group for an action group implementor in GTK, hard-coding a
-    ## single action group name in each action group proxy instance,
-    ## here e.g onto Gtk::Application
+    ## this hard-codes the name of an action group for the application,
+    ## assuming this matches an action group created somewhere in GTK
+    ## for the application
+    ##
     return "app".freeze
   end
 
   ## utility method for GAction initialization
   ##
-  ## FIXME move to a new GActionReceiver module after tests
-  ## - include module in GAppPrototype
-  ## - include module in GAppWindowPrototype (new)
-  ##
-  ## FIXME alternate approach: Use signal handlers configured via the
-  ## Glade UI editor, not menu actions per se
+  ## used for binding a callback to app.quit
   def map_simple_action(name, group: nil,
                         accel: nil, &handler)
     ## GSimpleAction is the name of a class
@@ -353,8 +394,9 @@ class VtyApp < Gtk::Application
     super("space.thinkum.vtytest",
           Gio::ApplicationFlags::SEND_ENVIRONMENT |
             Gio::ApplicationFlags::NON_UNIQUE)
-    ## ^ TBD does this call 'register' in some way, e.g in Gtk ?
-    ## ^ TBD calling with flags for multiple instance of the app
+    ## TBD managing multiple app instances in or outside of a single
+    ## process, and side effects w/ dbus - alternately, connecting
+    ## to some existing app instance, if already initialized
 
     ## map a handler for the app 'startup' signal,
     ## reached e.g via self.register
@@ -368,7 +410,7 @@ class VtyApp < Gtk::Application
       app.handle_activate
     end
 
-    ## TBD for app support prototypes - no "open" handling supported here
+    ## TBD for app support - no "open" handling supported in this app
     # signal_connect "open" do |app|
     #   app.handle_open
     # end
@@ -376,7 +418,6 @@ class VtyApp < Gtk::Application
   end
 
   ## handler for the app's 'startup' signal,
-  ## typically reached via #register on some class
   def handle_startup()
 
     if ((started = self.class.started) && !started.eql?(self))
@@ -387,14 +428,14 @@ class VtyApp < Gtk::Application
                   uplevel: 1)
     end
 
-
     ## bind C-q to an 'app.quit' action,
     ## also defining a handler for that action
     self.map_simple_action("app.quit", accel: "<Ctrl>Q") do
       self.quit
     end
- end
+  end
 
+  ## handler for the app 'activate' signal
   def handle_activate()
       Kernel.warn("Handling activate for #{self.class}: #{self.inspect}",
                   uplevel: 1)
@@ -408,21 +449,25 @@ class VtyApp < Gtk::Application
 
   ## create a new application preferences window for this application
   ##
-  ##
   ## at most one preferences window should be visible for a single
   ## appliction instance
-  def create_prefs_window(transient_for = self.active_window)
-    wdw = VtyPrefsWindow.new(transient_for: transient_for)
-    wdw.signal_connect_after("destroy") do
+  def ensure_prefs_window(transient_for = self.active_window)
+    if ! (wdw = self.prefs_window)
+      wdw = VtyPrefsWindow.new(transient_for: transient_for)
+      wdw.signal_connect_after("destroy") do
         self.prefs_window = nil
+      end
+      self.prefs_window = wdw
     end
     return wdw
   end
 
+  ## create a new application window
   def create_app_window()
     VtyAppWindow.new(self)
   end
 
+  ## return the config instance for this application
   def config
     @config || VtyConfig.new(self) do
       ## callback for the Config object's 'name' param
@@ -430,22 +475,18 @@ class VtyApp < Gtk::Application
     end
   end
 
+  ## run this application
   def run()
-    ## reached before #start
     Kernel.warn("Registering #{self}", uplevel: 0)
     self.register
     Kernel.warn("Start for #{self}", uplevel: 0)
     self.start
-    # Kernel.warn("Activating #{self}", uplevel: 0)
-    # self.activate
-    # Kernel.warn("Calling superclass run mtd for #{self}", uplevel: 0)
     super
   end
 
-  ## called from #activate as defined via inclusion of GtkAppPrototype
-  ##
+  ## called from #activate, via inclusion of
+  ## PebblApp::GtkSupport::GtkAppPrototype
   def start(args = nil)
-    ## args would not be handled here, should typically be empty
     if args && (! args.empty?)
       Kernel.warn("Discarding args: #{args.inspect}", uplevel: 0)
     end

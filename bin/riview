@@ -1,7 +1,4 @@
-#!/usr/bin/env ruby
-
-### first line for normal run:
-#!/usr/bin/env ruby
+#!/usr/bin/env -S bundle exec ruby
 
 ## first line for general debug
 #!/usr/bin/env -S rdbg -e 'catch AnException' -e 'continue' -c bundle exec ruby

@@ -176,21 +176,22 @@ if ENV['BUNDLE_GEMFILE'] &&
 else
   ## non-bundler-env tasks for rake
 
-  task default: %i(subrake)
+  task default: %i(bundle:subrake)
 
-  desc 'run rake under bundler'
-  ## By side effect corresponding to the deps of this task, this task
-  ## should serve to ensure that bundler will have installed the deps
-  ## for this project, before rake will call the default task under a
-  ## rake subprocess via bundler.
-  ##
-  ## To pass args to the subrake, e.g -T:
-  ## $ rake subrake -- -T
-  ##
-  task subrake: ['Gemfile.lock'] do
-    sh %(bundle exec rake ) + ARGV.difference(%w(subrake --)).join(" ")
+  namespace 'bundle' do
+    desc 'run rake under bundler'
+    ## By side effect corresponding to the deps of this task, this task
+    ## should serve to ensure that bundler will have installed the deps
+    ## for this project, before rake will call the default task under a
+    ## rake subprocess via bundler.
+    ##
+    ## To pass args to the subrake, e.g -T:
+    ## $ rake subrake -- -T
+    ##
+    task subrake: ['Gemfile.lock'] do
+      sh %(bundle exec rake ) + ARGV.difference(%w(subrake --)).join(" ")
+    end
   end
-
 end
 
 ##
@@ -235,17 +236,25 @@ file 'Gemfile.lock': %w(.bundle/config Gemfile) do
   File.utime(File.atime('Gemfile.lock'), Time.now, 'Gemfile.lock')
 end
 
-## the task as visible under rake -T
-desc %(update bundler installation for project)
-task update: %w(.bundle/config Gemfile) do
-  sh %(bundle update --verbose)
-  File.utime(File.atime('Gemfile.lock'), Time.now, 'Gemfile.lock')
-end
 
-desc %(update/clean (bundler))
-task refresh: [:update] do
-  sh %(bundle clean --verbose)
-end
+namespace 'bundle' do
+  desc 'install dependencies'
+  task install: %w(Gemfile.lock)
+
+  ## the task as visible under rake -T
+  desc %(update bundler installation for project)
+
+  task update: %w(.bundle/config Gemfile) do
+    sh %(bundle update --verbose)
+    File.utime(File.atime('Gemfile.lock'), Time.now, 'Gemfile.lock')
+  end
+
+  desc %(bundle update, bundle clean)
+  task refresh: [:update] do
+    sh %(bundle clean --verbose)
+  end
+end ## bundle
+
 
 require 'rake/clean'
 ## rake clean:
