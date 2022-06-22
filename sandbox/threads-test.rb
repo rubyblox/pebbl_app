@@ -26,15 +26,13 @@ end
 ##
 ## - MainDispatch#main can be called more than once, within one calling thread
 ##
-## - Due to the present implementation of the #data `quit` field and an
-##   internal flag as #data `dispatched`, the protected methods on each
-##   MainDispatch, and the 'quit' and 'dispatched' flags on the #data
-##   object should not be accessed outside of the thread in which
+## - Due to the present implementation of the #data `quit` field
+## ... should not be accessed outside of the thread in which
 ##   MainDispatch#main was called
 ##
 ## FIXME/TBD
 ##
-## - Define an internal class for the #data field
+## - Define an internal class for the #data field (work log optional)
 ##
 ## - Integration with GTK
 ##
@@ -53,7 +51,7 @@ class MainDispatch
   ##
   ## 2) for a new GLib::MainContext and the #data object for the instance:
   ##
-  ##    a) via #dispatch_work: initialize a callback block, for dispatch
+  ##    a) via #with_dispatch: initialize a callback block, for dispatch
   ##       in each iteration of the main loop. The #do_work method will
   ##       be called in each call to the callback,
   ##
@@ -78,38 +76,62 @@ class MainDispatch
     data = (@data ||= OpenStruct.new(work_log: {}))
     ## re/initialize all runtime flags
     data.quit = false
-    data.dispatched = false
     ## log the event
     data.work_log[Time.now] = :init
+
+    ## Initialize and hold a mutex during configuration and application runtime
+    main_mtx = Mutex.new
 
     ## local context object for the GLib::MainLoop
     ## which will be created in the main thread
     STDERR.puts "Init context"
     context = GLib::MainContext.new
 
-    ## configuring all known event sources on the context,
-    ## before initializing the main thread
-    STDERR.puts "Configure dispatch for work"
-    dispatch_work(context, data)
+    main_thr = false
 
-    ## Initialize and hold a mutex during application runtime
-    main_mtx = Mutex.new
+    ## using a separate mutex for blocking the main loop
+    ## during event source configuration
+    conf_mtx = Mutex.new
 
-    STDERR.puts "Call for main thread"
-    main_thr = context_main(context, data, main_mtx)
+    ## then releasing the mutex and begininng
+    ## processsing for the main event loop.
+    ##
+    ## The nop-op block on the mutex in the context_main thread
+    ## should serve to prevent that the event loop would be reached
+    ## before all event sources are configured from here. (DNW)
+    ##
+    begin
+      conf_mtx.lock
+      ## configuring all known event sources on the context,
+      ## before initializing the main thread
+      STDERR.puts "Configure dispatch for work"
 
-    ## simulating a duration in application runtime, before return
-    main_mtx.synchronize {
-      sleep 5
-      STDERR.puts "Done"
-      time = Time.now
-      ## log the event, for data review
-      data.quit = time
-      data.work_log[time] = :quit
-    }
-    # context.unref # n/a
-    main_thr.join
-    return data
+      begin
+        with_dispatch(context, data) ## do ... do_work .. end (block form)
+        STDERR.puts "Call for main thread"
+        main_thr = context_main(context, data, main_mtx, conf_mtx)
+      rescue
+        data.quit = $!
+        main_thr.exit if main_thr
+        return false
+      end
+
+      ## simulating a duration in application runtime, before return
+      main_mtx.synchronize do
+        conf_mtx.unlock
+        sleep 5
+        STDERR.puts "Done"
+        time = Time.now
+        ## log the event, for data review
+        data.quit = time
+        data.work_log[time] = :quit
+      end ## main_mtx
+
+      # context.unref # n/a
+      main_thr.join
+      return data
+
+    end ## conf_mtx
   end
 
   ## protected methods can be extended in a subclass
@@ -121,7 +143,7 @@ class MainDispatch
   ## add to the ostruct.work_log, dependent on the ostruct.quit flag
   ## in the ostruct
   ##
-  ## called under a callback initialized in #dispatch_work
+  ## called under a callback initialized in #with_dispatch
   ##
   def do_work(ostruct)
     if ostruct.quit
@@ -148,7 +170,7 @@ class MainDispatch
   ##
   ## returns the new GLib::Idle source, as added to the context
   ##
-  def dispatch_work(context, ostruct)
+  def with_dispatch(context, ostruct)
     STDERR.puts "dispatch setting callback"
     ostruct.work_log[Time.now] = :dispatched
     src = GLib::Idle.source_new
@@ -161,8 +183,6 @@ class MainDispatch
     src.priority = GLib::PRIORITY_DEFAULT
     ## add the source and its callback to the provided main context
     src.attach(context)
-    ## set a synchronization flag, for the main loop to begin iteration
-    ostruct.dispatched = true
     STDERR.puts "callback set"
     return src
   end
@@ -178,38 +198,45 @@ class MainDispatch
   ## called under #main
   ##
   ## returns the new thread
-  def context_main(context, ostruct, main_mtx)
+  def context_main(context, ostruct, main_mtx, conf_mtx)
     thr = Thread.new do
       ostruct.work_log[Time.now] = :main_run
       STDERR.puts "... main thread begins"
       main = GLib::MainLoop.new(context, false) ## false => not run
       @main = main
-      while ! ostruct.dispatched
-        ## wait for other threads to catch up
-        ##
-        ## FIXME could use a mutex and cv wait, here,
-        ## rather than spinning in a wait loop ...
-      end
 
-      ## Iterate in the event loop until the mutex provided by the
-      ## caller can be held in the dispatch loop.
-      ##
-      ## Once the mutex can be held here: Cleanup (quit main),
-      ## release the mutex and return
-      ostruct.work_log[Time.now] = :main_iterate
-      STDERR.puts "... dispatched" unless ostruct.dispatched
-      while ! main_mtx.try_lock
-        context.iteration(true)
-      end
-      begin
-        ostruct.work_log[Time.now] = :main_quit
-        STDERR.puts ".. quit main context"
-        main.quit
-        #main.unref # n/a
-      ensure
-        main_mtx.unlock
-      end
-    end
+      ## block on conf_mtx, while caller is configuring event sources
+      conf_mtx.synchronize do
+        Thread.exit if ostruct.quit
+
+        ## Iterate in the event loop until the mutex provided by the
+        ## caller can be held in the dispatch loop, or until
+        ## ostruct.quit is indicated.
+        ##
+        ## Once the mutex can be held here: Cleanup (quit main),
+        ## release the mutex and return
+        ostruct.work_log[Time.now] = :main_iterate
+        catch(:quit) do |tag|
+          while ! main_mtx.try_lock
+            if ostruct.quit
+              ## lock held, but ostruct.quit is indicated
+              throw tag
+            else
+              context.iteration(true) ## blocking iteration
+            end
+          end
+        end
+        begin
+          ostruct.work_log[Time.now] = :main_quit
+          STDERR.puts ".. quit main context"
+          ## cleanup
+          main.quit
+          #main.unref # n/a
+        ensure
+          main_mtx.unlock
+        end
+      end ## conf_mtx
+    end ## thread
     return thr
   end
 
