@@ -54,10 +54,6 @@ end
 ##
 class MainDispatch
 
-  ## FIXME generalize #main to accept the object to pass,
-  ## with this field moved into an implementing class
-  attr_reader :data
-
   def debug(message)
     STDERR.puts message if $DEBUG
   end
@@ -73,9 +69,6 @@ class MainDispatch
   def main(context = AltContext.new(), &block)
     debug "main"
 
-    debug "Init data"
-    debug_event(context, :init)
-
     debug "Init locals"
     ## Initialize and hold a mutex during configuration and application runtime
     main_mtx = context.main_mtx
@@ -84,24 +77,14 @@ class MainDispatch
     conf_mtx = context.conf_mtx
     main_thr = false
 
-    ## then releasing the mutex and begininng
-    ## processsing for the main event loop.
-    ##
-    ## The nop-op block on the mutex in the context_main thread
-    ## should serve to prevent that the event loop would be reached
-    ## before all event sources are configured from here. (DNW)
-    ##
     begin
       conf_mtx.lock
-      ## configuring all known event sources on the context,
-      ## before initializing the main thread
       debug "Configure dispatch for work"
 
       begin
         ## configure event sources for this instance of the implementing class
         self.map_sources(context)
         debug "Call for main thread"
-        # main_thr = context_main(context, data)
         main_thr = context_main(context)
       rescue
         debug_event(context, $!)
@@ -110,10 +93,10 @@ class MainDispatch
       end
 
       ## yield to the provided block, outside of the main event loop
+      ##
+      ## after this section returns, the main loop will exit
       main_mtx.synchronize do
-        ##  own thread may not have held the mutex,
-        ## in exit under cancellation
-        conf_mtx.unlock if conf_mtx.owned?
+        conf_mtx.unlock
         block.yield if block_given?
       end ## main_mtx
 
@@ -146,9 +129,21 @@ class MainDispatch
     return src
   end
 
+  ## prototype method, should be implemented in any subclass
+  ##
   def map_sources(context)
     Kernel.warn("prototype #{__method__} method reached for %p in %s" %
                 [context, self], uplevel: 0) if $DEBUG
+  end
+
+  ## iterate once, for a loop on this context
+  ##
+  ## called within the thread running the loop on the main context
+  ##
+  def context_dispatch(context)
+    context.iteration(true) ## true i.e a blocking iteration
+    ## an additional call for dispatching to GTK e.g
+    # Gtk.main_iteration_do(false) if Gtk.events_pending
   end
 
   ## an adaptated emulation of `thread1_main` in
@@ -160,12 +155,10 @@ class MainDispatch
   ##
   ## @fixme should allow a block, for additional actions in the main
   ##        loop dispatch, e.g `Gtk.main_iteration_do(false) if Gtk.events_pending`
-  def context_main(context, &block)
+  def context_main(context)
     main_mtx = context.main_mtx
     conf_mtx = context.conf_mtx
 
-    ## FIXME 'data' here provides only a contrivance for ensuring the event
-    ## loop exits. This could be handled without requiring the parameter here
     thr = Thread.new do
       debug "... main thread begins"
       debug_event(context, :main_run)
@@ -181,8 +174,8 @@ class MainDispatch
         ## caller can be held in the dispatch loop, or until
         ## the cancellation object for this context is cancelled
         ##
-        ## Once the mutex can be held here: Cleanup (cancelled main),
-        ## release the mutex and return
+        ## Once the mutex can be held here: Cleanup; Release the mutex
+        ## if held, and return
         debug_event(context, :main_iterate)
         catch(:cancelled) do |tag|
           while ! main_mtx.try_lock
@@ -190,10 +183,7 @@ class MainDispatch
               ## lock held, but cancellation is indicated
               throw tag
             else
-              context.iteration(true) ## blocking iteration
-              ## block e.g
-              # Gtk.main_iteration_do(false) if Gtk.events_pending
-              block.yield if block_given?
+              context_dispatch(context)
             end
           end
         end
@@ -204,8 +194,9 @@ class MainDispatch
           main.quit
           # main.unref # n/a
         ensure
-          ## own thread may not have held the mutex,
-          ## in exit under cancellation
+          ## own thread may not have held the mutex, when this
+          ## is reached under cancellation
+          ## (odd, but seen under tests - see signal handler?)
           main_mtx.unlock if main_mtx.owned?
         end
       end ## conf_mtx
@@ -234,7 +225,6 @@ class TestContext < AltContext
 
   def initialize(data)
     super()
-    ## for the progress logging .. in the other class ... FIXME
     @data = data
   end
 
