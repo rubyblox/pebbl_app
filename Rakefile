@@ -252,8 +252,12 @@ end
 
 
 namespace :console do
+  ## if run via 'bundle exec rake', should be run after e.g
+  ## $ bundle config --local set with development:irb
+  ##
+  ## else if run via rake and not bundler, irb should be
+  ## available in user or host gems
   desc 'Run IRB in a console in rake'
-  $TBD = Rake.application.instance_variable_get(:@scope)
   task :irb do |task, args|
     $RAKE_APP = Rake.application
     $RAKE_SCOPE = task.scope
