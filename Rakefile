@@ -214,7 +214,6 @@ else
     proj_data = Psych.load_file(proj_yaml)
   end
 
-
   if (publishing = proj_data['publish_gems'])
     ## value must be an array
     local_gems = publishing
@@ -228,24 +227,21 @@ else
   end
 
   namespace "gems" do
-
     namespace "each" do
       ## each individual set of tasks for each gem
-      ## will be defined in this namespae
+      ## will be defined in this namespace
       local_gems.each do |name|
         namespace name do
           Bundler::GemHelper.install_tasks(name: name)
         end
       end
     end
-
     ## define gems:build (...) tasks to build (...) all specified gems
     %w(build build:checksum install install:local).each do |dispatch|
       all_disp = local_gems.map { |name| "%s:each:%s" % [name, dispatch]}
       desc "#{dispatch} for #{local_gems.join(", ")}"
       task dispatch => all_disp
     end
-
   end
 
 end
