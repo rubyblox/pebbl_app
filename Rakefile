@@ -230,16 +230,16 @@ else
   namespace "gems" do
 
     namespace "each" do
+      ## each individual set of tasks for each gem
+      ## will be defined in this namespae
       local_gems.each do |name|
         namespace name do
-          ## ** FIXME ** wrong placement for this, and yet this will need
-          ## access to the project.yaml parser & its deps
           Bundler::GemHelper.install_tasks(name: name)
         end
       end
     end
 
-    ## e.g for the gems:build task to build all specified gems
+    ## define gems:build (...) tasks to build (...) all specified gems
     %w(build build:checksum install install:local).each do |dispatch|
       all_disp = local_gems.map { |name| "%s:each:%s" % [name, dispatch]}
       desc "#{dispatch} for #{local_gems.join(", ")}"
