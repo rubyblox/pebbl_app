@@ -41,27 +41,30 @@ end
 ##
 ## **Example: DispatchTest**
 ##
-## In the DispatchTest example, the class DispatchTest extends Sevice,
-## there overriding the #configure and #main methods on this class.
+## In the DispatchTest example, the class DispatchTest extends Service,
+## there overriding the #configure and #main methods on Service
 ##
 ## The #main method in DispatchTest calls the superclass' #main method
 ## via `super`, there providing a custom ServiceContext instance and
 ## a local block to the `super` call. The block implements a custom
-## application logic independent to the service main loop, such that
-## will be called in the same thread as #main. In application within the
-## #main method on Service, the DispatchTest #main method will return in
-## the calling thread, after control exits the block provided to the
-## Service #main method.
+## application logic independent to the service main loop. This block
+## will be called in the same thread as #main.
 ##
-## The #configure method in the DispatchTest test example adds a
+## In application with he #main method on Service, the DispatchTest
+## event loop will exit, after control has exited the block provided to
+## the Service #main method.
+##
+## The #configure method in the DispatchTest example will add a
 ## GLib::Idle kind of GLib::Source to the context object provided to the
-## method. This #configure method uses #map_idle_source to add a
-## callback on the the idle source and to add the source to the provided
-## context. The #configure method then sets a source priority on the
-## source object returned by #map_idle_source. In the DispatchTest
-## example, the idle source's callback block will call the implementing
-## class' `do_work` method. This should be reached in each normal
-## iteration of the application's main loop.
+## method.
+##
+## This #configure method uses #map_idle_source to add a callback on the
+## the idle source and to add the source to the provided context. The
+## #configure method then sets a source priority on the source object
+## returned by #map_idle_source. In the DispatchTest example, the idle
+## source's callback block will call the implementing class' `do_work`
+## method. This callback should be reached in each normal iteration of
+## the application's main loop.
 ##
 ## The `DispatchTest#main` method provides a five second wait in the
 ## local block, to simulate a duration in application runtime. Semantically,
@@ -127,27 +130,34 @@ end
 ##   will be available in each iteration of the main loop initialized via
 ##   #context_main.
 ##
-##   The main loop on the service will not begin until after the
-##   #configure method has returned.
+##   The service main loop will run within a thread returned by
+##   #context_main, internal to each call to to the Service#main method.
+##
+##   The main loop will not begin in that thread, until after the
+##   service's #configure method has returned.
 ##
 ##   The #main method in a subclass of `Service` should call
-## ` super(...)` i.e calling Service#main, there providing a new
+##   `super(...)` i.e calling Service#main, there providing a new
 ##   ServiceContext object and a custom block in the call to
-## `  super`. This will initialize the main loop for the service, using
+##   `super`. This will initialize the main loop for the service, using
 ##   any sources initailized under #configure. The main loop will run
 ##   until the block provided to `super(...)` has returned.
 ##
 ##   The block provided to `super(...`) should implement any
 ##   _Application Background Logic_ for the service, independent to any
 ##   logic implemented via callbacks or framework events in the
-##   application. After the block returns, the main loop on the Service
-##   will return.
+##   service main loop.
+##
+##   After the block provided to Service#main returns, the main loop on
+##   the Service will return, thus ending the runtime of the thread in
+##   which the main loop was initailized.
 ##
 ##   If no block is provided to Service#main, the service's main loop
 ##   will not be run.
 ##
 ## - Service#main can be called more than once, within any one or more
-##   consecutive threads
+##   consecutive threads, insofar as a new ServiceContext object is
+##   provided in each call to Service#main.
 ##
 ## - FIXME add support for defining custom interrupt handlers in the
 ##   #main thread, such as in DispatchTest. Consider adding the INT
