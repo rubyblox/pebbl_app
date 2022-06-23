@@ -1,4 +1,4 @@
-## MainDispatch version 1.0.1
+## Service version 1.0.1
 
 if ! Kernel.const_defined?(:Gtk)
   if ! ENV['DISPLAY']
@@ -9,18 +9,18 @@ if ! Kernel.const_defined?(:Gtk)
 end
 
 
-class AltContext < GLib::MainContext
+class ServiceContext < GLib::MainContext
 
   attr_reader :conf_mtx, :main_mtx, :cancellation
 
   def initialize()
     super()
-    ## in application with MainDispatch, the main loop will run in
-    ## a thread separate to the thread in which the GLib::MainContext
-    ## of that loop has been configured
+    ## in application with Service subclasses, the main loop will run
+    ## in a thread separate to the main thread, i.e the thread in which
+    ## the GLib::MainContext was configured
     ##
     ## the conf_mtx value here is applied to prevent the loop from
-    ## dispatching events until after all sources have been mapped
+    ## dispatching events until after all sources have been configured
     ## for the context
     @conf_mtx = Mutex.new
     @main_mtx = Mutex.new
@@ -44,7 +44,7 @@ end
 ##
 ## Notes
 ##
-## - MainDispatch#main can be called more than once, within one calling thread
+## - Service#main can be called more than once, within one calling thread
 ##
 ## FIXME/TBD
 ##
@@ -52,7 +52,7 @@ end
 ##
 ## - Application with FD polling for vtytest
 ##
-class MainDispatch
+class Service
 
   def debug(message)
     STDERR.puts message if $DEBUG
@@ -66,7 +66,7 @@ class MainDispatch
 
   ## an adapted emulation of `main` in
   ## https://developer.gnome.org/documentation/tutorials/main-contexts.html#
-  def main(context = AltContext.new(), &block)
+  def main(context = ServiceContext.new(), &block)
     debug "main"
 
     debug "Init locals"
@@ -220,7 +220,7 @@ class TestData
   end
 end
 
-class TestContext < AltContext
+class TestContext < ServiceContext
   attr_reader :data
 
   def initialize(data)
@@ -236,7 +236,7 @@ end
 
 ## an inelegant adaptation after
 ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
-class DispatchTest < MainDispatch
+class DispatchTest < Service
 
   attr_reader :data
 
