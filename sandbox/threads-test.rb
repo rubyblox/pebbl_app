@@ -30,11 +30,16 @@ class ServiceContext < GLib::MainContext
 end
 
 
-## An adaptation after
-## https://developer.gnome.org/documentation/tutorials/main-contexts.html
-## using GLib context support in Ruby-GNOME
+## This class is an adaptation after [the Main Contexts tutorial]
+## (https://developer.gnome.org/documentation/tutorials/main-contexts.html)
+## in the [GNOME Developer Documentation]
+## (https://developer.gnome.org/documentation/index.html).
 ##
-## Example
+## This implementation uses GLib context support in [Ruby-GNOME]
+## (https://github.com/ruby-gnome/ruby-gnome/)
+##
+##
+## Using the DispatchTest example:
 ## ~~~~
 ## require_relative 'thread-test.rb'
 ##
@@ -44,13 +49,11 @@ end
 ##
 ## Notes
 ##
-## - Service#main can be called more than once, within one calling thread
+## - Service#main can be called more than once, within any one or more
+##   consecutive threads
 ##
-## FIXME/TBD
-##
-## - Integration with GTK
-##
-## - Application with FD polling for vtytest
+## - The context provided to #main should be created newly for each call
+##   to #main
 ##
 class Service
 

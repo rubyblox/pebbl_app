@@ -15,28 +15,8 @@ if ENV['BUNDLE_GEMFILE'] &&
 
   task default: %i(spec)
 
-  gem 'bundler'
-  require "bundler/gem_helper"
-  require 'pebbl_app/project/y_spec'
   ##
-  ## configure gem tasks for all published gems
   ##
-  conf = File.join(__dir__, "project.yaml")
-  yspec = PebblApp::Project::YSpec.new(conf)
-  yspec.load_config
-  publish_gems =
-    yspec.project_field_value('publish_gems') do
-      ##
-      ## fallback block
-      ##
-      ## if no publish_gems field is configured for the project,
-      ## use all gems defined in project.yaml
-      ##
-      yspec.gems
-    end
-  publish_gems.each do |name|
-    Bundler::GemHelper.install_tasks(name: name)
-  end
 
   gem 'rspec'
   require "rspec/core/rake_task"
@@ -191,12 +171,109 @@ else
     task subrake: ['Gemfile.lock'] do
       sh %(bundle exec rake ) + ARGV.difference(%w(subrake --)).join(" ")
     end
+
   end
+
+
+  ## The following tasks are defined with Bundler::GemHelper but should
+  ## generally not be called under 'bundle exec'.
+  ##
+  ## if running the following tasks under 'bundle exec rake', then for
+  ## each install task defined in the following, the gem tool would
+  ## install each project gem to any locally configured bundle path,
+  ## not to the user gems path.
+  ##
+  ## Consequently, these tasks are defined as to not be avaialble
+  ## when rake is run under bundler
+
+  ## Logging support & local gem_wrapper for tasks added
+  ## via Bundler::GemHelper
+  ##
+  ## The environment can set GEM_BIN to specify a gem command
+  ## to use in bin/gem_wrapper for Bundler::GemHelper tasks
+  ##
+  ## LOGDIR will be set for purpose of recording output from the
+  ## gem cmd, in tasks that will be added by Bundler::GemHelper
+  ##
+  ## This can be used e.g to verify that the 'install' task --
+  ## when called under a bundler env with a local bundler path
+  ## configured -- that it will install the gem under the
+  ## project's bundle path & not in user or host gem paths
+  ##
+  ENV['GEM_COMMAND']= File.join(__dir__, "bin/gem_wrapper")
+  ENV['LOGDIR'] = File.join(__dir__, "tmp/gem_helper")
+
+
+  ## ad hoc project.yaml parser for Bundler::GemHelper tasks
+  gem 'bundler'
+  require 'psych'
+  require "bundler/gem_helper"
+  ##
+  ## configure gem tasks for all published gems
+  ##
+  proj_yaml = File.join(__dir__, "project.yaml")
+  if Psych.respond_to?(:safe_load_file)
+    proj_data = Psych.safe_load_file(proj_yaml)
+  else
+    proj_data = Psych.load_file(proj_yaml)
+  end
+
+
+  if (publishing = proj_data['publish_gems'])
+    ## value must be an array
+    local_gems = publishing
+  else
+    ## if no publishing_gems, use all gems defined in project.yaml
+    if (all_gems = proj_data['gems'])
+      local_gems = all_gems.keys
+    else
+      local_gems = [].freeze
+    end
+  end
+
+  namespace "gems" do
+
+    namespace "each" do
+      local_gems.each do |name|
+        namespace name do
+          ## ** FIXME ** wrong placement for this, and yet this will need
+          ## access to the project.yaml parser & its deps
+          Bundler::GemHelper.install_tasks(name: name)
+        end
+      end
+    end
+
+    ## e.g for the gems:build task to build all specified gems
+    %w(build build:checksum install install:local).each do |dispatch|
+      all_disp = local_gems.map { |name| "%s:each:%s" % [name, dispatch]}
+      desc "#{dispatch} for #{local_gems.join(", ")}"
+      task dispatch => all_disp
+    end
+
+  end
+
 end
 
 ##
 ## tasks accessible within or without a bundler environment
 ##
+
+
+namespace :console do
+  desc 'Run IRB in a console in rake'
+  $TBD = Rake.application.instance_variable_get(:@scope)
+  task :irb do |task, args|
+    $RAKE_APP = Rake.application
+    $RAKE_SCOPE = task.scope
+    require %q(irb)
+    require %q(irb/completion)
+    rake = File.basename($0)
+    STDERR.puts "#{rake} #{task.name} : Rake.application available as $RAKE_APP"
+    STDERR.puts "#{rake} #{task.name} : Current task scope available as $RAKE_SCOPE"
+    IRB.setup(__FILE__, argv: args)
+    IRB::Irb.new().run()
+  end
+end
 
 
 desc %(fetch ui/gtkbuilder.rnc)
@@ -222,7 +299,7 @@ BUNDLE_WITH ||= (ENV['BUNDLE_WITH'] || "development:gtk:irb")
 ## create a default bundler config, if no config exists
 file '.bundle/config' do
   sh %(bundle config set --local path "#{BUNDLE_PATH}")
-  sh %(bundle config set --local with "#{BUNDLE_WITH.join(":")}")
+  sh %(bundle config set --local with "#{BUNDLE_WITH}")
 end
 
 ## a bundle install task
