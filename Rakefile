@@ -219,7 +219,7 @@ else
     ## value must be an array
     local_gems = publishing
   else
-    ## if no publishing_gems, use all gems defined in project.yaml
+    ## if no publish_gems, use all gems defined in project.yaml
     if (all_gems = proj_data['gems'])
       local_gems = all_gems.keys
     else
