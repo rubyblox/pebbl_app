@@ -39,21 +39,119 @@ end
 ## (https://github.com/ruby-gnome/ruby-gnome/)
 ##
 ##
+## **Example: DispatchTest**
+##
+## In the DispatchTest example, the class DispatchTest extends Sevice,
+## there overriding the #configure and #main methods on this class.
+##
+## The #main method in DispatchTest calls the superclass' #main method
+## via `super`, there providing a custom ServiceContext instance and
+## a local block to the `super` call. The block implements a custom
+## application logic independent to the service main loop, such that
+## will be called in the same thread as #main. In application within the
+## #main method on Service, the DispatchTest #main method will return in
+## the calling thread, after control exits the block provided to the
+## Service #main method.
+##
+## The #configure method in the DispatchTest test example adds a
+## GLib::Idle kind of GLib::Source to the context object provided to the
+## method. This #configure method uses #map_idle_source to add a
+## callback on the the idle source and to add the source to the provided
+## context. The #configure method then sets a source priority on the
+## source object returned by #map_idle_source. In the DispatchTest
+## example, the idle source's callback block will call the implementing
+## class' `do_work` method. This should be reached in each normal
+## iteration of the application's main loop.
+##
+## The `DispatchTest#main` method provides a five second wait in the
+## local block, to simulate a duration in application runtime. Semantically,
+## the implementation provides an example of event dispatch outside of a
+## main application thread, using an extension on GLib::MainContext.
+##
+## The `main` method on `DispatchTest` produces some output on the
+## standard error stream, for purpose of illustration in the test.
+##
 ## Using the DispatchTest example:
 ## ~~~~
 ## require_relative 'thread-test.rb'
 ##
+## # Initialize a new DispatchTest
 ## test = DispatchTest.new
-## data = test.main
+##
+## # call #main
+## test.main
+##
+## # review the event log in the DispatchTest's data object
+## test.data.work_log
+##
+## # call main again
+## test.main
+##
+## # interrupt the main thread, such as with "Ctl-C"
+## # under interactive eval (user input)
+##
+## # review the event log after interrupt
+## test.data.work_log
+##
+##
 ## ~~~~
 ##
 ## Notes
 ##
+## - This `Service` implementation requires a `ServiceContext`. The
+##   `ServiceContext` class extends GLib::MainContext as to
+##   provide mutex objects for synchronization in the _configure_  and
+##   _application_ sections of the Service#main method.
+##
+## - Applications defining a subclass e.g ServiceImpl on Service may
+##   extend the `ServiceContext` class, e.g as ServiceImplContext. This
+##   may be of use, for instance to provide a custom API in the
+##   ServiceImplContext. The custom API on the ServiceImplContext may be
+##   used, for example, in the SeviceImpl's #configure and #main methods,
+##   respectively for configuring sources/callbacks for the
+##   ServiceImplContext and for any runtime logic in the #main thread.
+##
+##   The DispatchTest source code may provide an example of this
+##   extensional logic.
+##
+## - Each ServiceContext in #main should be used for at most one call
+##   to #main.
+##
+## - An appplications extending `Service` should provide at least a
+##   #configure method and a #main method.
+##
+##   The #configure method should add any one or more GLib::Source
+##   objects to the ServiceContext provided to the method, also
+##   configuring any properties on each source, e.g source priority.
+##   Each GLib::Source object should provide a custom callback, such that
+##   will be available in each iteration of the main loop initialized via
+##   #context_main.
+##
+##   The main loop on the service will not begin until after the
+##   #configure method has returned.
+##
+##   The #main method in a subclass of `Service` should call
+## ` super(...)` i.e calling Service#main, there providing a new
+##   ServiceContext object and a custom block in the call to
+## `  super`. This will initialize the main loop for the service, using
+##   any sources initailized under #configure. The main loop will run
+##   until the block provided to `super(...)` has returned.
+##
+##   The block provided to `super(...`) should implement any
+##   _Application Background Logic_ for the service, independent to any
+##   logic implemented via callbacks or framework events in the
+##   application. After the block returns, the main loop on the Service
+##   will return.
+##
+##   If no block is provided to Service#main, the service's main loop
+##   will not be run.
+##
 ## - Service#main can be called more than once, within any one or more
 ##   consecutive threads
 ##
-## - The context provided to #main should be created newly for each call
-##   to #main
+## - FIXME add support for defining custom interrupt handlers in the
+##   #main thread, such as in DispatchTest. Consider adding the INT
+##   handler as a default.
 ##
 class Service
 
@@ -67,7 +165,7 @@ class Service
     end
   end
 
-  ## an adapted emulation of `main` in
+  ## an adaptation after `main` in
   ## https://developer.gnome.org/documentation/tutorials/main-contexts.html#
   def main(context = ServiceContext.new(), &block)
     debug "main"
@@ -86,7 +184,7 @@ class Service
 
       begin
         ## configure event sources for this instance of the implementing class
-        self.map_sources(context)
+        self.configure(context)
         debug "Call for main thread"
         main_thr = context_main(context)
       rescue
@@ -132,9 +230,27 @@ class Service
     return src
   end
 
-  ## prototype method, should be implemented in any subclass
+  ## Configure all sources for the service's context.
   ##
-  def map_sources(context)
+  ## @abstract This is a prototype method. A configure method should be
+  ## implemented in any subclass, independent of this method. If reached
+  ## when $DEBUG is true, this method will emit a warning for purpose of
+  ## debug.
+  ##
+  ## The #configure method in the implementing class will be called
+  ##before the main loop begins iteration.
+  ##
+  ## Implementations may call e.g #map_idle_source in #configure, to
+  ## define a callback block to be run in each iteration of the main
+  ## loop.
+  ##
+  ## A a source priority may also be configured on any sources added in
+  ## #configure, e.g `source.priority = GLib::PRIORITY_DEFAULT`
+  ##
+  ## Soures added to the context will be applied in each iteration of
+  ## the main loop. See #map_idle_source
+  ##
+  def configure(context)
     Kernel.warn("prototype #{__method__} method reached for %p in %s" %
                 [context, self], uplevel: 0) if $DEBUG
   end
@@ -143,21 +259,30 @@ class Service
   ##
   ## called within the thread running the loop on the main context
   ##
+  ## This method can be overridden and/or extended, to provide
+  ## custom framework dispatch in the service main loop.
+  ##
   def context_dispatch(context)
-    context.iteration(true) ## true i.e a blocking iteration
+    context.iteration(false) ## do not block if no events available
+    ##
     ## an additional call for dispatching to GTK e.g
-    # Gtk.main_iteration_do(false) if Gtk.events_pending
+    ##
+    ## main_iteration_do returns true if Gtk.main_quit was called
+    ## at least, if internal to the Gtk event loop dispatch
+    ##
+    # if Gtk.main_iteration_do(false); return; end
+    ##
   end
 
-  ## an adaptated emulation of `thread1_main` in
-  ## https://developer.gnome.org/documentation/tutorials/main-contexts.html#
+  ## an adaptation after `thread1_main` in
+  ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
   ##
   ## called under #main
   ##
-  ## returns the new thread
+  ## returns a thread that will run the main event loop, beginning not
+  ## until #configure returns, then running until the block provided to
+  ## #main returns.
   ##
-  ## @fixme should allow a block, for additional actions in the main
-  ##        loop dispatch, e.g `Gtk.main_iteration_do(false) if Gtk.events_pending`
   def context_main(context)
     main_mtx = context.main_mtx
     conf_mtx = context.conf_mtx
@@ -169,13 +294,12 @@ class Service
       main = GLib::MainLoop.new(context, false) ## false => not run
       @main = main
 
-      ## block on conf_mtx, while caller is configuring event sources
+      ## hold on conf_mtx, while caller is configuring event sources
       conf_mtx.synchronize do
-        Thread.exit if context.cancellation.cancelled?
+        Thread.exit if context.cancellation.cancelled? ## should exit from here
 
-        ## Iterate in the event loop until the mutex provided by the
-        ## caller can be held in the dispatch loop, or until
-        ## the cancellation object for this context is cancelled
+        ## Iterate in the event loop until the main_mtx can be held, or
+        ## until the cancellation object for this context is cancelled
         ##
         ## Once the mutex can be held here: Cleanup; Release the mutex
         ## if held, and return
@@ -198,8 +322,7 @@ class Service
           # main.unref # n/a
         ensure
           ## own thread may not have held the mutex, when this
-          ## is reached under cancellation
-          ## (odd, but seen under tests - see signal handler?)
+          ## is reached under cancellation - seen under tests
           main_mtx.unlock if main_mtx.owned?
         end
       end ## conf_mtx
@@ -253,7 +376,7 @@ class DispatchTest < Service
   ## add to the ostruct.work_log, dependent on the ostruct.cancelled flag
   ## in the ostruct
   ##
-  ## called under a callback initialized in #map_sources
+  ## called under a callback initialized in #configure
   ##
   def do_work(data)
     STDERR.puts "do_work continuing"
@@ -262,7 +385,7 @@ class DispatchTest < Service
     sleep 1
   end
 
-  def map_sources(context)
+  def configure(context)
     src = map_idle_source(context) do
       ## each idle source's callback will be called
       ## in each main loop iteration
