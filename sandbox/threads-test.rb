@@ -211,7 +211,7 @@ class Service
         block.yield if block_given?
       end ## main_mtx
 
-      # context.unref # n/a
+      # context.unref # no unref needed here
       main_thr.join
       return true
     end ## conf_mtx
@@ -248,13 +248,13 @@ class Service
   ## debug.
   ##
   ## The #configure method in the implementing class will be called
-  ##before the main loop begins iteration.
+  ## before the main loop begins iteration.
   ##
   ## Implementations may call e.g #map_idle_source in #configure, to
   ## define a callback block to be run in each iteration of the main
   ## loop.
   ##
-  ## A a source priority may also be configured on any sources added in
+  ## A source priority may also be configured on any sources added in
   ## #configure, e.g `source.priority = GLib::PRIORITY_DEFAULT`
   ##
   ## Soures added to the context will be applied in each iteration of
@@ -317,7 +317,7 @@ class Service
         catch(:cancelled) do |tag|
           while ! main_mtx.try_lock
             if context.cancellation.cancelled?
-              ## lock held, but cancellation is indicated
+              ## lock not held, but cancellation is indicated
               throw tag
             else
               context_dispatch(context)
@@ -329,10 +329,10 @@ class Service
           debug ".. end of main context"
           ## cleanup
           main.quit
-          # main.unref # n/a
+          # main.unref # no unref needed here
         ensure
           ## own thread may not have held the mutex, when this
-          ## is reached under cancellation - seen under tests
+          ## is reached under cancellation
           main_mtx.unlock if main_mtx.owned?
         end
       end ## conf_mtx
