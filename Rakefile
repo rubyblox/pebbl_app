@@ -195,11 +195,6 @@ else
   ## LOGDIR will be set for purpose of recording output from the
   ## gem cmd, in tasks that will be added by Bundler::GemHelper
   ##
-  ## This can be used e.g to verify that the 'install' task --
-  ## when called under a bundler env with a local bundler path
-  ## configured -- that it will install the gem under the
-  ## project's bundle path & not in user or host gem paths
-  ##
   ENV['GEM_COMMAND']= File.join(__dir__, "bin/gem_wrapper")
   if ! ENV.key?('LOGDIR')
     ENV['LOGDIR'] = File.join(__dir__, "tmp/build_logs")
