@@ -186,8 +186,8 @@ else
   ## Consequently, these tasks are defined as to not be avaialble
   ## when rake is run under bundler
 
-  ## Logging support & local gem_wrapper for tasks added
-  ## via Bundler::GemHelper
+  ## Support for logging w/ local gem_wrapper, used for tasks that will
+  ## be added via Bundler::GemHelper
   ##
   ## The environment can set GEM_BIN to specify a gem command
   ## to use in bin/gem_wrapper for Bundler::GemHelper tasks
@@ -201,8 +201,9 @@ else
   ## project's bundle path & not in user or host gem paths
   ##
   ENV['GEM_COMMAND']= File.join(__dir__, "bin/gem_wrapper")
-  ENV['LOGDIR'] = File.join(__dir__, "tmp/gem_helper")
-
+  if ! ENV.key?('LOGDIR')
+    ENV['LOGDIR'] = File.join(__dir__, "tmp/build_logs")
+  end
 
   ## ad hoc project.yaml parser for Bundler::GemHelper tasks
   gem 'bundler'
