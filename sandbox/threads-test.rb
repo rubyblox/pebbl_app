@@ -624,17 +624,13 @@ class DispatchTest < Service
       ## temporary value, initializing the variable
       main_thread = Thread.current
 
-      # this = "%s : %p @ #%s" % [
-      #   File.basename($0), self.class, __method__
-      # ]
-
       interrupt_tag = :trap
       hdlr_base = proc { |sname|
-        warn("Handling signal #{sname}")
-        ## add some output to stderr and append a value the work log
+        ## append a value to the work log
         context.log_event([:signal, sname])
       }
       hdlr_cancel = proc { |sname|
+        warn("Handling signal #{sname}")
         ## cancel the main event loop, then join the main thread
         ## such that the main thread should return after the cancellation
         hdlr_base.yield(sname)
@@ -665,10 +661,11 @@ class DispatchTest < Service
       }
       usr1_hdlr = proc { |sname|
         ## log the present state of the event log
+        info("Handling signal #{sname}")
         hdlr_base.yield(sname)
-        debug("Running")
+        info("Running")
         self.data.work_log.each do |data|
-          debug("[event] %s : %s" % data)
+          info("[event] %s : %s" % data)
         end
       }
 
@@ -703,7 +700,7 @@ class DispatchTest < Service
       cancellation = context.cancellation
       cancellation.reset
       cancellation.signal_connect_after("cancelled") do
-        STDERR.puts("Cancellation reached")
+        debug("Cancellation reached")
         context.log_event(:cancellation)
       end
 
