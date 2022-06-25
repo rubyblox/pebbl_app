@@ -341,13 +341,6 @@ class Service
     # @cancellation_tag = cancellation_tag
   end
 
-  ## next changeset
-  # attr_reader :cancellation_tag
-
-  # def debug(message)
-  #   # STDERR.puts(message) if $DEBUG
-  # end
-
   def debug_event(context, tag)
     if $DEBUG && context.respond_to?(:log_event)
       context.log_event(tag)
