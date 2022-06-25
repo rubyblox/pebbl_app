@@ -41,7 +41,9 @@ module PebblApp::Support
     "support/sh_proc" =>
       %w(ShProc),
     "support/attrs" =>
-      %w(IvarUnbound AttrProxy)
+      %w(IvarUnbound AttrProxy),
+    "support/signals" =>
+      %w(SignalHandlerMap),
   })
 
 end

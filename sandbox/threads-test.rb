@@ -1,14 +1,23 @@
 ## Service version 1.0.1
 
-if ! Kernel.const_defined?(:Gtk)
-  if ! ENV['DISPLAY']
-    Kernel.warn("No display", uplevel: 0)
-    exit
+require 'glib2'
+require 'gio2'
+
+class ServiceCancellation < Gio::Cancellable
+  ## e.g the #reason  may be set to an exception object under any error
+  ## handler logic in the main event loop of a ServiceContext
+  attr_accessor :reason
+  def initialize()
+    super()
+    self.reset
   end
-  require 'gtk3'
+  def reset()
+    super()
+    @reason = false
+  end
 end
 
-
+## see Service
 class ServiceContext < GLib::MainContext
 
   attr_reader :conf_mtx, :main_mtx, :cancellation
@@ -24,11 +33,167 @@ class ServiceContext < GLib::MainContext
     ## for the context
     @conf_mtx = Mutex.new
     @main_mtx = Mutex.new
-    @cancellation = Gio::Cancellable.new
+    @cancellation = ServiceCancellation.new
   end
 
 end
 
+
+require 'logger'
+
+## Base Formatter class for ServiceLogger, which is a Logger interface
+## emulating Ruby/GLib logging
+##
+## FIXME use rainbow (gem) to add color tags to the logging, via a
+## subclass of ServiceLogger
+class ServiceLogFormatter
+
+  ## Constant named after Logger::Formatter::Format
+  ##
+  ## This format string accepts the following arguments:
+  ## pid, progrname, domain, severity, timestamp, message
+  FORMAT = "(%s:%d): %s-%s **: %s: %s\n".freeze
+
+  attr_reader :dt_format, :progname
+
+
+  def initialize(dt_format: "%H:%M:%S.%6N".freeze,
+                 progname:  File.basename($0))
+    super()
+    @progname = progname
+    @dt_format = dt_format
+  end
+
+  def format_time(time = Time.now)
+    time.strftime(self.dt_format)
+  end
+
+  ## This method provides a signature similar to Logger::Formatter#call
+  def call(severity, time, domain, msg)
+    log_msg = case msg
+              when String
+                msg
+              when Exception
+                if (bt = msg.backtrace)
+                  "(%s) %s %s" [ msg.class, msg.message, bt[0] ]
+                else
+                  "(%s) %s" [ msg.class, msg.message ]
+                end
+              else
+                msg.inspect
+              end
+    format(FORMAT, self.progname, Process.pid, domain, severity,
+           format_time(time), log_msg)
+  end
+end
+
+## @abstract Log device base class for ServiceLogger
+class ServiceLogDev
+
+end
+
+## Log device provider for a console log stream
+##
+## This log device implementation does not use MonitorMixin and may be
+## usable from within a signal trap context
+class ConsoleLogDev < ServiceLogDev
+  attr_reader :io
+  def initialize(io = STDERR)
+    super()
+    @io = io
+  end
+
+  def write(text)
+    begin
+      @io.write(text)
+    rescue
+      warn "Error when writing log to #{io}: #{$!}"
+    end
+  end
+
+  ## interface method for compatibility with Logger::LogDevice (no-op)
+  def close
+    return false
+  end
+
+  ## interface method for compatibility with Logger::LogDevice (no-op)
+  def reopen
+    return false
+  end
+
+end
+
+
+## a Logger interface with a default formatter generally emulating
+## Ruby/GLib logging, using the standard error stream for log output
+## by default.
+##
+## @fixme Due to the Logger::LogDevice class' use of MonitorMixin, this
+##  logger cannot be used within a signal trap context. MonitorMixin may
+##   not be needed when logging directly to a file or other IO
+class ServiceLogger < Logger
+
+  class << self
+    ## Return a unique name for an object
+    ##
+    ## If the object is a Module, Class, or Symbol, returns the string
+    ## representation of the object.
+    ##
+    ## Otherwise, returns a concatenation of the name of the object's
+    ## class and a hexadecimal representation of the object's `__id__`,
+    ## as a string
+    ##
+    ## @param obj [Any] the object
+    def iname(obj)
+      case obj
+        when Class, Symbol, Module
+          return obj.to_s
+        else
+          format("%s 0x%06x", obj.class, obj.__id__)
+      end
+    end
+  end
+
+  def initialize(logdev = ConsoleLogDev.new(),
+                 level: $DEBUG ? :debug : :info,
+                 domain: self.class.iname(self),
+                 formatter: ServiceLogFormatter.new(),
+                 **rest_args)
+    super(logdev, level: level, progname: domain, formatter: formatter,
+          **rest_args)
+    ## THe Ruby's Logger initialize method wraps the logdev in a
+    ## Logger::LogDevice no matter what logdev is provided. This has a
+    ## side effect that not any Ruby Logger can be used within a signal
+    ## trap context ... if using the logdev initialized there.
+    ##
+    ## A workaround, thus.
+    if (ServiceLogDev === logdev)
+      instance_variable_set(:@logdev, logdev)
+    end
+  end
+
+
+  def logdev
+    if instance_variable_defined?(:@logdev)
+      instance_variable_get?(:@logdev)
+    else
+      false
+    end
+  end
+
+  ## portability onto Ruby Logger, for the concept of a log domain in GLib
+  alias :domain :progname
+  alias :domain= :progname=
+
+  def to_s
+    "#<%s 0x%06x (%s) %s %s>" % [
+      self.class, __id__, log_device, domain, level
+    ]
+  end
+end
+
+
+require 'forwardable'
 
 ## This class is an adaptation after [the Main Contexts tutorial]
 ## (https://developer.gnome.org/documentation/tutorials/main-contexts.html)
@@ -38,6 +203,8 @@ end
 ## This implementation uses GLib context support in [Ruby-GNOME]
 ## (https://github.com/ruby-gnome/ruby-gnome/)
 ##
+## The Service/ServiceContext framwork implements a cancellable main
+## event loop model for GLib applications.
 ##
 ## **Example: DispatchTest**
 ##
@@ -165,9 +332,21 @@ end
 ##
 class Service
 
-  def debug(message)
-    STDERR.puts message if $DEBUG
+  attr_reader :logger
+  self.extend Forwardable
+  def_delegators(:@logger, :debug, :error, :fatal, :info, :warn)
+
+  def initialize(logger: ServiceLogger.new) # , cancellation_tag: :cancel)
+    @logger = logger
+    # @cancellation_tag = cancellation_tag
   end
+
+  ## next changeset
+  # attr_reader :cancellation_tag
+
+  # def debug(message)
+  #   # STDERR.puts(message) if $DEBUG
+  # end
 
   def debug_event(context, tag)
     if $DEBUG && context.respond_to?(:log_event)
@@ -208,7 +387,7 @@ class Service
       ## after this section returns, the main loop will exit
       main_mtx.synchronize do
         conf_mtx.unlock
-        block.yield if block_given?
+        block.yield(main_thr) if block_given?
       end ## main_mtx
 
       # context.unref # no unref needed here
@@ -298,7 +477,7 @@ class Service
     conf_mtx = context.conf_mtx
 
     thr = Thread.new do
-      debug "... main thread begins"
+      debug "main context thread begins"
       debug_event(context, :main_run)
 
       main = GLib::MainLoop.new(context, false) ## false => not run
@@ -326,7 +505,7 @@ class Service
         end
         begin
           debug_event(context, :main_context_end)
-          debug ".. end of main context"
+          debug "end of main context"
           ## cleanup
           main.quit
           # main.unref # no unref needed here
@@ -370,13 +549,25 @@ class TestContext < ServiceContext
   end
 end
 
-## an inelegant adaptation after
+
+require 'forwardable'
+require 'pebbl_app/support/signals'
+
+## an adaptation after
 ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
 class DispatchTest < Service
+  self.extend Forwardable
 
-  attr_reader :data
+  attr_reader :data, :handlers
+  def_delegators(:@handlers, :set_handler, :with_handler)
 
+  ## Create a new DispatchTest, using a new instance of TestData and a
+  ## log initialized for a debug level of information.
   def initialize()
+    super()
+    self.logger.level = "DEBUG"
+    self.logger.domain = ServiceLogger.iname(self)
+    @handlers = PebblApp::Support::SignalHandlerMap.new
     @data = TestData.new
   end
 
@@ -389,7 +580,7 @@ class DispatchTest < Service
   ## called under a callback initialized in #configure
   ##
   def do_work(data)
-    STDERR.puts "do_work continuing"
+    debug("do_work continuing")
     data.log_event(:loop_cont)
     ## pause a second, for purpose of tests
     sleep 1
@@ -400,16 +591,19 @@ class DispatchTest < Service
       ## each idle source's callback will be called
       ## in each main loop iteration
       if context.cancellation.cancelled?
-        return false
+        ## returning false from the source callback - source will be removed
+        GLib::Source::REMOVE ## 'return' DNW here ...
       else
-        ## could implement do_work here.
-        ##
-        ## this modular API will dispatch
-        ## to a method outside of this
-        ## callback,
-        STDERR.puts "In callback => do_work"
+        ## Similar to the original example
+        ## in the GLib documentaiton, this
+        ## modular API will dispatch to a
+        ## method outside of this
+        ## callback/context model,
+        ## mainly #do_work
+        debug("In callback => do_work")
         data.log_event(:callback)
         do_work(data)
+        GLib::Source::CONTINUE
       end
     end
     src.priority = GLib::PRIORITY_DEFAULT
@@ -419,12 +613,92 @@ class DispatchTest < Service
   ## https://developer.gnome.org/documentation/tutorials/main-contexts.html#
   ##
   ## see superclass docs
-  def main()
+  def main(wait = 5)
     initial_debug = $DEBUG
     $DEBUG = true
+
     begin
       data = self.data
       context = TestContext.new(data)
+
+      ## temporary value, initializing the variable
+      main_thread = Thread.current
+
+      # this = "%s : %p @ #%s" % [
+      #   File.basename($0), self.class, __method__
+      # ]
+
+      interrupt_tag = :trap
+      hdlr_base = proc { |sname|
+        warn("Handling signal #{sname}")
+        ## add some output to stderr and append a value the work log
+        context.log_event([:signal, sname])
+      }
+      hdlr_cancel = proc { |sname|
+        ## cancel the main event loop, then join the main thread
+        ## such that the main thread should return after the cancellation
+        hdlr_base.yield(sname)
+        context.cancellation.cancel
+        ## joining the main thread in any throw/exit handler should help
+        ## to ensure a clean exit for the main thread.
+        ##
+        ## This assumes that the main thread will exit the main loop and
+        ## return, once the context's cancellation object is set to
+        ## cancelled, such as in Service#context_main
+        main_thread.join if main_thread
+      }
+      int_hdlr  = proc { |sname|
+        ## cancel, join the main thread, then throw
+        ## as to return to the calling thread
+        hdlr_cancel.yield(sname)
+        throw(interrupt_tag, sname)
+      }
+      term_hdlr = proc { |sname|
+        ## cancel, join the main thread, then exit
+        hdlr_cancel.yield(sname)
+        exit(0)
+      }
+      urgent_hdlr = proc { |sname|
+        ## cancel, join the main thread, then exit immediately
+        hdlr_cancel.yield(sname)
+        exit!(0)
+      }
+      usr1_hdlr = proc { |sname|
+        ## log the present state of the event log
+        hdlr_base.yield(sname)
+        debug("Running")
+        self.data.work_log.each do |data|
+          debug("[event] %s : %s" % data)
+        end
+      }
+
+      ##
+      ## not tested on Microsoft Windows platforms,
+      ##
+      ## TBD support under MinGW
+      ## - assuming a GTK3 stack for MinGW, or at least glib2, gio2
+      ##
+      handlers.set_handler("INT", &int_hdlr)
+      handlers.set_handler("TERM", &term_hdlr)
+      handlers.set_handler("QUIT", &urgent_hdlr)
+      handlers.set_handler("URG", &urgent_hdlr)
+      handlers.set_handler("USR1", &usr1_hdlr)
+      begin
+        ## The SIGINFO signal may not be supported on all operating
+        ## systems - is supported on FreeBSD, commonly available with
+        ## Ctrl-t at a PTY, when this signal has an active handler
+        ##
+        ## Some applications, e.g ddpt, will implement a similar handler
+        ## for USR1 on other operating systems (e.g Linux) as similar to
+        ## the application's behavior when receiving an INFO signal
+        ## on FreeBSD
+        ##
+        ## So, this uses the usr1_hdlr for both, not calling a compiler
+        ## to test for signal availabilty before runtime ...
+        handlers.set_handler("INFO", &usr1_hdlr)
+      rescue ArgumentError
+        ## nop
+      end
 
       cancellation = context.cancellation
       cancellation.reset
@@ -433,33 +707,26 @@ class DispatchTest < Service
         context.log_event(:cancellation)
       end
 
-      super(context) do
-        ## block to run outside of the event loop
-        ## ... to which effect, the event loop will exit
-        ## after this block exits
+      catch(interrupt_tag) do
+      handlers.with_handlers do ## outside of the main thread
+        super(context) do |main|
+          main_thread = main ## for Thread.join in handlers
 
-        orig_int_handler = Signal.trap("INT") do
-          ## initailize a signal handler,
-          ## e.g for Ctrl-C in irb
-          ## for the duration of this method
-          STDERR.puts "Cancelled by signal"
-          context.log_event(:signal_int)
-          context.cancellation.cancel
-        end
+          ## block to run outside of the event loop
+          ## ... to which effect, the event loop will exit
+          ## after this block exits
 
-        begin
           ## simulating a duration in application runtime,
           ## while the main loop runs
-          sleep 5
-          STDERR.puts "Done"
+          sleep wait
+          debug("Done")
           context.log_event(:ext_return)
-        ensure
-          Signal.trap("INT", orig_int_handler)
         end
       end
       return context.data
     ensure
       $DEBUG = initial_debug
+    end
     end
   end
 end
