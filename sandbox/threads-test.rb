@@ -22,7 +22,11 @@ class ServiceContext < GLib::MainContext
 
   attr_reader :conf_mtx, :main_mtx, :cancellation
 
-  def initialize()
+  ## If true (the default) then the Service#context_dispatch method
+  ## should block for source availability during main loop iteration
+  attr_reader :blocking
+
+  def initialize(blocking: true)
     super()
     ## in application with Service subclasses, the main loop will run
     ## in a thread separate to the main thread, i.e the thread in which
@@ -34,6 +38,8 @@ class ServiceContext < GLib::MainContext
     @conf_mtx = Mutex.new
     @main_mtx = Mutex.new
     @cancellation = ServiceCancellation.new
+    ## used in Service#context_dispatch
+    @blocking = blocking
   end
 
 end
@@ -134,7 +140,7 @@ end
 class ServiceLogger < Logger
 
   class << self
-    ## Return a unique name for an object
+    ## Return a unique instance name for an object
     ##
     ## If the object is a Module, Class, or Symbol, returns the string
     ## representation of the object.
@@ -143,7 +149,7 @@ class ServiceLogger < Logger
     ## class and a hexadecimal representation of the object's `__id__`,
     ## as a string
     ##
-    ## @param obj [Any] the object
+    ## @param obj [Object] the object
     def iname(obj)
       case obj
         when Class, Symbol, Module
@@ -154,25 +160,71 @@ class ServiceLogger < Logger
     end
   end
 
+  ## Initialize a new ServiceLogger
+  ##
+  ## If logdev is provided as a ServiceLogDev, then this ServiceLogger
+  ## should be usable within signal trap handlers. Otherwise, the actual
+  ## logdev used will be a Logger::LogDevice encapsualting the logdev
+  ## value provied here. In this instance, the ServiceLogger cannot be
+  ## used within a signal trap handler.
+  ##
+  ## @param logdev [Object] the log device to use for this ServiceLogger
+  ## @param level [Symbol, String] the initial Logger level for this
+  ##  ServiceLogger
+  ## @param domain [String] the log domain to use for this
+  ##  ServiceLogger.
+  ##
+  ##  Internally, this value is mapped to the Logger _progname_
+  ##  field.
+  ##
+  ##  If the provided formatter is a ServiceLogFormatter, then the
+  ##  effective progname for this logger will be stored in the
+  ##  formatter. This formatter's progrname will appear as the _command
+  ##  name_ in log entries, while the domain provided here will be used
+  ##  as a _log domain_, in log entires.
+  ##
+  ##  This mapping provides a form of semantic compatability after log
+  ##  domains used for logging in GLib, furthermore in emulation of
+  ##  logging support in Ruby/GLib
+  ##
+  ## @param rest_args [Hash] Additional arguments to be provided to
+  ##  Logger#initialize
+  ##
   def initialize(logdev = ConsoleLogDev.new(),
                  level: $DEBUG ? :debug : :info,
-                 domain: self.class.iname(self),
                  formatter: ServiceLogFormatter.new(),
+                 domain: self.class.iname(self),
                  **rest_args)
     super(logdev, level: level, progname: domain, formatter: formatter,
           **rest_args)
-    ## THe Ruby's Logger initialize method wraps the logdev in a
-    ## Logger::LogDevice no matter what logdev is provided. This has a
-    ## side effect that not any Ruby Logger can be used within a signal
-    ## trap context ... if using the logdev initialized there.
+    ## The Ruby Logger#initialize method wraps the logdev in a
+    ## Logger::LogDevice for any logdev provided. This has a side
+    ## effect that not any Ruby Logger can be used within a signal
+    ## trap context, if using the logdev initialized in that method.
     ##
-    ## A workaround, thus.
+    ## This corresponds to the usage of MonitorMixin in the class
+    ## Logger::LogDevice
+    ##
+    ## A conditional workaround, to permit logging from within a signal
+    ## trap handler, such as when logging to console with this logger
     if (ServiceLogDev === logdev)
       instance_variable_set(:@logdev, logdev)
     end
   end
 
 
+  ## return the logdev stored via Logger#initialize.
+  ##
+  ## If a ServiceLogDev was provided to ServiceLogger#initialize, then
+  ## this should be eql to the provided logdev.
+  ##
+  ## Otherwise, the value returned here will be a Logger::LogDevice
+  ## encapsulating the value provided as the logdev to
+  ## ServiceLogger#initialize
+  ##
+  ## @return [ServiceLogDev, Logger::LogDevice, false] the log device
+  ##  for this ServiceLogger, or false if no logdev has been initialized
+  ##  to this ServiceLogger
   def logdev
     if instance_variable_defined?(:@logdev)
       instance_variable_get?(:@logdev)
@@ -445,7 +497,7 @@ class Service
   ## custom framework dispatch in the service main loop.
   ##
   def context_dispatch(context)
-    context.iteration(false) ## do not block if no events available
+    context.iteration(context.blocking)
     ##
     ## an additional call for dispatching to GTK e.g
     ##
@@ -640,6 +692,7 @@ class DispatchTest < Service
         ## cancel, join the main thread, then throw
         ## as to return to the calling thread
         hdlr_cancel.yield(sname)
+        ## the following will override the return value from this method:
         throw(interrupt_tag, sname)
       }
       term_hdlr = proc { |sname|
@@ -698,25 +751,28 @@ class DispatchTest < Service
       end
 
       catch(interrupt_tag) do
-      handlers.with_handlers do ## outside of the main thread
-        super(context) do |main|
-          main_thread = main ## for Thread.join in handlers
+        handlers.with_handlers do ## outside of the main block
+          super(context) do |main|
+            ## This block will be run in the current thread,
+            ## i.e outside of the event loop
+            ##
+            ## The event loop will exit after this block exits
 
-          ## block to run outside of the event loop
-          ## ... to which effect, the event loop will exit
-          ## after this block exits
+            ##  set the value of main_thread for Thread.join in handlers
+            main_thread = main
 
-          ## simulating a duration in application runtime,
-          ## while the main loop runs
-          sleep wait
-          debug("Done")
-          context.log_event(:ext_return)
-        end
-      end
-      return context.data
-    ensure
-      $DEBUG = initial_debug
-    end
+            ## simulating a duration in application runtime,
+            ## while the main loop runs
+            sleep wait
+            ## logging before return
+            debug("Done")
+            context.log_event(:ext_return)
+          end
+        end ## with_handlers
+        return context.data ## not returned on event of interrupt
+      ensure
+        $DEBUG = initial_debug
+      end  ## catch interrupt_tag
     end
   end
 end
