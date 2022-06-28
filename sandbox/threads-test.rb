@@ -407,7 +407,7 @@ require 'forwardable'
 ##
 ## Using the DispatchTest example:
 ## ~~~~
-## require_relative 'thread-test.rb'
+## require_relative 'threads-test.rb'
 ##
 ## # Initialize a new DispatchTest
 ## test = DispatchTest.new
@@ -451,8 +451,8 @@ require 'forwardable'
 ## - Each ServiceContext in #main should be used for at most one call
 ##   to #main.
 ##
-## - An appplications extending `Service` should provide at least a
-##   #configure method and a #main method.
+## - Generally, an application extending `Service` should provide at
+##   least a #configure method and a #main method.
 ##
 ##   The #configure method should add any one or more GLib::Source
 ##   objects to the ServiceContext provided to the method, also
@@ -470,14 +470,19 @@ require 'forwardable'
 ##   The #main method in a subclass of `Service` should call
 ##   `super(...)` i.e calling Service#main, there providing a new
 ##   ServiceContext object and a custom block in the call to
-##   `super`. This will initialize the main loop for the service, using
-##   any sources initailized under #configure. The main loop will run
-##   until the block provided to `super(...)` has returned.
+##   `super`. This block should accept a single argument, the main loop
+##   thread. It generally can be assumed that the thread will be in a
+##   running state, when received to the block.
+##
+##   The call to `super` will initialize the main loop for the service,
+##   using sources initialized under #configure. The main loop will call
+##   the block with the main thread initialized via #context_main, in
+##   effect running until the block provided to `super(...)` has returned.
 ##
 ##   The block provided to `super(...`) should implement any
-##   _Application Background Logic_ for the service, independent to any
-##   logic implemented via callbacks or framework events in the
-##   service main loop.
+##   _Application Background Logic_ for the service. This would be
+##   independent to any logic implemented via callbacks or framework
+##   events in the service main loop.
 ##
 ##   After the block provided to Service#main returns, the main loop on
 ##   the Service will return, thus ending the runtime of the thread in
