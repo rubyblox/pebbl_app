@@ -364,10 +364,10 @@ require 'forwardable'
 ## in the [GNOME Developer Documentation]
 ## (https://developer.gnome.org/documentation/index.html).
 ##
-## This implementation uses GLib context support in [Ruby-GNOME]
+## This implementation uses GLib::MainContext support in [Ruby-GNOME]
 ## (https://github.com/ruby-gnome/ruby-gnome/)
 ##
-## The Service/ServiceContext framwork implements a cancellable main
+## The Service/ServiceContext framework implements a cancellable main
 ## event loop model for GLib applications.
 ##
 ## **Example: DispatchTest**
@@ -381,7 +381,7 @@ require 'forwardable'
 ## application logic independent to the service main loop. This block
 ## will be called in the same thread as #main.
 ##
-## In application with he #main method on Service, the DispatchTest
+## In application with the #main method on Service, the DispatchTest
 ## event loop will exit, after control has exited the block provided to
 ## the Service #main method.
 ##
