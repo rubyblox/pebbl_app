@@ -94,45 +94,46 @@ end
 ## GTK Builder, when the template is initialized directly from a
 ## UI file source
 ##
-module CompositeFileProto
+module FileCompositeWidget
   def self.extended(whence)
-    whence.extend CompositeProto
+    whence.extend CompositeWidget
 
     ## initialize a file-based template for this class, using the class
     ## constant TEMPLATE to determine the template file's pathname
-    def init
-      if File.exists?(self::TEMPLATE)
+    def use_template(filename, children = false)
+
+      if File.exists?(filename)
         ## NB Gio::File @ gem gio2 lib/gio2/file.rb
         ## File, GFileInputStream topics under GNOME devhelp
         gfile = false
         fio = false
+        abs = File.expand_path(filename)
         begin
-          gfile = Gio::File.open(path: self::TEMPLATE)
+          gfile = Gio::File.open(path: abs)
           fio = gfile.read
-          nbytes = File.size(self::TEMPLATE)
+          nbytes = File.size(filename)
           bytes = fio.read_bytes(nbytes)
-          Kernel.warn("Setting template data for #{self} @ #{self::TEMPLATE}",
-                      uplevel: 0)
+          Kernel.warn("Setting template data for #{self} @ #{filename}",
+                      uplevel: 0) ## DEBUG
           self.set_template(data: bytes)
         ensure
-          ## TBD no #unref available for GLib::Bytes here
           fio.unref() if fio
           gfile.unref() if gfile
         end
       else
-        raise "Template does not exist: #{self::TEMPLATE}"
+        raise "Template file does not exist: #{filename}"
       end
-      self.initialize_template_children
-    end ## whence.init
-
+      self.initialize_template_children(children, abs) if children
+      return abs
+    end ## whence.use_template
   end
 end
 
 
 ## configuration support for VtyApp
 ##
-## an instance of this class is returned from VtyApp#config
-class VtyConfig < PebblApp::GtkSupport::GtkConfig
+## an instance of this class is returned from VtyApp#conf
+class VtyConf < PebblApp::GtkSupport::GtkConfig
 
   ## command line options parsing vor VtyApp
   def configure_option_parser(parser)
@@ -148,18 +149,8 @@ end
 ## preferences window for VtyApp
 ##
 class VtyPrefsWindow < Gtk::Dialog
-  TEMPLATE ||=
-    File.expand_path("../ui/prefs.vtytest.ui", __dir__)
 
-  extend BoxedProto
-  extend CompositeFileProto
-
-  class << self
-    ## configuration for initialize_template_children in init
-    def template_children
-      %w(shell_cmd_entry io_model_combo prefs_stack prefs_sb)
-    end
-  end ## class << self
+  extend FileCompositeWidget
 
 
   def initialize(**args)
@@ -178,12 +169,12 @@ class VtyPrefsWindow < Gtk::Dialog
   ## mapped to actionable widgets via the Glade UI editor, "signals" panel
   ##
 
-  def vty_io_model_changed(obj)
-    ## mapped to the 'changed' signal in the io_model_combo widget
+  def vty_io_model_changed
+    ## method mapped to the 'changed' signal in the io_model_combo widget
   end
 
-  def vty_default_shell_changed(obj)
-    ## mapped to the 'changed' signal in the shell_cmd_entry widget
+  def vty_default_shell_changed
+    ## method mapped to the 'changed' signal in the shell_cmd_entry widget
   end
 
 
@@ -211,25 +202,159 @@ end
 ## Main application window class, VtyApp
 ##
 class VtyAppWindow < Gtk::ApplicationWindow
-  TEMPLATE ||=
-    File.expand_path("../ui/appwindow.vtytest.ui", __dir__)
 
-  extend BoxedProto
-  extend CompositeFileProto
+  extend FileCompositeWidget
+  use_template(File.expand_path("../ui/appwindow.vtytest.ui", __dir__),
+               %w(vty vty_send vtwin_vty_menu vty_app_menu vty_menu
+                  vty_entry vty_entry_buffer vty_entry_completion
+                  editpop_popover editpop_textbuffer
+                  editpop_tags
+                  editpop_textview
+                  vtwin_header
+                 ))
 
-  class << self
-    ## configuration for initialize_template_children in init
-    def template_children
-      %w(vty vty_send vtwin_vty_menu vty_app_menu vty_menu
-         vty_entry vty_entry_buff vty_entry_completion)
+
+  def shell=(sh)
+    @shell = (String === sh) ? Shellwords.split(sh) : sh
+  end
+
+  def shell
+    if instance_variable_defined?(:@shell)
+       instance_variable_get(:@shell)
+    elsif self.application
+      self.shell = self.application.default_shell
+    elsif (sh = ENV['SHELL'])
+      self.shell = sh
+    else
+      Vte.user_shell
     end
-  end ## class << self
+  end
+
+  ## PID of the subprocess, or nil
+  attr_accessor :subprocess_pid
+  ## convenience accessor
+  attr_accessor :subprocess_pty
+  ## IO on the pty or nil
+  attr_accessor :pty_io
+
+  ## convenience method
+  attr_accessor :newline
+
+
+  def popover_entry_swap_text
+    popover = self.vty_entry_popover
+    popover_inactive =
+      (popover.state_flags & Gtk::StateFlags::ACTIVE).to_i.eql?(0)
+    if popover_inactive
+      self.vty_entry.text =
+        self.vty_entry_ext_textbuffer.text
+    else
+      self.vty_entry_ext_textbuffer.text =
+        self.vty_entry.text
+    end
+    return popover
+  end
 
 
   def initialize(app)
     Kernel.warn("Initializing #{self}", uplevel: 0)
+
     super(application: app)
+    ##
+    ## local conf
+    ##
+
+    # prefixes = self.action_prefixes
+    # Kernel.warn("Action prefixes (#{prefixes.length})")
+    # prefixes.each do |pfx|
+    #   ## >> win, app
+    #   Kernel.warn pfx
+    # end
+
+    ## hack in a default newline for the Vte::Pty in the Vte::Terminal
+    ## in this app window
+    nlio = StringIO.new
+    nlio.puts
+    @newline = nlio.string
+
     ## bind actions, signals ...
+
+
+    ## coordination for the input text entry
+    ## and popover text view
+    popover = self.editpop_popover
+    self.vty_entry.signal_connect("icon-press") do
+      if popover.visible?
+        popover.hide
+      else
+        popover.show
+      end
+    end
+    popover.signal_connect("hide") do
+      self.vty_entry_buffer.text =
+        self.editpop_textbuffer.text
+    end
+    popover.signal_connect("show") do
+      self.editpop_textbuffer.text =
+        self.vty_entry_buffer.text
+    end
+
+    ## TBD conf options (framework, app conf and framework, app, window conf)
+    self.vty.enable_sixel = true if self.vty.respond_to?(:enable_sixel=)
+
+    ## TBD configuring PWD, ENV, shell ...
+    ## for a pty I/O mode, though the Vte::Pty is not accessible here (FIXME)
+    sh = self.shell
+    vty_env = ENV.map { |elt| "%s=%s" % elt }
+    Kernel.warn("Using shell #{sh.inspect}", uplevel: 0)
+    ## before starting any shell ... binding a signal on pty activation
+    self.vty.signal_connect_after("notify::pty") do |obj, prop|
+      ## OBJ should be the Vte::Terminal for this app window
+      ## FIXME move to a pty adapter
+
+      ## update the subprocess_pty for this app window
+      was_pty = self.subprocess_pty
+      self.subprocess_pty = obj.pty
+      Kernel.warn(
+        "PTY updated for %s : %p => %p" % [
+          self, was_pty, obj.pty
+        ])
+      ## open / close the pty_io for this app window
+      if obj.pty
+        ## FIXME use any encoding stored in conf for the window
+        self.pty_io = File.open(obj.pty.fd, "wb")
+      elsif (io = self.pty_io)
+        io.close if (IO === io)
+        self.pty_io = nil
+      end
+    end
+
+
+    self.vty.signal_connect_after("commit") do |vt, text, len|
+      ## this signal is activated for individual charact entries to the
+      ## PTY, as well as for any full-string send
+      ##
+      ## of course, this is not activated on direct send to the PTY FD
+      Kernel.warn("Commit: #{text.inspect}")
+    end
+
+    ## TBD move this to a ManagedPty adapter
+    success, pid  = self.vty.spawn_sync(Vte::PtyFlags::DEFAULT, Dir.pwd,
+                                        sh, vty_env, GLib::Spawn::SEARCH_PATH)
+
+    if success
+      Kernel.warn("Initializing #{pid} for #{self}")
+      sh_shortname = File.basename(self.shell.first)
+      self.title = sh_shortname
+      self.vtwin_header.title = sh_shortname
+      self.subprocess_pid = pid
+      self.vtwin_header.subtitle = Const::RUNNING
+    else
+      self.vtwin_header.subtitle = Const::FAILED
+      Kernel.warn("Failed. closing window")
+      self.close
+    end
+
   end
 
   ###########################################3
@@ -243,11 +368,12 @@ class VtyAppWindow < Gtk::ApplicationWindow
   ##   the active widget when the signal is sent
 
   def vtwin_close
+    ## signal handler on vtwin_close_entry, a menu entry
     self.close
   end
 
   def vty_eof
-    ## self.class.send_vte_eof(self.vte) ...
+    self.vty.feed_child(Const::EOF)
   end
 
   def vty_reset
@@ -256,14 +382,13 @@ class VtyAppWindow < Gtk::ApplicationWindow
 
   ## present an application preferences window, creating a new
   ## preferences window if not already initialized for the VtyApp
-  def vtwin_show_prefs(obj)
-    Kernel.warn("Prefs method received data: #{obj.inspect}",
-                uplevel: 0)
+  def vtwin_show_prefs
     app = self.application
     app.ensure_prefs_window(app.active_window || self).present
   end
 
-  def vtwin_show_about(obj)
+  def vtwin_show_about
+    ## needs another UI definition, and a project concept
   end
 
   def vtwin_new
@@ -271,23 +396,53 @@ class VtyAppWindow < Gtk::ApplicationWindow
     win.show
   end
 
+  def vtwin_save_data
+  end
+
   def vtwin_save_text
     ## self.class.save_vte_text(...)
   end
 
-  def vtwin_save_data
-    ## self.class.save_vte_data(...)
-  end
 
   def vtwin_send
-    ## from the 'send' button - send any text in vty_entry_buff
-    ## to the input stream of the pty/pipe
+
+    popover = self.editpop_popover
+    if popover.visible?
+      ## a side effect of the hide action:
+      ## any text in the popover text view will be set to the text
+      ## buffer in the main text entry field
+      popover.hide
+    end
+
+    ## mapped to the 'clicked' signal on the window 'send' button
+    ##
+    ## send any text in vty_entry_buffer to the pty,
+    ## using feed_child_raw (if defined)
+    ## or feed_child (if local sources / updated)
+    text = vty_entry_buffer.text + self.newline
+    Kernel.warn("Sending text: #{text.inspect}")
+    if vty.respond_to?(:feed_child_raw)
+      Kernel.warn("DEBUG using feed_child_raw")
+      vty.feed_child_raw(text)
+    else
+      ## patch
+      Kernel.warn("DEBUG using feed_child")
+      vty.feed_child(text)
+    end
   end
 
   def vtwin_received_eof(vty)
   end
 
-  def vtwin_received_exit(vty)
+  def vtwin_subprocess_exit(vty, status)
+    ## signal handler for the child-exited signal
+    ##
+    ## assigned to the vty object (a Vte::Teriminal) on the app window
+    if ! self.in_destruction?
+      self.vtwin_header.subtitle = "pid %s %s %s" % [
+        self.subprocess_pid, Const::EXITED, status
+      ]
+    end
   end
 
 end
@@ -298,7 +453,7 @@ class VtyApp < Gtk::Application
 
   class << self
     ## internal instance tracking for VtyApp
-    ## - not integrated with dbus
+    ## - not yet integrated with dbus
     def started
       if class_variable_defined?(:@@started)
         @@started
@@ -312,59 +467,71 @@ class VtyApp < Gtk::Application
     end
   end ## class << self
 
+  ## ad hoc place holders for app conf @ shell
   def default_shell=(cmd)
     @default_shell = cmd
   end
-
   def default_shell
     ## TBD - should be implemented as a configurable property
     ## of the app and/or window
     if instance_variable_defined?(:@default_shell)
       return @default_shell
-    elsif self.config.option?(:shell)
-      return self.config.options[:shell]
+    elsif self.conf.option?(:shell)
+      return self.conf.options[:shell]
     else
       return Vte.user_shell
     end
   end
 
 
-  def action_group_name()
+  def action_prefix(widget)
     ## a hack for map_simple_action
     ##
-    ## this hard-codes the name of an action group for the application,
+    ## this hard-codes the name of an action prefix for the application,
     ## assuming this matches an action group created somewhere in GTK
     ## for the application
     ##
-    return "app".freeze
+    case widget
+    when Gtk::Application
+      ## no action_prefixes method for this class of object
+      "app".freeze
+    else
+      all = widget.action_prefixes
+      if all.empty
+        raise "No action prefixes found for #{widget}"
+      else
+        ## Assumption: the first action prefix may represent a default
+        ## e.g "win" in %w(win app) for a Gtk::ApplicationWindow
+        all[0]
+      end
+    end
   end
 
   ## utility method for GAction initialization
   ##
   ## used for binding a callback to app.quit
-  def map_simple_action(name, group: nil,
-                        accel: nil, &handler)
-    ## GSimpleAction is the name of a class
-    if (! group)
+  def map_simple_action(name, prefix: nil,
+                        accel: nil, widget: self,
+                        &handler)
+    if (! prefix)
       if (name.include?("."))
         elts = name.split(".")
-        group = elts[0]
+        prefix = elts[0]
         if elts.length > 1
           name = elts[1..].join(".")
         else
-          raise "No action name provided in string #{name.inspect}"
+          raise "Unable to parse action name #{name.inspect}"
         end
       else
-        group = self.action_group_name
+        prefix = action_prefix(widget)
       end
     end
 
-    Kernel.warn("Binding action #{group}.#{name} for #{self}", uplevel: 1)
+    Kernel.warn("Binding action #{prefix}.#{name} for #{self}", uplevel: 1)
 
     act = Gio::SimpleAction.new(name)
     if block_given?
       act.signal_connect("activate") do |action, param|
-        ## TBD how is a parameter ever delivered to an action's activate signal?
         handler.yield(action, param)
       end
       self.add_action(act)
@@ -374,7 +541,7 @@ class VtyApp < Gtk::Application
 
     if accel
       with_accels = (Array === accel) ? accel : [accel]
-      self.set_accels_for_action(('%s.%s' % [group, name]), with_accels)
+      self.set_accels_for_action(('%s.%s' % [prefix, name]), with_accels)
     end
   end
 
@@ -415,6 +582,11 @@ class VtyApp < Gtk::Application
     #   app.handle_open
     # end
 
+    self.signal_connect_after("window-removed") do
+      if self.windows.empty?
+        self.quit
+      end
+    end
   end
 
   ## handler for the app's 'startup' signal,
@@ -464,21 +636,47 @@ class VtyApp < Gtk::Application
 
   ## create a new application window
   def create_app_window()
-    VtyAppWindow.new(self)
+    ## initialize and configure a main window for this application
+    appwdw = VtyAppWindow.new(self)
+    appwdw.shell = self.default_shell
+    return appwdw
   end
 
-  ## return the config instance for this application
-  def config
-    @config || VtyConfig.new(self) do
-      ## callback for the Config object's 'name' param
+
+  def quit()
+    super()
+    Kernel.warn("Calling Gtk.main_quit in Thread 0x%06x" % [Thread.current.__id__],
+                uplevel: 0)
+    self.windows.each do |wdw|
+      wdw.close
+    end
+    Gtk.main_quit
+  end
+
+  ## return the VtyConf instance for this application
+  def conf
+    #self.default_shell = %w(bash -i)
+    self.default_shell = %w(ruby -r irb -r irb/completion -e IRB.start)
+    @conf || VtyConf.new(self) do
+      ## callback for the conf object's 'name' param
       self.app_cmd_name
     end
   end
 
   ## run this application
   def run()
-    Kernel.warn("Registering #{self}", uplevel: 0)
-    self.register
+    if self.registered?
+      Kernel.warn("Already registered: #{self}", uplevel: 0)
+      ## if self.remote?
+      ##  ... self is not the primary application instance ...
+      ## end
+    else
+      Kernel.warn("Registering #{self}", uplevel: 0)
+      ## may err - see devhelp
+      ## the register call will result in the 'startup' signal
+      ## activating for the application
+      self.register
+    end
     Kernel.warn("Start for #{self}", uplevel: 0)
     self.start
     super

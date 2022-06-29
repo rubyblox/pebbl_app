@@ -1,4 +1,4 @@
-## PebblApp::Support::Config class definition
+## PebblApp::Support::Conf class definition
 
 require 'pebbl_app/support'
 
@@ -6,7 +6,15 @@ require 'ostruct'
 require 'optparse'
 require 'forwardable'
 
-class PebblApp::Support::Config
+class PebblApp::Support::Conf
+
+  module Scope
+    DEFAULTS ||= 1
+    ACTIVE ||= 2
+    ## MANAGER ||= 4
+    ## ALL ||= (DEFAULTS | ACTIVE | MANAGER)
+    ALL ||= (DEFAULTS | ACTIVE)
+  end
 
   include Enumerable
   extend Forwardable
@@ -15,14 +23,14 @@ class PebblApp::Support::Config
   def_delegators(:@options, :[], :[]=, :delete_field, :delete_field!,
                  :each_pair, :to_enum, :enum_for)
 
-  ## initialize a new Config object
+  ## initialize a new Conf object
   ##
   ## At least one of a cmd_name or cmd_name_block should be provided.
   ##
   ## If a cmd_name_block is provided, then the storage for the #cmd_name
   ## method will be be deferred until first access, at which time the
   ## cmd_name_block will be called to set and return the cmd_name for
-  ## this Config object.
+  ## this Conf object.
   ##
   ## Else, if a cmd_name is provided, the string representation of the
   ## provided value will be used to provide the shell command name.
@@ -31,10 +39,10 @@ class PebblApp::Support::Config
   ## the documentation for that method.
   ##
   ## If neither a cmd_name_block nor cmd_name is provided, no cmd_name
-  ## will be available for the Config object.
+  ## will be available for the Conf object.
   ##
   ## If an options value is provided, the value will be used when
-  ## initializing the internal options struct for the Config
+  ## initializing the internal options struct for the Conf
   ## object. Else, the internal options struct will be initialized with
   ## an empty options set.
   ##
@@ -52,16 +60,16 @@ class PebblApp::Support::Config
   end
 
 
-  ## Return any cmd_name initialized to this Config object
+  ## Return any cmd_name initialized to this Conf object
   ##
   ## If the @cmd_name instance variable has been initialized for the
   ## instance, that instance variable's value will be returned.
   ##
-  ## Else, if the Config object was initialized with a cmd_name_block
+  ## Else, if the Conf object was initialized with a cmd_name_block
   ## and the  @cmd_name instance variable is uninitialized for the
-  ## instance, this Config object will be yielded to the
+  ## instance, this Conf object will be yielded to the
   ## cmd_name_block,. The string representation of the block's return
-  ## value will be stored and returned as the cmd_name for this Config
+  ## value will be stored and returned as the cmd_name for this Conf
   ## object.
   ##
   ## If no cmd_name has been stored and no cmd_name_block was provided,
@@ -81,15 +89,14 @@ class PebblApp::Support::Config
     end
   end
 
-  ## Return the options struct for this Config object
+  ## Return the options struct for this Conf object
   ##
   ## This value may be used for setting default configuration values,
   ## storing values from parsed shell options uncer
-  ## config_option_parser, and generally  configuring this Config
+  ## config_option_parser, and generally  configuring this Conf
   ## object.
   ##
   ## @return [OpenStruct] the options struct
-  #
   def options
     @options ||= OpenStruct.new
   end

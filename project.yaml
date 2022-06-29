@@ -4,7 +4,7 @@
 ## Known limitations for this project.yaml syntax:
 ## - do not delimit values with a tab character, as this may fail in psych under jruby
 ---
-## common gemspec author, contact info
+## common gemspec author info
 authors:
   - Sean Champ
 email:
@@ -18,10 +18,6 @@ licenses:
 docs:
   - README.md
   - COPYING.md
-## common spec files for rpsec tests
-spec_files:
-  - spec/spec_helper.rb
-  - spec/spec_helper_spec.rb
 ## common development dependencies
 devo_depends:
   ## common development dependencies for all project gemspecs,
@@ -39,7 +35,7 @@ devo_depends:
   - [yard, ">=0.9"]
   ## bundler can install the latest version of bundler,
   ## which may be needed for resolving built-in gems with
-  ## newer Ruby 3.1 releases
+  ## newer Ruby 3.1 releases (e.g for the psych dep)
   - [bundler, ">= 2.3"]
 required_ruby_version: ">= 2.7.0"
 require_paths:
@@ -64,61 +60,65 @@ gems:
       - lib/pebbl_app/support.rb
       - lib/pebbl_app/support/app.rb
       - lib/pebbl_app/support/app_prototype.rb
-      - lib/pebbl_app/support/config.rb
+      - lib/pebbl_app/support/conf.rb
       - lib/pebbl_app/support/const.rb
       - lib/pebbl_app/support/exceptions.rb
       - lib/pebbl_app/support/file_manager.rb
       - lib/pebbl_app/support/files.rb
+      - lib/pebbl_app/support/logging.rb
       - lib/pebbl_app/support/sh_proc.rb
-    sandbox_files:
-      ## not published with the gem. To define autoloads for these files e.g:
-      ##    require 'thinkum_space/project'
-      ## as conditionally under 'bundle exec <ruby>' in the rblib source tree
-      ##
-      ## FIXME this should probably be moved to a root 'sandbox' library
-      ## path, then activated with some top-level add-on parameter for
-      ## bundler (or when :development under bundler eg), beyond an ad
-      ## hoc dispatch and test onto a bundler environment variable.
-      - lib/pebbl_app/project/sandbox.rb
-      - lib/pebbl_app/project/sandbox/spectool.rb
-      - sandbox/lib/pebbl_app/project/ext_spec.rb
+    # sandbox_files:
+    #   ## not published with the gem - FIXME unmaintained prototypes
+    #   - lib/pebbl_app/project/sandbox.rb
+    #   - lib/pebbl_app/project/sandbox/spectool.rb
+    #   - sandbox/lib/pebbl_app/project/ext_spec.rb
     depends:
-## TBD add an internal_depends field for information purposes vis "built-in gems?"
-#      - psych
+      - psych
 
   pebbl_app-gtk_support:
-    module: PebblApp::GtkSupport
+    modules:
+      - PebblApp::GtkSupport
     summary: PebblApp support for Ruby-GNOME applications
     description:
       A minial Ruby toolkit for PebblApp applications using Ruby-GNOME
     build_depends:
-      - pebbl_app-support
+      - [pebbl_app-support, ">=1"]
     depends:
-      - [gtk3, ">=3"]
-      - pebbl_app-support
+      - [pastel, ">=0.8"]
+      - gtk3:
+          ## testing the hash/map decoder in YSpec & adding the dep
+          versions: ">=3.5.2"
+      - [pebbl_app-support, ">=1.0"]
     source_files:
       - lib/pebbl_app/gtk_support.rb
       - lib/pebbl_app/gtk_support/gtk_app_prototype.rb
-      - lib/pebbl_app/gtk_support/gtk_config.rb
+      - lib/pebbl_app/gtk_support/gtk_conf.rb
       - lib/pebbl_app/gtk_support/exceptions.rb
       ## earlier prototype definitions:
-      - lib/pebbl_app/gtk_support/logging.rb
+      - lib/pebbl_app/gtk_support/logging.rb ## FIXME deprecate
+      - lib/pebbl_app/gtk_support/service.rb
       - lib/pebbl_app/gtk_support/threads.rb
-      - lib/pebbl_app/gtk_support/sysexit.rb
-      - lib/pebbl_app/gtk_support/glib_type_ext.rb
-      - lib/pebbl_app/gtk_support/gtk_type_ext.rb
-      - lib/pebbl_app/gtk_support/gbuilder_app.rb
+      - lib/pebbl_app/gtk_support/sysexit.rb ## FIXME deprecate
+      - lib/pebbl_app/gtk_support/gobj_type.rb
+      - lib/pebbl_app/gtk_support/builders.rb
+      - lib/pebgbl_app/gtk_support/gbuilder_app.rb
       - lib/pebbl_app/gtk_support/basedir.rb
-      ### sandbox (to implement)
-      ## - lib/pebbl_app/gtk_support/tools/resources.rb
-      ## - lib/pebbl_app/gtk_support/tools/ui.rb
-      ## - lib/pebbl_app/gtk_support/tools/schemas.rb
+      - sandbox/service-example.rb
+
+  pebbl_app-proto-vty_test:
+    summary: pseudoterminal (prototype)
+    description:
+      Prototype for a vte3 appliation using Ruby-GNOME
+    deps:
+      - [vte3, ">= 3.5.2"]
+      - pebbl_app-gtk_support
 
   riview:
-    module: RIView
+    modules:
+      - RIView
     summary: Documentation browser for Ruby, using Ruby-GNOME (prototype)
     description:
-      This is a project.
+      Prototype for a documentation browser in Ruby, using Ruby-GNOME
     build_depends:
       - pebbl_app-support
     depends:
@@ -136,10 +136,11 @@ gems:
       - ui/docview.riview.ui
 
   rikit:
-    module: RIKit
+    modules:
+      - RIKit
     summary: Prototype for user documentation support for Ruby
     description:
-      This is a project.
+      Prototype for user documentation support for Ruby, using rdoc
     build_depends:
       - pebbl_app-support
     depends:

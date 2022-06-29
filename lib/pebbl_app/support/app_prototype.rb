@@ -82,7 +82,7 @@ module PebblApp::Support
       end
 
       def app_cmd_name
-        ## FIXME this should be configured from app.yaml x Config
+        ## FIXME this should be configured from app.yaml x Conf
         return $0
       end
 
@@ -93,7 +93,7 @@ module PebblApp::Support
       end
 
       def config
-        @config ||= PebblApp::Support::Config.new() do
+        @config ||= PebblApp::Support::Conf.new() do
           ## defer access to the app_cmd_name field,
           ## which should be configured before #configure' is called
           self.app_command_name

@@ -5,7 +5,32 @@ require 'pebbl_app/support'
 
 module PebblApp::Support
 
-  class SignalHandlerMap
+  class SignalMap
+
+    class Const
+      SYS_DEFAULT ||= 'SYSTEM_DEFAULT'.freeze
+      DEFAULT ||= 'DEFAULT'.freeze
+      DEFAULTS ||= [SYS_DEFAULT, DEFAULT].freeze
+      IGNORE ||= 'IGNORE'.freeze
+      EXIT ||= 'EXIT'.freeze
+    end
+
+    class << self
+      def proc_for_handler(hdlr, kind)
+        ## referenced on line_editor.rb from the reline gem
+        case hdlr
+        when Const::DEFAULTS
+            proc { raise Interrupt.new("Default signal handler for #{kind}") }
+        when Const::IGNORE
+          ## nop
+          proc { }.freeze
+        when Const::EXIT
+          proc { exit }.freeze
+        else
+          proc { hdlr.call if hdlr.respond_to?(:call) }
+        end
+      end
+    end ## class <<
 
     attr_reader :handlers
 
@@ -42,17 +67,18 @@ module PebblApp::Support
     ## @return [void] The value returned by the block
     ##
     def with_handlers(&block)
-      previous = {}
+      exists = {}
       begin
         handlers.each do |kind, hdlr|
-          previous[kind] = Signal.trap(kind) do
-            hdlr.yield(kind)
+          exists[kind] = Signal.trap(kind) do
+            proc = SignalMap.proc_for_handler(exists[kind], kind)
+            hdlr.yield(kind, proc)
           end
         end
         block.yield() if block_given?
       ensure
-        previous.each do |signal, prev|
-          Signal.trap(signal, prev)
+        exists.each do |signal, nxt|
+          Signal.trap(signal, nxt)
         end
       end
     end

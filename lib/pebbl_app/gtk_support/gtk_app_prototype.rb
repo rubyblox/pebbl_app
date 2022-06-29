@@ -51,58 +51,48 @@ module PebblApp::GtkSupport
 
   ## NB this needs to access a configuration context from outside of
   ## any objects that would be initilized in the Ruby process with Gtk.init
-
-  def config
-    @config ||= PebblApp::GtkSupport::GtkConfig.new(self)
+  ##
+  def conf
+    @conf ||= PebblApp::GtkSupport::GtkConf.new() do
+      self.app_cmd_name
+    end
   end
 
-
-  def handle_args(args)
-    ## prototype method, should be overridden in implementing classes
-    ##
-    ## args: as returned by Gtk.init_with_args
-    ##       and as may be used under "handle open" typically
+  ## prototype method, should be overridden in implementing classes
+  ##
+  ## args: as returned by, or as provided to Gtk.init_with_args
+  def start(args)
+    warn("Reached prototype #start method", uplevel: 0)
   end
 
-
-  def activate(argv: ARGV)
+  def main(argv: ARGV)
     configure(argv: argv)
 
     ## reduce memory usage, clearing the module's original autoloads
     ## definitions
     ##
     ## FIXME call the freeze during app startup if deferred here
-    # PebblApp::GtkSupport.freeze unless self.config.option(:defer_freeze)
+    # PebblApp::GtkSupport.freeze unless self.conf.option(:defer_freeze)
 
-
-    if (ENV['XAUTHORITY'].nil?)
-      Kernel.warn("No XAUTHORITY found in environment", uplevel: 0)
-    end
-    ## preload GIR object definitions via Gtk.init
-    ## with timeout on the call to Gtk.init
-    time = self.config.option(:gtk_init_timeout, Const::GTK_INIT_TIMEOUT_DEFAULT)
+    time = self.conf.option(:gtk_init_timeout, Const::GTK_INIT_TIMEOUT_DEFAULT)
     init = false
-    args = self.config.gtk_args
+    args = self.conf.gtk_args ## assumes self.conf is a GtkConf
     next_args = args
     Timeout::timeout(time, Timeout::Error, "Timeout in Gtk.init") do
       require 'gtk3'
-      ## This calls Gtk.init_with_args, such that may not be initially defined.
+      ## This may call Gtk.init_with_args, such that may not be
+      ## initially defined.
       ##
-      ## In the first instance, this will call through to Gtk.init
+      ## If Gtk.init has not already been called, this will call through
+      ## to Gtk.init
       ##
-      ## In subsequent instances, this method will still be available
-      ##
-      ## FIXME after Gtk.init and before initializing the application's
-      ## GTK code, pre-load any classes named with string values under
-      ## a config parameter, config.options[:preload_classes] (Array)
+      ## In subsequent instances, Gtk.init_with_args, assuminig the
+      ## method was defined under an earlier Gtk.init call
       ##
       if Gtk.respond_to?(:init)
         Gtk.init(*args)
         init = true
       else
-        ## calling Gtk.init_with_args here, e.g after Gtk.init has
-        ## removed the method Gtk.init
-        ##
         ## The behaviors of Gtk.init_with_args may not entirely match
         ## the behaviors of the initial Gtk.init e.g for some args
         ## processed by GTK such as "--display"
@@ -115,8 +105,7 @@ module PebblApp::GtkSupport
     if init
       nm = self.app_name
       GLib::set_application_name(nm)
-      GLib::Log::set_log_domain(nm)
-      self.handle_args(next_args)
+      self.start(next_args)
     else
       ## TBD whether and how this may be reached
       ## TBD error codes under GTK via Ruby

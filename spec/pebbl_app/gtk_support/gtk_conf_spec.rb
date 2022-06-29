@@ -1,9 +1,9 @@
 ## rspec tests for PebblApp::GtkSupport::GtkApp
 
 ## the library to test:
-require 'pebbl_app/gtk_support/gtk_config'
+require 'pebbl_app/gtk_support/gtk_conf'
 
-describe PebblApp::GtkSupport::GtkConfig do
+describe PebblApp::GtkSupport::GtkConf do
   subject {
     described_class.new(described_class)
   }
@@ -26,8 +26,8 @@ describe PebblApp::GtkSupport::GtkConfig do
     ENV['DISPLAY'] = display_initial
   end
 
-  it "Uses a GtkConfig for config" do
-    expect(subject).to be_a PebblApp::GtkSupport::GtkConfig
+  it "Uses a GtkConf for config" do
+    expect(subject).to be_a PebblApp::GtkSupport::GtkConf
   end
 
   it "parses arg --display DPY" do

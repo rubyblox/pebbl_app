@@ -44,9 +44,13 @@ this project includes:
 > libgirepository-1_0-1 libglib-2_0-0 libgobject-2_0-0 libgthread-2_0-0
 > libgtk-3-0 libharfbuzz-gobject0 libharfbuzz-icu0 libharfbuzz-subset0
 > libharfbuzz0 libpango-1_0-0 gobject-introspection-devel
+> gegl-devel libsecret-devel clutter-devel libgsf-devel
+> libpoppler-glib-devel libpoppler-glib-devel clutter-gtk-devel
+> gtksourceview-devel webkit2gtk3-soup2-devel libwnck-devel
+> gstreamer-devel clutter-gst-devel [...]
 
-This is in addition to typelib information on SUSE platforms, for each
-library.
+The unabridged dependency map should include typelib information as
+available on SUSE platforms, for each library.
 
 If the Cinnamon desktop platform or gnome-builder is installed in
 addition to `gobject-introspection-devel`, this should serve to ensure

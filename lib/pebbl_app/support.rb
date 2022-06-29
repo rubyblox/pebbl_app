@@ -32,12 +32,15 @@ module PebblApp::Support
       %w(AppPrototype),
     "support/app" =>
       %w(App),
-    "support/config" =>
-      %w(Config),
+    "support/conf" =>
+      %w(Conf),
     "support/exceptions" =>
       %w(EnvironmentError),
     "support/files" =>
       %w(Files),
+    "support/logging" =>
+      %w(ServiceLogFormatter ServiceLogDev StreamLogDev
+        ConsoleLogDev ProcessLogDev MultilogDev ServiceLogger),
     "support/sh_proc" =>
       %w(ShProc),
     "support/attrs" =>

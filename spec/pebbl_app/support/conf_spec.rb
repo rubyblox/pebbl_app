@@ -1,13 +1,13 @@
-## rspec tests for PebblApp::Support::Config
+## rspec tests for PebblApp::Support::Conf
 
 ## the library to test
-require 'pebbl_app/support/config'
+require 'pebbl_app/support/conf'
 
 ## API used in tests
 require 'optparse'
 require 'securerandom'
 
-describe PebblApp::Support::Config do
+describe PebblApp::Support::Conf do
   let!(:name) { described_class.to_s }
   subject {
     described_class.new(name)
@@ -84,7 +84,7 @@ describe PebblApp::Support::Config do
 
 
   it "accepts and applies an option parser configuration in an extending class" do
-    class ConfigTest < described_class
+    class ConfTest < described_class
       attr_reader :test_str
       def configure_option_parser(parser)
         parser.on("-t", "--test STR", "Option test") do |str|
@@ -94,7 +94,7 @@ describe PebblApp::Support::Config do
     end
     opts = %w(-t defined)
     opts_initial = opts.dup
-    inst = ConfigTest.new
+    inst = ConfTest.new
     expect { inst.parse_opts!(opts) }.to_not raise_error
     expect(opts).to_not be == opts_initial
     expect(opts).to be_empty

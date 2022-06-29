@@ -1,12 +1,12 @@
-## GtkConfig for Pebbl App
+## GtkConf for Pebbl App
 
-require 'pebbl_app/support/config'
+require 'pebbl_app/support/conf'
 
 require 'optparse'
 
-class PebblApp::GtkSupport::GtkConfig < PebblApp::Support::Config
+class PebblApp::GtkSupport::GtkConf < PebblApp::Support::Conf
 
-  ## Constants for PebblApp::GtkSupport::GtkConfig
+  ## Constants for PebblApp::GtkSupport::GtkConf
   module Const
     DISPLAY_ENV ||= 'DISPLAY'.freeze
   end

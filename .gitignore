@@ -12,12 +12,12 @@ Gemfile.local
 /vendor*
 /doc
 /.yardoc
-/_yardoc/
 /coverage/
 /pkg/
 /spec/reports/
 ## other
 /tmp/
+/sandbox
 
 # rspec failure tracking
 .rspec_status

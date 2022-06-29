@@ -7,50 +7,72 @@ BEGIN {
   require(__dir__ + ".rb")
 }
 
+## require the exact gtk version elsewhere
+# require 'gtk3'
 
-require 'gtk3'
-
+## encapsulation for Gtk::Builkder
 module PebblApp::GtkSupport::UIBuilder
   def self.extended(extclass)
-    def extclass.builder()
-      @builder ||= Gtk::Builder.new()
-    end
 
-    def extclass.builder=(builder)
-      if @builder && (@builder != builder)
-        Kernel.warn("in #{self}: :builder is already bound to #{@builder}. Ignoring builder #{builder}", uplevel: 1)
-      else
-        @builder = builder
+    ## FIXME the following should be defined as instance methods
+    class << extclass
+
+      ## return a Gtk::Builder initialized for the class scope
+      def builder()
+        ## FIXME originally a utility for the template support,
+        ## but not actually used for template support
+        if class_variable_defined?(:@@builder)
+          return class_variable_get(:@@builder)
+        else
+          bld = Gtk::Builder.new()
+          class_variable_set(:@@builder, bld)
+        end
       end
-    end
 
-    def extclass.add_ui_file(file)
-      ## TBD usage for testing - presently unused here
-
-      ## NB this assumes that the UI file
-      ## does not contain any template decls.
+      ## set the class-scoped UI builder, if not already defined
       ##
-      ## i.e each object initialized from the file
-      ## will be initialized at most once
-      ## for this class
-      @builder.add_from_file(file)
-    end
+      ## @param builder [Gtk::Builder] the initial UI builder
+      def builder=(builder)
+        if (self.builder != builder)
+          ## FIXME logging
+          Kernel.warn("in #{self}: :builder is already bound to #{@builder}. Ignoring builder #{builder}", uplevel: 1)
+        else
+          @builder = builder
+        end
+      end
 
-    def extclass.add_ui_resource(path)
-      ## NB this assumes that the UI file
-      ## does not contain any template decls.
-      ##
-      ## i.e each object initialized from the file
-      ## will be initialized at most once
-      ## for this class
-      @builder.add_from_resource(path)
-    end
+      def add_ui_file(file)
+        ## FIXME this is a utility  for initial development
+        ## - does not use a gresource bundle
 
-    def extclass.ui_object(id)
-      ## NB may return nil
-      @builder.get_object(id)
-    end
-  end
+        ## NB this assumes that the UI file
+        ## does not contain any template decls.
+        ##
+        ## i.e each object initialized from the file
+        ## will be initialized at most once
+        ## for this class
+        @builder.add_from_file(file)
+      end
+
+      def add_ui_resource(path)
+        ## FIXME this assumes that the UI file
+        ## does not contain any template decls.
+        ##
+        ## i.e each object initialized from the file
+        ## will be initialized at most once
+        ## for this class
+        ##
+        ## FIXME add calls to validate this when running under bundler
+        @builder.add_from_resource(path)
+      end
+
+      def ui_object(id)
+        ## NB may return nil (FIXME/NEEDSTEST)
+        @builder.get_object(id)
+      end
+
+    end ## class <<
+  end ## extended
 end
 
 ## general-purpose mixin module for TemplateBuilder extension modules
@@ -59,7 +81,7 @@ end
 ## @see FileTemplateBuilder
 module PebblApp::GtkSupport::TemplateBuilder
   def self.included(extclass)
-    extclass.extend PebblApp::GtkSupport::GTypeExt
+    extclass.extend PebblApp::GtkSupport::GObjType
     extclass.extend PebblApp::GtkSupport::UIBuilder
 
     ## set the template path to be used for this class
@@ -68,7 +90,8 @@ module PebblApp::GtkSupport::TemplateBuilder
     ## @see FileTemplateBuilder::init
     def extclass.use_template(path)
       ## FIXME err if the variable is already defined/non-null
-        @template = path
+      ## and bound to some Gtk/glib object
+      @template = path
     end
 
     ## retrieve the template path to be used for this class
@@ -81,7 +104,6 @@ module PebblApp::GtkSupport::TemplateBuilder
 
     ## @see #ui_internal
     def extclass.bind_ui_internal(id)
-      ## FIXME test for usage
       self.bind_template_child_full(id, true, 0)
     end
 
@@ -219,7 +241,7 @@ module PebblApp::GtkSupport::ResourceTemplateBuilder
       ## NB here, @template must represent a GResource path, not a filename
       set_template(resource: @template)
     end
-    extclass.register
+    extclass.register_type
   end
 end
 
@@ -239,21 +261,22 @@ module PebblApp::GtkSupport::FileTemplateBuilder
         ## NB ~/.local/share/gem/ruby/3.0.0/gems/gio2-3.4.9/lib/gio2/file.rb
         ## && GFile, GFileInputStream pages under GNOME devhelp
         gfile = Gio::File.open(path: use_path)
-        fio = gfile.read
-        nbytes = File.size(use_path)
+        fio = false
         begin
+          fio = gfile.read
+          nbytes = File.size(use_path)
           bytes = fio.read_bytes(nbytes)
           self.set_template(data: bytes)
         ensure
           ## TBD no #unref available for GLib::Bytes here
-          fio.unref()
-          gfile.unref()
+          fio.unref() if fio
+          gfile.unref() if gfile
         end
       else
         raise "Template file does not exist: #{use_path}"
       end
     end
-    extclass.register
+    extclass.register_type
   end
 end
 

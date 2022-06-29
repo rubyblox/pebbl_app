@@ -1,5 +1,7 @@
 ## riview.rb - baseline module definition and autoloads
 
+## @private yard parser tries to document this 'require' call
+##  due to the comment line just above
 require 'rubygems'
 
 gem 'pebbl_app-support'

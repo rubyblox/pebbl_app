@@ -3,10 +3,13 @@
 BEGIN {
   gem 'pebbl_app-support'
   require 'pebbl_app/project/project_module'
+  ## define autoloads for pebbl_app/support
+  require 'pebbl_app/support'
 }
 
 ## prototyping - gem method for this individual module
 require 'pebbl_app/project/spec_finder'
+
 
 module PebblApp::GtkSupport
   include PebblApp::Project::ProjectModule
@@ -28,28 +31,30 @@ module PebblApp::GtkSupport
   defautoloads({
     "gtk_support/gtk_app_prototype" =>
       %w(GtkAppPrototype),
-    "gtk_support/gtk_config" =>
-      %w(GtkConfig),
+    "gtk_support/gtk_conf" =>
+      %w(GtkConf),
     "gtk_support/exceptions" =>
       %w(ConfigurationError),
+    "gtk_support/service" =>
+      %w(ServiceCancellation ServiceContext Service),
     "gtk_support/gir_proxy" =>
       %w(InvokerP FuncInfo),
     "gtk_support/logging" =>
       %w(LoggerDelegate LogManager LogModule),
     "gtk_support/threads" =>
       %w(NamedThread),
-    "gtk_support/sysexit" =>
-      %w(SysExit),
-    "gtk_support/glib_type_ext" =>
-      %w(GTypeExt),
-    "gtk_support/gtk_type_ext" =>
-      ## FIXME => WidgetBuilder
+    "gtk_support/gobj_type" =>
+      %w(GObjType),
+    "gtk_support/builders" =>
       %w(UIBuilder TemplateBuilder
          ResourceTemplateBuilder FileTemplateBuilder),
     "gtk_support/gbuilder_app" =>
       %w(GBuilderApp),
     "gtk_support/basedir" =>
-      %w(FileResourceManager)
+      %w(FileResourceManager),
+    "gtk_support/sysexit" =>
+      %w(SysExit)
+
   })
 
 end

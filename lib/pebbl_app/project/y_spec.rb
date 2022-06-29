@@ -10,8 +10,8 @@ end
 
 require 'rubygems'
 require 'pathname'
+require 'ostruct'
 
-## psych will serve as a dependency for bootstrapping a gemspec, here
 require 'psych'
 
 ## YAML encoding for gemspec configuration
@@ -46,10 +46,15 @@ class PebblApp::Project::YSpec
     SRC_FIELD		||= 'source_files'.freeze
     DOCS_FIELD		||= 'docs'.freeze
     RESOURCE_FIELD	||= 'resource_files'.freeze
-    DEVO_FIELD		||= 'devo_depends'.freeze
     DEPS_FIELD		||= 'depends'.freeze
     BDEPS_FIELD		||= 'build_depends'.freeze
-    ALLDEPS_FIELDS	||= [BDEPS_FIELD, DEPS_FIELD, DEVO_FIELD].freeze
+    DEVO_FIELD		||= 'devo_depends'.freeze
+    ## group mapping for dependency fields => gem depends in project.yaml
+    ALLDEPS_FIELDS	||= {
+      default: [DEPS_FIELD, BDEPS_FIELD].freeze,
+      development: [DEVO_FIELD].freeze
+    }.freeze
+    VERSIONS_FIELD	||= 'versions'.freeze
     WWW_FIELD		||= 'homepage'.freeze
     WWW_URI_FIELD	||= 'homepage_uri'.freeze
     SRC_URI_FIELD	||= 'source_code_uri'.freeze
@@ -57,22 +62,22 @@ class PebblApp::Project::YSpec
     REQUIRE_FIELD	||= 'require_path'.freeze
     REQUIRE_ENUM_FIELD	||= 'require_paths'.freeze
 
-    ## required fields for general iteration
-    PRIMARY_DEFAULT ||= %w(version summary description authors email
+    ## required fields (YAML, gemspec)
+    PRIMARY_FIELDS ||= %w(version summary description authors email
                            licenses
                           ).map { |name| name.freeze }.freeze
-    ## optional fields for general iteration
-    OPTIONAL_DEFAULT ||= %w(required_ruby_version homepage
+    ## optional fields (YAML, gemspec)
+    OPTIONAL_FIELDS ||= %w(required_ruby_version homepage
                             bindir executables extensions extension_dir
                            ).map { |name| name.freeze }.freeze
-    ## metadta fields for general iteration
+    ## metadta fields (YAML, gemspec metadata)
     ##
     ## FIXME this will discard some custom YAML data
-    METADATA_DEFAULT ||= %w(homepage_uri source_code_uri
+    METADATA_FIELDS ||= %w(homepage_uri source_code_uri
                             changelog_uri allowed_push_host
                            ).map { |name| name.freeze }.freeze
 
-    GEM_REQUIREMENT_DEFAULT ||= Gem::Requirement.default.to_s.freeze
+    # GEM_REQUIREMENT_FIELDS ||= Gem::Requirement.default.to_s.freeze
   end
 
   ## pathname for serialized YAML data for this YSpec instance
@@ -102,6 +107,9 @@ class PebblApp::Project::YSpec
 
   ## a configurable map, using the same syntax as the writers_cache attribute
   attr_reader :readers_cache
+
+  ## intermediate data for the project yaml => gemspec parser
+  attr_reader :deps_cache
 
   ## project data decoded from YAML
   attr_accessor :proj_data
@@ -144,19 +152,25 @@ class PebblApp::Project::YSpec
   ##        gem scopes (FIXME this syntax needs documentation)
   ## @see #write_config
   def initialize(pathname)
+    yspec_debug("Initializing new %s for %s", self.class, pathname)
     @pathname = Pathname(pathname)
     ## default field names for method calls under #write_config
-    @primary_fields = Const::PRIMARY_DEFAULT
-    @optional_fields = Const::OPTIONAL_DEFAULT
-    @metadata_fields = Const::METADATA_DEFAULT
+    @primary_fields = Const::PRIMARY_FIELDS
+    @optional_fields = Const::OPTIONAL_FIELDS
+    @metadata_fields = Const::METADATA_FIELDS
     ## configuration state data, local to one gemspec writer session
     # @gem_name = nil
     # @gem_data = nil
     # @proj_data = nil
     @writers_cache ||= {}
     @readers_cache ||= {}
+    @deps_cache ||= {}
   end
 
+
+  def yspec_debug(fmt, *params)
+    STDERR.puts("YSPEC: " + (fmt % params)) if $YSPEC_DEBUG
+  end
 
   ## returm a writer method name for the spec field denoted as name
   ##
@@ -192,7 +206,7 @@ class PebblApp::Project::YSpec
       if Psych.respond_to?(:safe_load_file)
         @proj_data = Psych.safe_load_file(@pathname)
       else
-        ## TBD as to how this is being reached under some Ruby
+        ## TBD as to how this may be reached under some Ruby
         ## implementations, though the latest Psych is installed from
         ## gemfiles - seen during GH tests
         Kernel.warn("Psych.safe_load_file not available", uplevel: 0) if $DEBUG
@@ -261,7 +275,7 @@ class PebblApp::Project::YSpec
   def gem_field_value(gem, field, default: false, &fallback)
     load_config if !@proj_data
     load_gem_config(gem)
-    if @gem_data.has_key?(field)
+    if @gem_data && @gem_data.has_key?(field)
       return @gem_data[field]
     else
       project_field_value(field, default: default) do
@@ -294,11 +308,15 @@ class PebblApp::Project::YSpec
   ##        configuration from active project data.
   def load_gem_config(name)
     @gem_name = name
+
+    ## initialize/clear dependency data
+    @deps_cache[name] = {}
+
     ## If no gem is found for the name in the active project data, a
     ## partial configuration may still be provied for the named gem,
     ## using any gem configuration fields defined at the project scope.
     all_gem_data = project_field_value(Const::GEMS_FIELD) do |field|
-      ## fallback block, if no gems map is yet configured to the project
+      ## fallback block, if no gems map is  configured to the project
       ##
       ## this ensures that an empty table is initialized for
       ## unconfigured gem-specific data.
@@ -306,10 +324,7 @@ class PebblApp::Project::YSpec
                name, field, @pathname)
       return (@gem_data = {})
     end
-    ## FIXME store the all_gem_data value itself,
-    ## access later via @gem_name as a key on that value
     @gem_data = all_gem_data[name]
-    return self
   end
 
   ## write an active configuration to a provided gemspec
@@ -331,6 +346,9 @@ class PebblApp::Project::YSpec
   ##
   def write_config(spec)
 
+    yspec_debug("Writing configuration for %s %s : %s", spec.class, spec,
+                (spec.loaded_from || "(pathname not provided)"))
+
     ## FIXME add gemspec grouping support, i.e grouping support for deps
     ## configuration in project gemspecs
 
@@ -345,10 +363,14 @@ class PebblApp::Project::YSpec
     ## the gemspec in gemspec scope
     ##
     if (name = spec.name)
-      load_gem_config(name)
+      if ! load_gem_config(name)
+        msg_fail("no gemspec configuration for %s in %p", name, @pathname)
+      end
     else
       msg_fail("gem specification has no name: %s", spec)
     end
+
+
 
     ##
     ## common data fields (required. gem field overrides project field)
@@ -405,7 +427,7 @@ class PebblApp::Project::YSpec
     ##
     ## add the project YAML file
     ##
-    append_singleton_value(@pathname.basename.to_s, :files, spec)
+    append_enumerable_value(@pathname.basename.to_s, :files, spec)
 
     ##
     ## add the gemspec file
@@ -474,74 +496,138 @@ class PebblApp::Project::YSpec
     ##
     ## FIXME this needs something like an openschema documentation
 
-    ## caching for the precedence conditional:
-    alldeps = {}
-    depname = false
-    lastdep = false
-    ## gemspec encoding for deps:
-    Const::ALLDEPS_FIELDS.map do |field|
-      callback_enumerable(field) do |value|
-        ## FIXME if a gem is listed more than once, add each subsequent
-        ## version requirements to local storage for that dependency,
-        ## then apply when configuring the gemspec.
+    ##
+    ## i.e dependency parsing, project.yaml => gemspec
+    ##
+
+    ## caching for dependency decls
+    alldeps = self.deps_cache[name]
+    ## gemspec encoding for parse(yaml, API data) => deps
+    Const::ALLDEPS_FIELDS.each do |group, fields|
+      fields.each do |field|
+        ## the following block will be called at least once for the
+        ## project scope, and may be called once for the gem scope for
+        ## the gemspec being configured
         ##
-        ## Presently: First dep overides any later, in the gemspec
-        ## encoding for a gem dependency of a provided name
+        ## In this API, dependencies in the project scope will be parsed
+        ## first, before dependencies in the gem scope.
         ##
-        ## In this API, data in the gemspec scope is parsed first
-        case value
-        when Array
-          depname = value[0]
-        else
-          depname = value
-        end
-        if alldeps.has_key?(depname)
-          first_field = alldeps[depname][0]
-          if ! ((first_field == Const::BDEPS_FIELD) && (field == Const::DEPS_FIELD))
-            ## do not warn about gemspec dependencies duplicated
-            ## when listed as both a build dependency and a runtime
-            ## dependency in project.yaml
+        callback_enumerable(field) do |decl, scope|
+          case decl
+            ## switch based on the syntax of each dependency declaration
+            ## - String : dependency name
+            ## - Array : dependency name with zero or more version bounds
+            ## - Hash :  { name => { "versions" => <string-or-array> ... }}
+          when Array
+            ## array encoding for dependency (project.yaml)
+            depname = decl[0]
+            if decl.length > 1
+              ## canonicalizing all input versions strings
+              ## before version tests onto intermediate data
+              versions = decl[1..].map do |v|
+                Gem::Requirement.new(v).to_s
+              end
+            else
+              versions = []
+            end
+          when Hash
+            ## hash/map encoding for a dependency (project.yaml)
             ##
-            ## for purposes of distribution in host package management
-            ## systems, not all build dependencies may be runtime
-            ## dependencies.
+            ## e.g simple syntax for versions, in this encoding (YAML)
             ##
-            ## for purposes of gemspec initialization from project.yaml:
-            ## If a build dependency is configured for a gem, then it
-            ## will indicate a runtime dependency for the gem, there
-            ## being no singular distinction of "build" and "run" stages
-            ## in the gemspec scope.
+            ## depends:
+            ##   - gtk3:
+            ##       versions: ">=3.5.2"
             ##
-            ## To provide information for host package developement
-            ## tasks, each build dependency should be declared separate
-            ## to each application runtime dependency in project.yaml.
+            ## e.g alternate syntax, for zero or more version bounds
             ##
-            ## The list of build dependencies for each gem will be
-            ## stored in a YAML string encoded in gemspec metadata for
-            ## each configured gemspec.
+            ## depends:
+            ##   - gtk3:
+            ##       versions: [">=3.5.2"]
             ##
-            ## The conditional form above may simply serve to prevent
-            ## that any misleading warning message would be emitted
-            ## under any duplication in the interpretation of
-            ## application build dependencies and runtime dependencies
-            ## both as gemspec runtime dependencies.
-            ##
-            unparsed = alldeps[depname][1].to_s
-            msg_warn("Skipping duplicate %s dependency (%s): %p | \
-first declared under %s as %p",
-                     name, field, value,
-                     first_field, unparsed)
+            yspec_debug("Parsing dependency as map: %p", decl)
+            ## there would be only one k,v entry here,
+            ## for each dependency being parsed
+            depname = decl.keys[0]
+            dep_data = decl.values[0]
+            versions_decl = (Hash === dep_data) ?
+              dep_data[Const::VERSIONS_FIELD] : nil
+            yspec_debug("Parsing versions: %p", versions_decl)
+            case versions_decl
+            when String
+              ## string encoding under a mapped dep "versions:" entry
+              ## for a single versions decl, canonicalized from input
+              versions = [ Gem::Requirement.new(versions_decl).to_s ]
+            when nil
+              ## no versions specified
+              versions = []
+            else
+              ## array encoding under a mapped dep "versions:" entry
+              ## for a multiply bounded versions decl,
+              ## canonicalized from input
+              versions = versions_decl.map do |v|
+                Gem::Requirement.new(v).to_s
+              end
+            end
+          else
+            ## string encoding for a dependency (project.yaml)
+            depname = decl
+            ## an empty versions set should *not be* a frozen array, here.
+            ## the value may be destructively modified before return
+            versions = []
           end
-        else
-          as_devo = (field == Const::DEVO_FIELD)
-          ## FIXME capture any Gem::Requirement::BadRequirementError,
-          ## then warn for the origin filename and dep value and raise
-          lastdep = write_dep(value, spec, development: as_devo)
-          ## lastdep will be the new Gem::Dependency object,
-          ## as initialized and returned from write_dep
-          alldeps[depname] = [field, lastdep]
+          ## parse the dependency info,
+          ## adding to cached info if previously declared
+          ## for the active gemspec
+          if (depinfo = alldeps[depname.to_sym])
+            yspec_debug("found %s dependency %p %p for %s",
+                        scope, depname, versions, name)
+            prev_versions = depinfo.versions
+            new_versions = []
+            versions.each do |ov|
+              ## filter all provided versions, to ensure a unique
+              ## version reference for each dependency added from
+              ## project.yaml, before adding deps to the gemspec
+              yspec_debug("check %s", ov)
+              catch(:found) do |tag|
+                prev_versions.each do |pv|
+                  yspec_debug("check %s ?? %s", ov, pv)
+                  throw(tag, true) if (ov == pv)
+                end
+                new_versions.push(ov)
+              end ## catch :found
+            end ## versions filter
+            depinfo.versions.concat(new_versions) if ! new_versions.empty?
+            depinfo.source_fields << [field, scope]
+            depinfo.groups << group
+          else
+            ## initializing a new OpenStruct for each named dependency,
+            ## to be used in filtering version dependencies and if needed
+            ## for debugging for field/scope inheritance
+            depinfo = OpenStruct.new
+            depinfo.name = depname
+            depinfo.groups = [group]
+            depinfo.source_fields = [[field, scope]]
+            depinfo.versions = versions
+            ## FIXME, additional fields may be useful for Gemfile parse (e.g git info)
+            ##
+            ## Albeit, this block is generating a gemspec parse for the dep info
+            ##
+            # depinfo.other_fields = tbd
+            ##
+            ## add to the alldeps table
+            alldeps[depname.to_sym] = depinfo
+          end
         end
-      end
+      end ## fields iterator
+    end
+    yspec_debug("adding %d dependencies for %s", alldeps.length, name)
+    alldeps.each do |key, depinfo|
+      name_s = depinfo.name
+      versions = depinfo.versions
+      groups = depinfo.groups
+      is_runtime_dep = groups.include?(:default)
+      write_dep(spec, name_s, versions, is_runtime_dep)
     end
 
     ## post-parse, outside of the previous iterator.
@@ -554,18 +640,18 @@ first declared under %s as %p",
     ##
     ## The array value, if non-empty, will be translated to a string in
     ## YAML syntax before storing in gemspec metadata
-    bdeps = []
-    alldeps.map do |name, data|
-      kind = data[0]
-      if (kind == Const::BDEPS_FIELD)
-        ## converting each initialized Gem::Dependency under build_depends
-        ## to a string, before storing in the gemspec metadata
-        gemdep = data[1]
-        bdeps << gemdep
-      end
-    end
+    # bdeps = []
+    # alldeps.map do |name, data|
+    #   kind = data[0]
+    #   if (kind == Const::BDEPS_FIELD)
+    #     ## converting each initialized Gem::Dependency under build_depends
+    #     ## to a string, before storing in the gemspec metadata
+    #     gemdep = data[1]
+    #     bdeps << gemdep
+    #   end
+    # end
     ## storing YAML in a metadata string (build depends)
-    set_direct_metadata(Const::BDEPS_FIELD, bdeps.to_yaml(header: true), spec) if ! bdeps.length.eql?(0)
+    # set_direct_metadata(Const::BDEPS_FIELD, bdeps.to_yaml(header: true), spec) if ! bdeps.length.eql?(0)
 
     ##
     ## set require_path, require_paths from YAML
@@ -585,7 +671,7 @@ first declared under %s as %p",
   ## @param str [String] format string
   ## @param args [Array<Any>] format arguments
   def msg_fail(str, *args)
-    raise new str % args
+    raise (str % args)
   end
 
   ## produce a warning message, with a message string calculated from
@@ -614,30 +700,38 @@ first declared under %s as %p",
   ## > ["<name>", "<version>" ...]
   ##
   ## If the depval is provided as a string, the value of the runtime
-  ## constant Const::GEM_REQUIREMENT_DEFAULT will be used as a single
+  ## constant Const::GEM_REQUIREMENT_FIELDS will be used as a single
   ## version bound for the requirement.
   ##
-  ## @param depval [String, Array<String>] the dependency declaration,
-  ##        such as decoded from YAML
   ## @param spec [Gem::Specification] the gemspec receiving the
-  ##        dependency definition
-  ## @param development [boolean] true if the value indicates a
-  ##        development dependency, else the value will be interpreted
-  ##        as a runtime dependency
-  def write_dep(depval, spec, development: false)
-    case depval
-    when Array
-      name = depval[0]
-      bounds = depval[1..]
-      req = Gem::Requirement.new(bounds)
-      group = development ? :development : :runtime
-      dep = Gem::Dependency.new(name, req, group)
-      spec.add_dependency(dep)
-      return dep
+  ##  dependency definition
+  ##
+  ## @param name [String] name of the dependency
+  ##
+  ## @param versions [Array<String>, null] string encoded version bounds
+  ##  for the dependency, or a falsey value if the dependency is not
+  ##  version-constrained
+  ##
+  ## @param runtime [boolean] true if the value indicates a
+  ##  runtime dependency, else the value will be interpreted
+  ##  as a development dependency for purposes of gemspec definition
+  ##
+  def write_dep(spec, name, versions = nil, runtime = true)
+    yspec_debug("Adding dep %p %s (%s) to %s %s",
+                name, versions, (runtime ? "default" : "development"),
+                spec.class, spec.name)
+    if runtime
+      if versions && ! versions.empty?
+        spec.add_dependency(name, *versions)
+      else
+        spec.add_dependency(name)
+      end
     else
-      ## depval is a string - dispatch to call on an array with defaults added
-      self.write_dep([depval, Const::GEM_REQUIREMENT_DEFAULT],
-                     spec, development: development)
+      if versions && ! versions.empty?
+        spec.add_development_dependency(name, *versions)
+      else
+        spec.add_development_dependency(name)
+      end
     end
   end
 
@@ -658,6 +752,8 @@ first declared under %s as %p",
   ## @param spec [Gem::Specification] gemspec to configure under the
   ##        provided set_field
   def set_direct_field(set_field, value, spec)
+    yspec_debug("Setting field %p => %p in %s %s",
+                set_field, value, spec.class, spec.name)
     setmtd = writer_for(set_field)
     spec.send(setmtd, value)
   end
@@ -685,7 +781,9 @@ first declared under %s as %p",
   ##        both of the gem and project contexts in the active
   ##        configuration data
   def set_field(field, spec, required: true)
-    data = ( @gem_data[field] || @proj_data[field] )
+    yspec_debug("Configuring %s (%s) for %s %s", field,
+                required ? "required" : "optional",  spec.class, spec.name)
+    data = ( (@gem_data[field] if @gem_data) || @proj_data[field] )
     if data
       set_direct_field(field, data, spec)
     elsif required
@@ -699,6 +797,8 @@ first declared under %s as %p",
   ## set the provided value as metadata for the named field, in the
   ## provided gemspec object
   def set_direct_metadata(field, value, spec)
+    yspec_debug("Setting metadata field %s for %s %s => %p",
+                field, spec.class, spec.name, value)
     spec.metadata[field] = value
   end
 
@@ -706,13 +806,13 @@ first declared under %s as %p",
   ## data, setting the value as metadata with the same field name in the
   ## provided gemspec object
   def set_field_metadata(field, spec)
-    data = ( @gem_data[field] || @proj_data[field] )
+    data = ( (@gem_data[field] if @gem_data) || @proj_data[field] )
     set_direct_metadata(field, data, spec) if data
   end
 
   ## add a single value to an enumerable field of the active gem
   ## specification
-  def append_singleton_value(value, specfield, spec)
+  def append_enumerable_value(value, specfield, spec)
     readmtd = reader_for(specfield)
     data = spec.send(readmtd)
     data << value
@@ -738,14 +838,14 @@ first declared under %s as %p",
   ##        configured in gem or project data and if a non-falsey
   ##        default value is provided
   def append_singleton(field, specfield, spec, default: false)
-    if @gem_data.has_key?(field)
+    if @gem_data && @gem_data.has_key?(field)
       value = @gem_data[field]
     elsif @proj_data.has_key?(field)
       value = @proj_data[field]
     else
       value = default
     end
-    append_singleton_value(value, specfield, spec) if value
+    append_enumerable_value(value, specfield, spec) if value
   end
 
   ## append each element for an enumerable field value (if non-nil) in
@@ -798,18 +898,19 @@ first declared under %s as %p",
   ##
   ## @param field [String] field name for gem and project data
   ## @param callback [Proc] a block that may recieve each successive
-  ##        value from the enumerable field
+  ##        value from the enumerable field, and a second value
+  ##        indicating the scope of the field value, one of :project or :gem
   ## @see #append_enumerable
   def callback_enumerable(field, &callback)
     raise "No callback provided for field #{field.inspect}" unless callback
     if (configured = @proj_data[field])
       configured.each do |value|
-        callback.call(value)
+        callback.yield(value, :project)
       end
     end
     if (configured = @gem_data[field])
       configured.each do |value|
-        callback.call(value)
+        callback.yield(value, :gem)
       end
     end
   end
