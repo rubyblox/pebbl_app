@@ -63,6 +63,7 @@ gems:
       - lib/pebbl_app/file_manager.rb
       - lib/pebbl_app/framework.rb
       - lib/pebbl_app/project.rb
+      - lib/pebbl_app/logger_mixin.rb
       - lib/pebbl_app/project_module.rb
       - lib/pebbl_app/shell.rb
       - lib/pebbl_app/project/spec_finder.rb ## ?? see conf. patch & remove refs
@@ -90,7 +91,7 @@ gems:
           versions: ">=3.5.2"
       - [pebbl_app-support, ">=1.0"]
     source_files:
-      - lib/pebbl_app/gapp.rb
+      - lib/pebbl_app/gmain.rb
       - lib/pebbl_app/gtk_app.rb
       - lib/pebbl_app/gtk_conf.rb
       - lib/pebbl_app/gtk_framework.rb

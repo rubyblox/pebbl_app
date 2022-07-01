@@ -41,6 +41,7 @@ module PebblApp
   autoload(:FileManager, 'pebbl_app/file_manager.rb')
   autoload(:Framework, 'pebbl_app/framework.rb')
   autoload(:EnvironmentError, 'pebbl_app/exceptions.rb')
+  autoload(:LoggerMixin, "pebbl_app/logger_mixin.rb")
   autoload(:Project, 'pebbl_app/project.rb')
   autoload(:ProjectModule, 'pebbl_app/project_module.rb')
   autoload(:Shell, 'pebbl_app/shell.rb')

@@ -1,31 +1,31 @@
-## DispatchTest : Example GApp application
+## DispatchTest : Example GMain application
 
 ## **Example: DispatchTest**
 ##
-## The class DispatchTest extends GApp, there overriding the GApp
+## The class DispatchTest extends GMain, there overriding the GMain
 ## #configure and #main methods
 ##
 ## The #main method in DispatchTest calls the superclass' #main method
-## via `super`, there providing a custom GAppContext instance and
+## via `super`, there providing a custom GMainContext instance and
 ## a local block to the `super` call. The block implements a custom
 ## application logic independent to the service main loop. This block
 ## will be called in the same thread as #main.
 ##
-## In application with the #main method on GApp, the DispatchTest
+## In application with the #main method on GMain, the DispatchTest
 ## event loop will exit after control has exited the block provided to
-## the GApp #main method.
+## the GMain #main method.
 ##
 ## The #configure method in the DispatchTest example will add a
 ## GLib::Idle kind of GLib::Source to the context object provided to the
 ## method.
 ##
-## This #configure method uses #map_idle_source to add a callback on the
-## the idle source and to add the source to the provided context. The
-## #configure method then sets a source priority on the source object
-## returned by #map_idle_source. In the DispatchTest example, the idle
-## source's callback block will call the implementing class' `do_work`
-## method. This callback should be reached in each normal iteration of
-## the application's main loop.
+## This #configure method uses GMain.map_idle_source to add a callback
+## on the the idle source and to add the source to the provided
+## context. The #configure method then sets a source priority on the
+## source object returned by GMain.map_idle_source. In the DispatchTest
+## example, the idle source's callback block will call the implementing
+## class' `do_work` method. This callback should be reached in each
+## normal iteration of the application's main loop.
 ##
 ## The `DispatchTest#main` method provides a five second wait in the
 ## local block, to simulate a duration in application runtime. Semantically,
@@ -58,10 +58,10 @@
 ## test.data.work_log
 ##
 
-require 'pebbl_app/gapp'
+require 'pebbl_app/gmain'
 require 'forwardable'
 
-## FIXME move signal trap support into GApp
+## FIXME move signal trap support into GMain
 require 'pebbl_app/signals'
 
 ## Data object class for the DispatchTest example
@@ -83,7 +83,7 @@ class TestData
   end
 end
 
-## a GAppContext for the DispatchTest example, storing an arbitrary
+## a GMainContext for the DispatchTest example, storing an arbitrary
 ## data value.
 ##
 ## In the DispatchTest example, the data value will typically be a
@@ -93,11 +93,11 @@ end
 ## The availability of the data value in the TestContext will permit for
 ## forwarding to the TestData#log_event method from within context
 ## methods
-class TestContext < PebblApp::GAppContext
+class TestContext < PebblApp::GMainContext
   attr_reader :data
 
-  def initialize(data)
-    super()
+  def initialize(data, logger)
+    super(blocking: true, logger: logger)
     @data = data
   end
 
@@ -109,7 +109,7 @@ end
 
 ## an adaptation after
 ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
-class DispatchTest < PebblApp::GApp
+class DispatchTest < PebblApp::GMain
   self.extend Forwardable
 
   attr_reader :data, :handlers
@@ -120,7 +120,7 @@ class DispatchTest < PebblApp::GApp
   ## log initialized for a debug level of information.
   def initialize()
     super()
-    self.logger.level = "DEBUG"
+    self.logger.level = "DEBUG" ## for purpose of tests
     self.logger.domain = PebblApp::AppLog.iname(self)
     @handlers = PebblApp::SignalMap.new
     @data = TestData.new
@@ -142,7 +142,7 @@ class DispatchTest < PebblApp::GApp
   end
 
   def map_sources(context)
-    map_idle_source(context, priority: :default) do
+    PebblApp::GMain.map_idle_source(context, priority: :default) do
       ## each idle source's callback will be called
       ## in each main loop iteration
       if context.cancellation.cancelled?
@@ -162,13 +162,13 @@ class DispatchTest < PebblApp::GApp
   end
 
   def context_new(data)
-    TestContext.new(data)
+    TestContext.new(data, self.logger)
   end
 
   ## a partial adaptation after `main` in
   ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
   ##
-  ## @see GApp#main
+  ## @see GMain#main
   def main(wait = 5)
     initial_debug = $DEBUG
     $DEBUG = true
@@ -199,7 +199,7 @@ class DispatchTest < PebblApp::GApp
         ##
         ## This assumes that the main thread will exit the main loop and
         ## return, once the context's cancellation object is set to
-        ## cancelled, such as in GApp#context_main
+        ## cancelled, such as in GMain#context_main
         main_thread.join if main_thread
       }
       term_hdlr = proc { |sname, nxt|
@@ -274,7 +274,7 @@ class DispatchTest < PebblApp::GApp
 
       catch(interrupt_tag) do
         handlers.with_handlers do ## outside of the main block
-          super(context: context) do |main|
+          super(context) do |main|
             ## This block will be run in the current thread,
             ##
             ## The event loop's thread will exit after this block exits

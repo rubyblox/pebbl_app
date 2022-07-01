@@ -1,4 +1,4 @@
-## GApp version 1.2.0
+## GMain version 1.2.0
 
 require 'pebbl_app'
 require 'pebbl_app/gtk_framework'
@@ -13,7 +13,6 @@ module PebblApp
   class SynchronizationError < RuntimeError
   end
 
-
   ## Cancellable object class for asynchronous applications.
   ##
   ## This class uses a mutex internally, to synchronize the #reset and
@@ -22,7 +21,7 @@ module PebblApp
   ## No locking behavior is specified if this object is #cancelled or
   ## #reset in any call external to the Ruby application environment.
   ##
-  class GAppCancellation < Gio::Cancellable
+  class GMainCancellation < Gio::Cancellable
     ## informative tag for a cancellation event e.g the #reason may be
     ## set to an exception object
     attr_reader :reason
@@ -99,18 +98,25 @@ module PebblApp
     end
   end
 
-  ## see GApp
-  class GAppContext < GLib::MainContext
+  ## see GMain
+  class GMainContext < GLib::MainContext
+
+    include LoggerMixin
+    def debug_event(tag)
+      if $DEBUG && respond_to?(:log_event)
+        log_event(tag)
+      end
+    end
 
     attr_reader :conf_mtx, :main_mtx, :cancellation
 
-    ## If true (the default) then the GApp#context_dispatch method
+    ## If true (the default) then the GMain#context_dispatch method
     ## should block for source availability during main loop iteration
     attr_reader :blocking
 
-    def initialize(blocking: true)
+    def initialize(blocking: true, logger: AppLog.new)
       super()
-      ## in application with GApp subclasses, the main loop will run
+      ## in application with GMain subclasses, the main loop will run
       ## in a thread separate to the main thread, i.e the thread in which
       ## the GLib::MainContext was configured
       ##
@@ -119,9 +125,10 @@ module PebblApp
       ## for the context
       @conf_mtx = Mutex.new
       @main_mtx = Mutex.new
-      @cancellation = GAppCancellation.new
-      ## used in GApp#context_dispatch
+      @cancellation = GMainCancellation.new
+      ## used in GMain#context_dispatch
       @blocking = blocking
+      @logger = logger
     end
 
   end
@@ -135,7 +142,7 @@ module PebblApp
   ## This implementation uses GLib::MainContext support in [Ruby-GNOME]
   ## (https://github.com/ruby-gnome/ruby-gnome/)
   ##
-  ## The GApp/GAppContext framework implements a cancellable main
+  ## The GMain/GMainContext framework implements a cancellable main
   ## event loop model for GLib applications.
   ##
   ## **Examples**
@@ -145,49 +152,49 @@ module PebblApp
   ##
   ## **Notes**
   ##
-  ## - This `GApp` implementation requires a `GAppContext`. The
-  ##   `GAppContext` class extends GLib::MainContext as to
+  ## - This `GMain` implementation requires a `GMainContext`. The
+  ##   `GMainContext` class extends GLib::MainContext as to
   ##   provide mutex objects for synchronization in the _configure_  and
-  ##   _application_ sections of the GApp#main method.
+  ##   _application_ sections of the GMain#main method.
   ##
-  ## - Applications defining a subclass e.g GAppImpl on GApp may
-  ##   extend the `GAppContext` class, e.g as GAppImplContext. This
+  ## - Applications defining a subclass e.g GMainImpl on GMain may
+  ##   extend the `GMainContext` class, e.g as GMainImplContext. This
   ##   may be of use, for instance to provide a custom API in the
-  ##   GAppImplContext. The custom API on the GAppImplContext may be
+  ##   GMainImplContext. The custom API on the GMainImplContext may be
   ##   used, for example, in the SeviceImpl's #map_sources and #main methods,
-  ##   for configuring sources/callbacks for the  GAppImplContext and
+  ##   for configuring sources/callbacks for the  GMainImplContext and
   ##   for any runtime logic in the #main thread.
   ##
   ##   The DispatchTest source code may provide an example of this
   ##   extensional logic.
   ##
-  ## - An application extending `GApp` should provide at least a
+  ## - An application extending `GMain` should provide at least a
   ##   #map_sources method and a #main method.
   ##
   ##   The #map_sources method should add any one or more GLib::Source
-  ##   objects to the GAppContext provided to the method, also
+  ##   objects to the GMainContext provided to the method, also
   ##   configuring any properties on each source, e.g source priority.
   ##   Each GLib::Source object should provide a custom callback, such that
   ##   will be available in each iteration of the main loop initialized via
   ##   #context_main. This can be accomplished with #map_idle_source and
-  ##   other Source-initializing methods on GApp.
+  ##   other Source-initializing methods on GMain.
   ##
   ##   The service main loop will run within a thread returned by
   ##   #context_main. The main loop will not begin in this thread, until
   ##   after the service's #map_sources method has returned.
   ##
-  ##   The #main method in a subclass of `GApp` should call
-  ##   `super(...) do |thread| ...` i.e calling GApp#main, there
-  ##    providing a new GAppContext object and a custom block in the
+  ##   The #main method in a subclass of `GMain` should call
+  ##   `super(...) do |thread| ...` i.e calling GMain#main, there
+  ##    providing a new GMainContext object and a custom block in the
   ##    call to `super`. This block should accept a single argument, the
-  ##    main loop thread initialized for the call to GApp#main.
+  ##    main loop thread initialized for the call to GMain#main.
   ##
-  ##   The call to GApp#main will initialize the main loop for the
-  ##   service. This main loop will operate on the GAppContext for the
+  ##   The call to GMain#main will initialize the main loop for the
+  ##   service. This main loop will operate on the GMainContext for the
   ##   call to #main and all sources initialized under #map_sources.
   ##
   ##   It can be assumed that the main loop's thread will be in a running
-  ##   state, when received to the block provided to GApp#main.
+  ##   state, when received to the block provided to GMain#main.
   ##   Internally, the thread will wait  until the #map_sources method on
   ##   the implementing class has returned, before beginning iteration in
   ##   the service main loop.
@@ -197,25 +204,27 @@ module PebblApp
   ##   independent to any logic implemented via callbacks or any other
   ##   framework events in the service main loop.
   ##
-  ##   After the block provided to GApp#main returns, the main loop
+  ##   After the block provided to GMain#main returns, the main loop
   ##   on the extending class will return, thus ending the runtime of the
   ##   main loop's thread.
   ##
-  ##   If no block is provided to GApp#main, the service's main
+  ##   If no block is provided to GMain#main, the service's main
   ##   loop will not be run.
   ##
-  ## - GApp#main can be called more than once, within any one or more
-  ##   consecutive threads. A new GAppContext object could be provided
-  ##   in each call to GApp#main.
+  ## - GMain#main can be called more than once, within any one or more
+  ##   consecutive threads. A new GMainContext object could be provided
+  ##   in each call to GMain#main.
   ##
   ## - Once dispatching on event soures, the main loop created via
-  ##   #context_main will continue until the _cancellation_ object for the
-  ##   GAppContext (provided in FIXME needs illustration) has been set
-  ##   to a _cancelled_ state, or until any uncaught error occurs during
-  ##   event dispatch. After a cancellcation event, the main loop thread
-  ##   will return normally. On event of error (FIXME needs docs)
+  ##   #context_main will continue until the _cancellation_ object for
+  ##   the GMainContext has been set to a _cancelled_ state, or until
+  ##   any uncaught error occurs during event dispatch. After a
+  ##   cancellcation event, the main loop thread will return
+  ##   normally. On event of error (FIXME needs docs)
 
-  class GApp < App
+  class GMain
+
+    include PebblApp::LoggerMixin
 
     module Constants
       GIO_COND_READ ||= (GLib::IOCondition::IN |
@@ -317,16 +326,205 @@ module PebblApp
           raise ArgumentError.new("Unsupported arg syntax (#{arg.class}) #{arg.inspect}")
         end
       end ## io_condition_int
+
+      ## configure a GLib::Source object for dispatch within the main event
+      ## loop of the provided context.
+      ##
+      ## The source's callback will be set to a block that yields the
+      ## _context_ to the _callback_ provided to this method.
+      ##
+      ## The source's _priority_ will be set to the priority value provided.
+      ##
+      ## Lastly, the source will be added to the context.
+      ##
+      ## This method is used by the following methods, for initializing each
+      ## correponding kind of GLib::Source object
+      ## - map_idle_source
+      ## - map_fd_source
+      ## - map_timeout_source
+      ## - map_seconds_timeout_source
+      ## - map_child_watch_source
+      ##
+      ## @param context [GMainContext] the context for the new source object
+      ##
+      ## @param source [GLib::Source, GLib::PollFD] the source to add to the
+      ##  context
+      ##
+      ## @param priority [Symbol, String, Integer] priority to set as the
+      ##  GLib::Source#priority for the source object. A symbol or
+      ##  string value will be translated to an integer value, using
+      ##  source_priority_int
+      ##
+      ## @param remove_on_nil [boolean] If true, the source will be
+      ##  removed from the context if the callback yields
+      ##  GLib::Source::REMOVE i.e yielding nil.
+      ##
+      ##  If a non-falsey value, the source will not be removed from the
+      ##  context if yielding nil.  This behavior may be overriden within the
+      ##  callback, if the callback yields a nil value via `return nil`
+      ##
+      ## @param callback [Proc] the block for the callback. The context will
+      ##  be yielded to the block, in each iteration of the main event loop.
+      ##  Any `return` call in the callback will return to a lambda form
+      ##  encapsulating the callback block.
+      def configure_source(context, source,
+                           priority = GLib::PRIORITY_DEFAULT,
+                           remove_on_nil = false,
+                           callback)
+        ## set the callback for the source, using a lambda proc.
+        ##
+        ## 'return' will be a valid call, within the callback proc
+        if ! callback
+          raise ArgumentError.new("No callback provided")
+        end
+        ## lambda procs will allow for return from within the callback block.
+        if remove_on_nil
+          lmb = lambda {
+            callback.yield(context)
+          }
+        else
+          lmb = lambda {
+            callback.yield(context)
+            GLib::Source::CONTINUE
+          }
+        end
+        source.set_callback(&lmb)
+
+        source.priority = GMain.source_priority_int(priority)
+        ## add the source and its callback to the provided main context
+        source.attach(context)
+        return source
+      end
+
+      ## initialize a GLib::Idle kind of GLib::Source for a provided
+      ## GMainContext
+      ##
+      ## returns the new GLib::Idle source, as added to the context
+      ##
+      ## @param context (see #configure_context)
+      ##
+      ## @param priority (see #configure_context)
+      ##
+      ## @param remove_on_nil (see #configure_source)
+      ##
+      ## @param callback (see #configure_source)
+      ##
+      def map_idle_source(context, priority: :default_idle,
+                          remove_on_nil: false, &callback)
+        context.debug "adding idle source for context"
+        context.debug_event(__method__)
+
+        src = GLib::Idle.source_new
+        configure_source(context, src, priority, remove_on_nil, callback)
+        return src
+      end
+
+
+      ## Initialize a new GLib::PollFD source for the provided context
+      ##
+      ## @param context (see #configure_context)
+      ##
+      ## @param fd [IO, Integer] an IO stream or literal file
+      ## descriptor value. If an IO object is provided, the IO must have a
+      ## non-nil IO#fileno
+      ##
+      ## @param priority (see #configure_context)
+      ##
+      ## @param remove_on_nil (see #configure_source)
+      ##
+      ## @param callback (see #configure_source)
+      ##
+      ## @see GMain.io_condition_int
+      def map_fd_source(context, fd,
+                        poll: Const::GIO_COND_READ, ret: poll,
+                        priority: :default,
+                        &callback)
+        context.debug "adding fd source for context"
+        context.debug_event(__method__)
+
+        filedes = (IO === fd) ? fd.fileno : fd
+        src = GLib::PollFD.new(filedes, poll, ret)
+        configure_source(context, src, priority, callback)
+        return src
+      end
+
+
+      ## Initialize a new GLib::Timeout (timer) kind of GLib::Source for the
+      ## provided context, with the timer source activating for a provided
+      ## number of miliseconds.
+      ##
+      ## @param context (see #configure_context)
+      ##
+      ## @param ms (Number) number of miliseconds in the activation of the
+      ## timeout source
+      ##
+      ## @param priority (see #configure_context)
+      ##
+      ## @param remove_on_nil (see #configure_source)
+      ##
+      ## @param callback (see #configure_source)
+      ##
+      ## @see map_seconds_timeout_source
+      def map_timeout_source(context, ms,
+                             priority: :default,
+                             &callback)
+        context.debug "adding timeout (miliseconds) source for context"
+        context.debug_event(__method__)
+        ## TBD non-blocking, async timer => action actuation,
+        ## independent of the main event loop
+        src = GLib::Timeout.source_new(ms)
+        configure_source(context, src, priority, callback)
+        return src
+      end
+
+
+      ## Initialize a new GLib::Timeout (timer)_ kind of GLib::Source for
+      ## the provided context, activating for a provided number of seconds.
+      ##
+      ## @param context (see #configure_context)
+      ##
+      ## @param seconds (Number) number of seconds in the activation of the
+      ## timeout source
+      ##
+      ## @param priority (see #configure_context)
+      ##
+      ## @param remove_on_nil (see #configure_source)
+      ##
+      ## @param callback (see #configure_source)
+      ##
+      ## @see map_timeout_source
+      def map_seconds_timeout_source(context, seconds,
+                                     priority: :default,
+                                     &callback)
+        context.debug "adding timeout (seconds) source for context"
+        context.debug_event(__method__)
+
+        src = GLib::Timeout.source_new_seconds(seconds)
+        configure_source(context, src, priority, callback)
+        return src
+      end
+
+
+      ## @param context (see #configure_context)
+      ##
+      ## @param priority (see #configure_context)
+      ##
+      ## @param remove_on_nil (see #configure_source)
+      ##
+      ## @param callback (see #configure_source)
+      def map_child_watch_source(context, pid,
+                                 priority: :default,
+                                 &callback)
+        context.debug "adding child watch source for context"
+        context.debug_event(__method__)
+        src = GLib::ChildWatch.source_new(pid)
+        configure_source(context, src, priority, callback)
+        return src
+      end
+
     end ## class << self
 
-    ## A GApplication for this GApp
-    attr_reader :gapp
-
-    ## Logger for this GApp
-    attr_reader :logger
-
-    self.extend Forwardable
-    def_delegators(:@logger, :debug, :error, :fatal, :info, :warn)
+    include LoggerMixin
 
     def initialize(logger: PebblApp::AppLog.new)
       ## NB this class does not provide  any #configure method
@@ -341,17 +539,13 @@ module PebblApp
     end
 
     def context_new()
-      GAppContext.new()
+      GMainContext.new(logger: logger)
     end
 
     ## an adaptation after `main` in
     ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
-    def main(context: context_new, argv: ARGV, &block)
+    def main(context = context_new, &block)
       debug "main"
-
-      configure(argv: argv) ## also called from App#main
-      nm = self.app_name
-      GLib::set_application_name(nm)
 
       debug "Init locals"
       ## Initialize and hold a mutex during configuration and application runtime
@@ -379,10 +573,13 @@ module PebblApp
         ## yield to the provided block, outside of the main event loop
         ##
         ## after this section returns, the main loop will exit
-        main_mtx.synchronize do
-          conf_mtx.unlock
-          block.yield(main_thr) if block_given?
-        end ## main_mtx
+
+        catch(:main) do
+          main_mtx.synchronize do
+            conf_mtx.unlock
+            block.yield(main_thr) if block_given?
+          end
+        end
 
         # context.unref # no unref needed here
         main_thr.join
@@ -390,216 +587,6 @@ module PebblApp
       end ## conf_mtx
     end
 
-    ## configure a GLib::Source object for dispatch within the main event
-    ## loop of the provided context.
-    ##
-    ## The source's callback will be set to a block that yields the
-    ## _context_ to the _callback_ provided to this method.
-    ##
-    ## The source's _priority_ will be set to the priority value provided.
-    ##
-    ## Lastly, the source will be added to the context.
-    ##
-    ## This method is used by the following methods, for initializing each
-    ## correponding kind of GLib::Source object
-    ## - #map_idle_source
-    ## - #map_fd_source
-    ## - #map_timeout_source
-    ## - #map_seconds_timeout_source
-    ## - #map_child_watch_source
-    ##
-    ## @param context [GAppContext] the context for the new source object
-    ##
-    ## @param source [GLib::Source, GLib::PollFD] the source to add to the
-    ##  context
-    ##
-    ## @param priority [Symbol, String, Integer] priority to set as the
-    ##  GLib::Source#priority for the source object. A symbol or
-    ##  string value will be translated to an integer value, using
-    ##  source_priority_int
-    ##
-    ## @param remove_on_nil [boolean] If true, the source will be
-    ##  removed from the context if the callback yields
-    ##  GLib::Source::REMOVE i.e yielding nil.
-    ##
-    ##  If a non-falsey value, the source will not be removed from the
-    ##  context if yielding nil.  This behavior may be overriden within the
-    ##  callback, if the callback yields a nil value via `return nil`
-    ##
-    ## @param callback [Proc] the block for the callback. The context will
-    ##  be yielded to the block, in each iteration of the main event loop.
-    ##  Any `return` call in the callback will return to a lambda form
-    ##  encapsulating the callback block.
-    def configure_source(context, source,
-                         priority = GLib::PRIORITY_DEFAULT,
-                         remove_on_nil = false,
-                         callback)
-      ## set the callback for the source, using a lambda proc.
-      ##
-      ## 'return' will be a valid call, within the callback proc
-      if ! callback
-        raise ArgumentError.new("No callback provided")
-      end
-      ## lambda procs will allow for return from within the callback block.
-      if remove_on_nil
-        lmb = lambda {
-          callback.yield(context)
-        }
-      else
-        lmb = lambda {
-          callback.yield(context)
-          GLib::Source::CONTINUE
-        }
-      end
-      source.set_callback(&lmb)
-
-      source.priority = self.class.source_priority_int(priority)
-      ## add the source and its callback to the provided main context
-      source.attach(context)
-      return source
-    end
-
-    ## initialize a GLib::Idle kind of GLib::Source for a provided
-    ## GAppContext
-    ##
-    ## returns the new GLib::Idle source, as added to the context
-    ##
-    ## @param context (see #configure_context)
-    ##
-    ## @param priority (see #configure_context)
-    ##
-    ## @param remove_on_nil (see #configure_source)
-    ##
-    ## @param callback (see #configure_source)
-    ##
-    def map_idle_source(context, priority: :default_idle,
-                        remove_on_nil: false, &callback)
-      ## TBD extending map_idle_source for iVty -> IRB
-      ## - starting with vtytest, create a new Vte::Pty for running IRB
-      ##   in the same process (limitations include: Only available for
-      ##   IRB on the same machine as the Vty app. usage cases include:
-      ##   available for initial prototyping for iVty support using IRB)
-      ## - for IRB in a separate process with iVty: Extending irb, create
-      ##   a socket for "back channel" eval with IRB, using some json
-      ##   protocol for communicating with IRB. This socket may exist
-      ##   on a remote host, if the IRB PTY was initialized e.g via 'ssh -t'
-      ## - for any "calls to irb", the same-process instance and the
-      ##   other-process instance should be accessed with a modular API
-      ##   where the location of the "receiving IRB" would be orthogonal
-      ##   to the procedures for run/eval in IRB
-      debug "adding idle source for context"
-      debug_event(context, __method__)
-
-      src = GLib::Idle.source_new
-      configure_source(context, src, priority, remove_on_nil, callback)
-      return src
-    end
-
-
-    ## Initialize a new GLib::PollFD source for the provided context
-    ##
-    ## @param context (see #configure_context)
-    ##
-    ## @param fd [IO, Integer] an IO stream or literal file
-    ## descriptor value. If an IO object is provided, the IO must have a
-    ## non-nil IO#fileno
-    ##
-    ## @param priority (see #configure_context)
-    ##
-    ## @param remove_on_nil (see #configure_source)
-    ##
-    ## @param callback (see #configure_source)
-    def map_fd_source(context, fd,
-                      poll: Const::GIO_COND_READ, ret: poll,
-                      priority: :default,
-                      &callback)
-      debug "adding fd source for context"
-      debug_event(context, __method__)
-
-      filedes = (IO === fd) ? fd.fileno : fd
-      src = GLib::PollFD.new(filedes, poll, ret)
-      configure_source(context, src, priority, callback)
-      return src
-    end
-
-
-    ## Initialize a new GLib::Timeout (timer) kind of GLib::Source for the
-    ## provided context, with the timer source activating for a provided
-    ## number of miliseconds.
-    ##
-    ## @param context (see #configure_context)
-    ##
-    ## @param ms (Number) number of miliseconds in the activation of the
-    ## timeout source
-    ##
-    ## @param priority (see #configure_context)
-    ##
-    ## @param remove_on_nil (see #configure_source)
-    ##
-    ## @param callback (see #configure_source)
-    ##
-    ## @see #map_seconds_timeout_source
-    def map_timeout_source(context, ms,
-                           priority: :default,
-                           &callback)
-      ## TBD usage testing towards an async, sleep/call kind of idle source
-      ## (single use, non-blocking - create a thread, then yield to the
-      ## callback after sleep if non-cancellable/not cancelled. TBD storage
-      ## for the thread, after the caller returns)
-      debug "adding timeout (miliseconds) source for context"
-      debug_event(context, __method__)
-      ## TBD non-blocking, async timer => action actuation,
-      ## independent of the main event loop
-      src = GLib::Timeout.source_new(ms)
-      configure_source(context, src, priority, callback)
-      return src
-    end
-
-
-    ## Initialize a new GLib::Timeout (timer)_ kind of GLib::Source for
-    ## the provided context, activating for a provided number of seconds.
-    ##
-    ## @param context (see #configure_context)
-    ##
-    ## @param seconds (Number) number of seconds in the activation of the
-    ## timeout source
-    ##
-    ## @param priority (see #configure_context)
-    ##
-    ## @param remove_on_nil (see #configure_source)
-    ##
-    ## @param callback (see #configure_source)
-    ##
-    ## @see #map_timeout_source
-    def map_seconds_timeout_source(context, seconds,
-                                   priority: :default,
-                                   &callback)
-      debug "adding timeout (seconds) source for context"
-      debug_event(context, __method__)
-
-      src = GLib::Timeout.source_new_seconds(seconds)
-      configure_source(context, src, priority, callback)
-      return src
-    end
-
-
-    ## @param context (see #configure_context)
-    ##
-    ## @param priority (see #configure_context)
-    ##
-    ## @param remove_on_nil (see #configure_source)
-    ##
-    ## @param callback (see #configure_source)
-    def map_child_watch_source(context, pid,
-                               priority: :default,
-                               &callback)
-      debug "adding child watch source for context"
-      debug_event(context, __method__)
-
-      src = GLib::ChildWatch.source_new(pid)
-      configure_source(context, src, priority, callback)
-      return src
-    end
 
     ## Configure all sources for the service's context.
     ##
@@ -671,10 +658,10 @@ module PebblApp
     ## Generally, any known exceptions should be handled internal to each
     ## source callback.
     ##
-    ## @param context [GAppContext] the context of the main event loop
+    ## @param context [GMainContext] the context of the main event loop
     ## @param exception [StandardError] the exception received
-    ## @see GAppContext#cancellation
-    ## @see GAppCancellation#reason
+    ## @see GMainContext#cancellation
+    ## @see GMainCancellation#reason
     ## @see #map_idle_source
     def context_error(context, exception)
       ## the following should result in the main loop returning before any
@@ -721,7 +708,7 @@ in #{self} thread #{Thread.current}", uplevel: 0)
           ## Once the mutex can be held here: Cleanup; Release the mutex
           ## if held, and return
           debug_event(context, :main_iterate)
-          catch(:main) do |tag|
+          catch(:main_loop) do |tag|
             while ! main_mtx.try_lock
               if context.cancellation.cancelled?
                 ## lock not held, but cancellation is indicated
@@ -746,6 +733,6 @@ in #{self} thread #{Thread.current}", uplevel: 0)
       end ## thread
     end
 
-  end ## GApp
+  end ## GMain
 
 end ## PebblApp::GtkFramework scope
