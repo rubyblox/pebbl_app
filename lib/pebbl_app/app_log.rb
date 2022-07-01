@@ -1,15 +1,17 @@
-## ServiceLog and related classes - Logging in PebblApp
+## AppLog and related classes - Logging in PebblApp
+
+require 'pebbl_app'
 
 require 'logger'
 
-module PebblApp::Support
+module PebblApp
 
-  ## Base Formatter class for ServiceLogger
+  ## Base Formatter class for AppLog
   ##
   ## **New Feature:** Using Pastel (gem) to add color tags to the
   ## logging
   ## - can be enabled per each formatter
-  class ServiceLogFormatter
+  class AppLogFormatter
 
     module Const
       ## Format control string for log formatting
@@ -48,7 +50,7 @@ module PebblApp::Support
     ## strings, or false if pastel is not enabled for this formatter.
     attr_reader :pastel_formats
 
-    ## Create a new ServiceLogFormatter
+    ## Create a new AppLogFormatter
     ##
     ## @param dt_format [String] Time format string for #format_time
     ##
@@ -62,7 +64,7 @@ module PebblApp::Support
     ## to configure the logging styles used in #format_severity and in
     ## #format_time
     ##
-    ## @see ServiceLogger
+    ## @see AppLog
     def initialize(dt_format: Const::DT_FORMAT,
                    progname: File.basename($0).freeze,
                    pastel: false, pastel_formats: false)
@@ -202,7 +204,7 @@ module PebblApp::Support
     ##
     ## @param msg (see #format_message)
     ##
-    ## @see ServiceLogger
+    ## @see AppLog
     def call(severity, time, domain, msg)
       if pastel
         ## reset all terminal escape codes before the next log entry
@@ -218,12 +220,12 @@ module PebblApp::Support
     end
   end
 
-  ## @abstract Log device base class for ServiceLogger
-  class ServiceLogDev
+  ## @abstract Log device base class for AppLog
+  class AppLogDev
 
   end
 
-  class StreamLogDev < ServiceLogDev
+  class StreamLogDev < AppLogDev
 
     attr_reader :io
 
@@ -250,8 +252,8 @@ module PebblApp::Support
   ## This log device implementation does not use MonitorMixin and may be
   ## used within a signal trap context.
   ##
-  ## @see ServiceLogger
-  ## @see ServiceLogFormatter
+  ## @see AppLog
+  ## @see AppLogFormatter
   class ConsoleLogDev < StreamLogDev
 
     def initialize(io = STDERR)
@@ -278,9 +280,9 @@ module PebblApp::Support
   ##
   class ProcessLogDev < StreamLogDev
 
-    attr_reader :cmd, :pid, :thread
+    attr_reader :command, :pid, :thread
 
-    ## @param cmd [String, Array<String>] Shell command to use when
+    ## @param command [String, Array<String>] Shell command to use when
     ## initializing the logging process
     ##
     ## @param fallback [Io, String, Pathname, false] If a non-falsey
@@ -291,15 +293,15 @@ module PebblApp::Support
     ##  new stream  will be opened for that filename. If a falsey value,
     ##  a stream will be opened on IO::NULL on event of failure in the
     ##  logging process.
-    def initialize(cmd,
+    def initialize(command,
                    fallback: STDERR)
       ## no io initially ...
       super(false)
-      ## @cmd should be initialized as an Array<String>-like Enumerable
-      if (Enumerable === cmd)
-        @cmd = cmd
+      ## @command should be initialized as an Array<String>-like Enumerable
+      if (Enumerable === command)
+        @command = command
       else
-        @cmd = Shellwords.split(cmd)
+        @command = Shellwords.split(command)
       end
       @fallback = fallback
       @pid = 0
@@ -346,7 +348,7 @@ module PebblApp::Support
       ##   of faiure with the log process.
       ##
       begin
-        p_in, p_xout, p_thr = Open3.popen2(* @cmd)
+        p_in, p_xout, p_thr = Open3.popen2(* @command)
         pid = p_thr.pid
         begin
           exited = Process.waitpid(pid, Process::WNOHANG)
@@ -355,7 +357,7 @@ module PebblApp::Support
         end
         if exited
           Kernel.warn("Failed to open shell command: %s" % [
-            Shellwords.join(@cmd) ], uplevel: 0)
+            Shellwords.join(@command) ], uplevel: 0)
           err = String.new
           err_read = false
           begin
@@ -403,8 +405,8 @@ module PebblApp::Support
           ObjectSpace.define_finalizer(self, finalizer)
           @pid = -1
         else
-          Kernel.warn("Opened #{@cmd.first} (#{pid}): \
-#{Shellwords.join(@cmd).inspect}") if $DEBUG
+          Kernel.warn("Opened #{@command.first} (#{pid}): \
+#{Shellwords.join(@command).inspect}") if $DEBUG
           @io = p_in
           @pid = pid
           @thread = p_thr
@@ -465,7 +467,7 @@ module PebblApp::Support
       super(multilog, fallback: fallback)
       @logdir = logdir
       ## adding the logdir to the parsed multilog cmd
-      self.cmd.push(logdir)
+      self.command.push(logdir)
     end
 
     def write(text)
@@ -480,47 +482,47 @@ module PebblApp::Support
   end
 
 
-  ## Logger interface for ServiceLogDev and ServiceLogFormatter instances
+  ## Logger interface for AppLogDev and AppLogFormatter instances
   ##
   ## **Log Device**
   ##
-  ## ServiceLogger will use a ConsoleLogDev on STDERR as the default log
+  ## AppLog will use a ConsoleLogDev on STDERR as the default log
   ## device.  This class of log device does not utilize MonitorMixin and
   ## can be used within signal trap handlers, as well as in other runtime
   ## contexts.
   ##
-  ## ServiceLogger also provides support for using a Logger::LogDevice as
-  ## a logdev for a ServiceLogger. If a Logger::LogDevice or any value not
-  ## either a ServiceLogDev or File::NULL is provided as the logdev for
-  ## ServiceLog#initialize, then the ServiceLogger will use a
+  ## AppLog also provides support for using a Logger::LogDevice as
+  ## a logdev for a AppLog. If a Logger::LogDevice or any value not
+  ## either a AppLogDev or File::NULL is provided as the logdev for
+  ## AppLog#initialize, then the AppLog will use a
   ## Logger::LogDevice. If using a Logger::LogDevice then the containing
-  ## ServiceLogger cannot be used within signal trap contexts.
+  ## AppLog cannot be used within signal trap contexts.
   ##
   ##
   ## **Log Formatter**
   ##
-  ## By default, ServiceLogger will use a ServiceLogFormatter for log
+  ## By default, AppLog will use a AppLogFormatter for log
   ## formatting
   ##
-  ## The ServiceLogFormatter instance for a ServiceLogger can be initialized
-  ## to use Pastel. Applied within a ServiceLogFormatter, Pastel would
+  ## The AppLogFormatter instance for a AppLog can be initialized
+  ## to use Pastel. Applied within a AppLogFormatter, Pastel would
   ## provide a utility for adding terminal escape strings for color
   ## encoding in the log text. This may generally be of use for logs
   ## produced on a pseudterminal device or TTY. This feature is generally
-  ## constant to each individual ServiceLogFormatter, but can be
-  ## configured when each ServiceLogFormatter is initialized.
+  ## constant to each individual AppLogFormatter, but can be
+  ## configured when each AppLogFormatter is initialized.
   ##
   ## By default, the SericeLogFormatter will use Pastel when the STDERR
   ## stream represents a TTY or PTY device. This corresponds to the
-  ## default logdev used when creating a ServiceLogger.
+  ## default logdev used when creating a AppLog.
   ##
   ## **Emulation of Ruby/GLib Logging**
   ##
-  ## The ServiceLogger, ServiceLogFormatter, and ServiceLogDev API was
+  ## The AppLog, AppLogFormatter, and AppLogDev API was
   ## designed as to provide a Logger-like API with a logger output format
   ## resembling the GLib::Log support in Ruby-GNOME
   ##
-  class ServiceLogger < Logger
+  class AppLog < Logger
 
     class << self
       ## Return a unique instance name for an object
@@ -553,30 +555,30 @@ module PebblApp::Support
       end
     end
 
-    ## Initialize a new ServiceLogger
+    ## Initialize a new AppLog
     ##
-    ## If logdev provided is a ServiceLogDev, then this ServiceLogger
+    ## If logdev provided is a AppLogDev, then this AppLog
     ## can be used within signal trap handlers. Otherwise, the actual
     ## logdev used will be a Logger::LogDevice encapsualting the logdev
-    ## value provied here. In this instance, the ServiceLogger cannot be
+    ## value provied here. In this instance, the AppLog cannot be
     ## used within a signal trap handler.
     ##
     ## @param logdev [Object] the log device to use for this
-    ##  ServiceLogger.
+    ##  AppLog.
     ##
     ## @param level [Symbol, String] the initial Logger level for this
-    ##  ServiceLogger.
+    ##  AppLog.
     ##
-    ## @param formatter [ServiceLogFormatter, Logger::Formatter] the log
-    ## formatter to use for this ServiceLogger.
+    ## @param formatter [AppLogFormatter, Logger::Formatter] the log
+    ## formatter to use for this AppLog.
     ##
     ## @param domain [String] the log domain to use for this
-    ##  ServiceLogger.
+    ##  AppLog.
     ##
-    ##  Internally, this ServiceLogger _domain_ attribute is mapped to the
+    ##  Internally, this AppLog _domain_ attribute is mapped to the
     ##  Logger _progname_ attribute
     ##
-    ##  If the provided formatter is a ServiceLogFormatter, then the
+    ##  If the provided formatter is a AppLogFormatter, then the
     ##  effective _progname_ for the running process will be stored in the
     ##  formatter. The formatter's progrname will then appear as the
     ##  _command name_ in log entries.  The _domain_ provided here
@@ -591,10 +593,10 @@ module PebblApp::Support
     ##
     def initialize(logdev = ConsoleLogDev.new(STDERR),
                    level: $DEBUG ? :debug : :info,
-                   formatter: ServiceLogFormatter.new(pastel: ServiceLogger.tty_logdev?(logdev)),
-                   domain: ServiceLogger.iname(self),
+                   formatter: AppLogFormatter.new(pastel: AppLog.tty_logdev?(logdev)),
+                   domain: AppLog.iname(self),
                    **rest_args)
-      if (ServiceLogDev === logdev) || (Logger::LogDevice === logdev)
+      if (AppLogDev === logdev) || (Logger::LogDevice === logdev)
         ## a workaround to preventing Logger from initializing a new LogDevice
         super_logdev = File::NULL
       else
@@ -611,26 +613,26 @@ module PebblApp::Support
       ## initialized in that method.
       ##
       ## A conditional workaround - this permits for logging from within a
-      ## signal trap handler, if the logdev is a ServiceLogDev
-      if (ServiceLogDev === logdev) || (Logger::LogDevice === logdev)
+      ## signal trap handler, if the logdev is a AppLogDev
+      if (AppLogDev === logdev) || (Logger::LogDevice === logdev)
         instance_variable_set(:@logdev, logdev)
       end
     end
 
 
-    ## return the logdev for this ServiceLogger
+    ## return the logdev for this AppLog
     ##
-    ## If a ServiceLogDev or Logger was provided to
-    ## ServiceLogger#initialize, then this should be eql to the provided
+    ## If a AppLogDev or Logger was provided to
+    ## AppLog#initialize, then this should be eql to the provided
     ## logdev.
     ##
     ## Otherwise, the value returned here will be a Logger::LogDevice
     ## encapsulating the value provided as the logdev to
-    ## ServiceLogger#initialize
+    ## AppLog#initialize
     ##
-    ## @return [ServiceLogDev, Logger::LogDevice, false] the log device
-    ##  for this ServiceLogger, or false if no logdev has been initialized
-    ##  to this ServiceLogger
+    ## @return [AppLogDev, Logger::LogDevice, false] the log device
+    ##  for this AppLog, or false if no logdev has been initialized
+    ##  to this AppLog
     def logdev
       if instance_variable_defined?(:@logdev)
         instance_variable_get(:@logdev)
@@ -650,4 +652,4 @@ module PebblApp::Support
     end
   end
 
-end ## PebblApp::Support
+end ## PebblApp

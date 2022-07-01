@@ -3,6 +3,26 @@
 <interface>
   <requires lib="gtk+" version="3.24"/>
   <requires lib="vte-2.91" version="0.68"/>
+  <object class="GtkAdjustment" id="editpop_adjustment_h">
+    <property name="upper">100</property>
+    <property name="step-increment">1</property>
+    <property name="page-increment">10</property>
+  </object>
+  <object class="GtkAdjustment" id="editpop_adjustment_v">
+    <property name="upper">100</property>
+    <property name="step-increment">1</property>
+    <property name="page-increment">10</property>
+  </object>
+  <object class="GtkTextTagTable" id="editpop_tags">
+    <child type="tag">
+      <object class="GtkTextTag" id="KeywordTag">
+        <property name="font">Normal</property>
+      </object>
+    </child>
+  </object>
+  <object class="GtkTextBuffer" id="editpop_textbuffer">
+    <property name="tag-table">editpop_tags</property>
+  </object>
   <object class="GtkMenu" id="vtwin_vty_menu">
     <property name="visible">True</property>
     <property name="can-focus">False</property>
@@ -51,7 +71,7 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="vtwin_close">
+      <object class="GtkMenuItem" id="vtwin_close_entry">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
         <property name="label" translatable="yes">Close</property>
@@ -80,7 +100,7 @@
       </object>
     </child>
   </object>
-  <object class="GtkEntryBuffer" id="vty_entry_buff">
+  <object class="GtkEntryBuffer" id="vty_entry_buffer">
     <property name="text" translatable="yes">Dir.pwd</property>
   </object>
   <object class="GtkEntryCompletion" id="vty_entry_completion"/>
@@ -125,7 +145,6 @@
           <object class="GtkHeaderBar" id="vtwin_header">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
-            <property name="subtitle" translatable="yes">vtytest</property>
             <child>
               <object class="GtkMenuButton" id="File">
                 <property name="visible">True</property>
@@ -184,7 +203,7 @@
             <property name="encoding">UTF-8</property>
             <property name="scroll-on-keystroke">True</property>
             <property name="scroll-on-output">False</property>
-            <signal name="child-exited" handler="vtwin_received_exit" object="VtyAppWindow" swapped="no"/>
+            <signal name="child-exited" handler="vtwin_subprocess_exit" object="VtyAppWindow" swapped="no"/>
             <signal name="eof" handler="vtwin_received_eof" object="VtyAppWindow" swapped="no"/>
           </object>
           <packing>
@@ -197,37 +216,6 @@
           <object class="GtkBox" id="vty_modeline">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
-            <child>
-              <object class="GtkButton" id="vty_send">
-                <property name="label" translatable="yes">send</property>
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="receives-default">True</property>
-                <property name="tooltip-text" translatable="yes">Send to Process</property>
-                <signal name="activate" handler="vtwin_send" object="VtyAppWindow" swapped="no"/>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">0</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkEntry" id="vty_entry">
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="tooltip-text" translatable="yes">Input</property>
-                <property name="hexpand">True</property>
-                <property name="buffer">vty_entry_buff</property>
-                <property name="completion">vty_entry_completion</property>
-                <property name="input-purpose">terminal</property>
-              </object>
-              <packing>
-                <property name="expand">False</property>
-                <property name="fill">True</property>
-                <property name="position">1</property>
-              </packing>
-            </child>
             <child>
               <object class="GtkMenuButton" id="vty_menu_btn">
                 <property name="visible">True</property>
@@ -248,6 +236,41 @@
               <packing>
                 <property name="expand">False</property>
                 <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="vty_entry">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="tooltip-text" translatable="yes">Input</property>
+                <property name="hexpand">True</property>
+                <property name="buffer">vty_entry_buffer</property>
+                <property name="secondary-icon-name">accessories-text-editor</property>
+                <property name="primary-icon-activatable">False</property>
+                <property name="primary-icon-sensitive">False</property>
+                <property name="completion">vty_entry_completion</property>
+                <property name="input-purpose">terminal</property>
+                <property name="input-hints">GTK_INPUT_HINT_NO_SPELLCHECK | GTK_INPUT_HINT_WORD_COMPLETION | GTK_INPUT_HINT_NONE</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="vty_send">
+                <property name="label" translatable="yes">send</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="tooltip-text" translatable="yes">Send to Process</property>
+                <signal name="clicked" handler="vtwin_send" object="VtyAppWindow" swapped="no"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
                 <property name="position">2</property>
               </packing>
             </child>
@@ -261,4 +284,64 @@
       </object>
     </child>
   </template>
+  <object class="GtkPopover" id="editpop_popover">
+    <property name="can-focus">False</property>
+    <property name="hexpand">True</property>
+    <property name="relative-to">vty_entry</property>
+    <property name="modal">False</property>
+    <child>
+      <object class="GtkBox">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkLabel">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="hexpand">True</property>
+            <property name="label" translatable="yes">Input Buffer</property>
+            <property name="single-line-mode">True</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkTextView" id="editpop_textview">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="hadjustment">editpop_adjustment_h</property>
+            <property name="hscroll-policy">natural</property>
+            <property name="vadjustment">editpop_adjustment_v</property>
+            <property name="vscroll-policy">natural</property>
+            <property name="pixels-above-lines">4</property>
+            <property name="pixels-below-lines">4</property>
+            <property name="pixels-inside-wrap">6</property>
+            <property name="wrap-mode">word</property>
+            <property name="left-margin">6</property>
+            <property name="right-margin">6</property>
+            <property name="top-margin">6</property>
+            <property name="bottom-margin">6</property>
+            <property name="buffer">editpop_textbuffer</property>
+            <property name="input-purpose">terminal</property>
+            <property name="input-hints">GTK_INPUT_HINT_NO_SPELLCHECK | GTK_INPUT_HINT_NONE</property>
+            <property name="monospace">True</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+  <object class="GtkSizeGroup">
+    <widgets>
+      <widget name="editpop_popover"/>
+      <widget name="vty_entry"/>
+    </widgets>
+  </object>
 </interface>

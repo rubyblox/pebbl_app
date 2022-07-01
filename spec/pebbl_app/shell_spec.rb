@@ -1,8 +1,8 @@
 
 ## the library to test
-require 'pebbl_app/support/sh_proc'
+require 'pebbl_app/shell'
 
-describe PebblApp::Support::ShProc do
+describe PebblApp::Shell do
 
 
   context "implementation of which" do

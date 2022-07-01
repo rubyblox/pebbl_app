@@ -1,12 +1,15 @@
-## PebblApp::Support::Conf class definition
+## PebblApp::Conf class definition
 
-require 'pebbl_app/support'
+require 'pebbl_app'
 
 require 'ostruct'
 require 'optparse'
 require 'forwardable'
 
-class PebblApp::Support::Conf
+class PebblApp::ConfigurationError < RuntimeError
+end
+
+class PebblApp::Conf
 
   module Scope
     DEFAULTS ||= 1
@@ -116,6 +119,10 @@ class PebblApp::Support::Conf
       end
     end
     return false
+  end
+
+  def set_option(name, value)
+    self.options[name] = value
   end
 
   ## remove a named option from the instance

@@ -1,16 +1,16 @@
-## rspec tests for pebbl_app/gtk_support/gir_proxy.rb
+## rspec tests for pebbl_app/gtk_framework/gir_proxy.rb
 
 ## dependencies
 require 'gobject-introspection'
 
 ## the library to test
-require 'pebbl_app/gtk_support/gir_proxy'
+require 'pebbl_app/gir_proxy'
 
 ## prerequisites for the tests
 require 'gtk3'
 
 
-describe PebblApp::GtkSupport::InvokerP do
+describe PebblApp::InvokerP do
   subject {
     inst = described_class.allocate
     ## singleton method for initializing the allocated object
@@ -79,7 +79,7 @@ describe PebblApp::GtkSupport::InvokerP do
 
 end
 
-describe PebblApp::GtkSupport::FuncInfo do
+describe PebblApp::FuncInfo do
   subject {
     inst = described_class.allocate
     ## singleton method for initializing the allocated object
@@ -105,12 +105,12 @@ describe PebblApp::GtkSupport::FuncInfo do
   end
 
   it "provides a class method find_callable_info(FunctionInfo)" do
-    ivp = PebblApp::GtkSupport::InvokerP.find_invoker_p(invk)
+    ivp = PebblApp::InvokerP.find_invoker_p(invk)
     expect(described_class.find_callable_info(ivp.info)).to_not be false
   end
 
   it "provides a class method find_callable_info(FunctionInfo)" do
-    ivp = PebblApp::GtkSupport::InvokerP.find_invoker_p(invk)
+    ivp = PebblApp::InvokerP.find_invoker_p(invk)
     expect(described_class.find_callable_info(ivp.info)).to_not be false
   end
 

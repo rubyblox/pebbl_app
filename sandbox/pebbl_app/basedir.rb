@@ -1,6 +1,6 @@
 ## basedir.rb - API for application base directory handling
 
-require 'pebbl_app/gtk_support'
+require 'pebbl_app'
 
 ## This source file provides the following methods, such that may
 ## be applied for purpose of setting and accessing an application
@@ -76,9 +76,8 @@ require 'pebbl_app/gtk_support'
 ## application's recourse base directory - e.g user home
 ## directory - independent of this API.
 
-module PebblApp::GtkSupport
 
-module FileResourceManager
+module PebblApp::FileResourceManager
   def self.extended(extclass)
 
     ## * Remarks *
@@ -133,7 +132,6 @@ module FileResourceManager
   end ## extended
 end
 
-end ## PebblApp::GtkSupport module
 
 ## Local Variables:
 ## fill-column: 65

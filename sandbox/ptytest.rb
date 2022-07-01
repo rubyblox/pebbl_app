@@ -1,16 +1,15 @@
 ## pipe-mode IO with GLib::Spawn
 ##
-## Prototype for
-## PebblApp::Support::PtyCmd
-## and subsq PebblApp::GtkSupport::VtyCmd
+## Prototype for a PebblApp::PtyCmd
+## and subsq PebblApp::GtkFramework::VtyCmd
 
-require 'pebbl_app/support'
+require 'pebbl_app'
 require 'pty'
 
 ## for an EOL test (FIXME should be stored in constants)
 require 'stringio'
 
-module PebblApp::Support
+module PebblApp
 
   module Const
     EOL ||= proc { io = StringIO.new; io.puts; io.string }.call
@@ -311,6 +310,15 @@ def Object.test_pty_cmd()
 
  it.run_async
 
+ ## example for an async status monitor thread for PtyCmd, in Ruby
+ ## - accompanied with no event loop
+ wait_thr = Thread.new {
+   st = Process.waitpid(it.pid)
+   it.instance_variable_set(:@pid, nil)
+   it.instance_variable_set(:@exit, st)
+ }
+
+
 # in_thr = Thread.new {
    ## testing i/o synchronization
    ## - a PTY cmd without a separate stderr channel might be more ideal
@@ -325,7 +333,8 @@ def Object.test_pty_cmd()
    it.send('exit')
 # }
 # in_thr.join
- it.output_thread.join
+# it.output_thread.join
+wait_thr.join
 end
 
 # ## TBD threads, Gtk, and Vte Pty support  ..

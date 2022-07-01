@@ -1,14 +1,14 @@
-## RSpec for PebblApp::Project::ProjectModule
+## RSpec for PebblApp::ProjectModule
 
 ## test with the following, under the project root directory
 ##
 ## $ bundle exec rake --trace spec
 ##
 
-describe %(Module includes PebblApp::Project::ProjectModule) do
+describe %(Module includes PebblApp::ProjectModule) do
   let(:subject) {
     module ProjectModuleTests01
-      include PebblApp::Project::ProjectModule
+      include PebblApp::ProjectModule
     end
   }
 

@@ -2,14 +2,14 @@
 
 ## FIXME obsolete implementation @ FileResourceManager
 ##
-## newer implementation: PebblApp::Project::ProjectModule
+## newer implementation: PebblApp::ProjectModule
 
-require 'pebbl_app/gtk_support/basedir' # the library to test
+require 'pebbl_app/gtk_framework/basedir' # the library to test
 
-describe PebblApp::GtkSupport::FileResourceManager do
+describe PebblApp::GtkFramework::FileResourceManager do
   subject{
     class TestClass
-      extend PebblApp::GtkSupport::FileResourceManager ## the module to test ...
+      extend PebblApp::GtkFramework::FileResourceManager ## the module to test ...
     end
     TestClass
   }

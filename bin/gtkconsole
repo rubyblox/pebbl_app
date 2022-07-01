@@ -18,9 +18,9 @@ require %q(bundler/setup)
 require %q(irb)
 require %q(irb/completion)
 
-require %q(pebbl_app/project/y_spec)
+require %q(pebbl_app/y_spec)
 
-yspec = PebblApp::Project::YSpec.new(
+yspec = PebblApp::YSpec.new(
   File.expand_path('project.yaml', File.dirname(ENV['BUNDLE_GEMFILE']))
 )
 yspec.load_config.gems.each do |name|

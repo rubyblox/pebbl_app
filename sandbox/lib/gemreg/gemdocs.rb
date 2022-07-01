@@ -16,12 +16,11 @@ Remarks: Gem::Specification.load(file)
 
 =end
 
-## NB for a Gem::Specification s => s.full_gem_path
-
 require 'rubygems'
 require 'yard'
 require 'rbconfig'
 
+## @private :nodoc:
 ## FIXME spectool.rb moved to rbdevtools/riview/sandbox/spectool.rb
 require_relative 'spectool'
 

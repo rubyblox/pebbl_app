@@ -1,19 +1,19 @@
-## DispatchTest : Example Service application
+## DispatchTest : Example GApp application
 
 ## **Example: DispatchTest**
 ##
-## The class DispatchTest extends Service, there overriding the Service
+## The class DispatchTest extends GApp, there overriding the GApp
 ## #configure and #main methods
 ##
 ## The #main method in DispatchTest calls the superclass' #main method
-## via `super`, there providing a custom ServiceContext instance and
+## via `super`, there providing a custom GAppContext instance and
 ## a local block to the `super` call. The block implements a custom
 ## application logic independent to the service main loop. This block
 ## will be called in the same thread as #main.
 ##
-## In application with the #main method on Service, the DispatchTest
+## In application with the #main method on GApp, the DispatchTest
 ## event loop will exit after control has exited the block provided to
-## the Service #main method.
+## the GApp #main method.
 ##
 ## The #configure method in the DispatchTest example will add a
 ## GLib::Idle kind of GLib::Source to the context object provided to the
@@ -58,11 +58,11 @@
 ## test.data.work_log
 ##
 
-require 'pebbl_app/gtk_support/service'
+require 'pebbl_app/gapp'
 require 'forwardable'
 
-## FIXME move signal trap support into Service
-require 'pebbl_app/support/signals'
+## FIXME move signal trap support into GApp
+require 'pebbl_app/signals'
 
 ## Data object class for the DispatchTest example
 class TestData
@@ -83,7 +83,7 @@ class TestData
   end
 end
 
-## a ServiceContext for the DispatchTest example, storing an arbitrary
+## a GAppContext for the DispatchTest example, storing an arbitrary
 ## data value.
 ##
 ## In the DispatchTest example, the data value will typically be a
@@ -93,7 +93,7 @@ end
 ## The availability of the data value in the TestContext will permit for
 ## forwarding to the TestData#log_event method from within context
 ## methods
-class TestContext < PebblApp::GtkSupport::ServiceContext
+class TestContext < PebblApp::GAppContext
   attr_reader :data
 
   def initialize(data)
@@ -109,10 +109,11 @@ end
 
 ## an adaptation after
 ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
-class DispatchTest < PebblApp::GtkSupport::Service
+class DispatchTest < PebblApp::GApp
   self.extend Forwardable
 
   attr_reader :data, :handlers
+  ## TBD Generalization / Modularity - move @handlers to App
   def_delegators(:@handlers, :set_handler, :with_handler)
 
   ## Create a new DispatchTest, using a new instance of TestData and a
@@ -120,8 +121,8 @@ class DispatchTest < PebblApp::GtkSupport::Service
   def initialize()
     super()
     self.logger.level = "DEBUG"
-    self.logger.domain = PebblApp::Support::ServiceLogger.iname(self)
-    @handlers = PebblApp::Support::SignalMap.new
+    self.logger.domain = PebblApp::AppLog.iname(self)
+    @handlers = PebblApp::SignalMap.new
     @data = TestData.new
   end
 
@@ -140,14 +141,12 @@ class DispatchTest < PebblApp::GtkSupport::Service
     sleep 1
   end
 
-  def configure(context)
+  def map_sources(context)
     map_idle_source(context, priority: :default) do
       ## each idle source's callback will be called
       ## in each main loop iteration
       if context.cancellation.cancelled?
-        ## when the the source callback returns false => source will be removed
-        ##
-        ## this has not yet been reached under tests
+        ## not yet reached under tests
         debug("In callback (cancelled)")
       else
         ## Similar to the original example in the GLib documentaiton,
@@ -162,17 +161,21 @@ class DispatchTest < PebblApp::GtkSupport::Service
     end
   end
 
+  def context_new(data)
+    TestContext.new(data)
+  end
+
   ## a partial adaptation after `main` in
   ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
   ##
-  ## @see Service#main
+  ## @see GApp#main
   def main(wait = 5)
     initial_debug = $DEBUG
     $DEBUG = true
 
     begin
       data = self.data
-      context = TestContext.new(data)
+      context = context_new(data)
 
       ## temporary value, initializing the variable
       main_thread = Thread.current
@@ -196,7 +199,7 @@ class DispatchTest < PebblApp::GtkSupport::Service
         ##
         ## This assumes that the main thread will exit the main loop and
         ## return, once the context's cancellation object is set to
-        ## cancelled, such as in Service#context_main
+        ## cancelled, such as in GApp#context_main
         main_thread.join if main_thread
       }
       term_hdlr = proc { |sname, nxt|
@@ -271,7 +274,7 @@ class DispatchTest < PebblApp::GtkSupport::Service
 
       catch(interrupt_tag) do
         handlers.with_handlers do ## outside of the main block
-          super(context) do |main|
+          super(context: context) do |main|
             ## This block will be run in the current thread,
             ##
             ## The event loop's thread will exit after this block exits

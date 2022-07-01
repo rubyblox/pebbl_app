@@ -2,7 +2,7 @@
 
 ## see also: ./spec_helper_spec.rb
 
-require 'pebbl_app/support/sh_proc'
+require 'pebbl_app/shell'
 
 RSpec.configure do |config|
   ## configure $DATA_ROOT and test for bundler environment
@@ -23,8 +23,8 @@ RSpec.configure do |config|
   ## an ephemeral, singleton mkdir_p method
   ##
   ## this mirrors the implementation in
-  ## rblib lib/pebbl_app/support/files.rb
-  ## @ PebblApp::Support::Files.mkdir_p
+  ## rblib lib/pebbl_app/files.rb
+  ## @ PebblApp::Framework::Files.mkdir_p
   def config.mkdir_p(path)
     dirs = []
     lastdir = nil
@@ -57,7 +57,7 @@ RSpec.configure do |config|
   ## run Xvfb as a background process, providing a DISPLAY
   ## with a display name derived from the ruby PID
   if ! ENV['DISPLAY']
-    cmd = PebblApp::Support::ShProc.which('Xvfb')
+    cmd = PebblApp::Shell.which('Xvfb')
     if cmd
       $XVFB = cmd
       dpy=":#{$$}"

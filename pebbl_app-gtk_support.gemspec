@@ -2,7 +2,7 @@
 
 ## this assumes that $LOAD_PATH is configured to include ./lib
 ## such that will be provided under the project Gemfile
-require 'pebbl_app/project/y_spec'
+require 'pebbl_app/y_spec'
 
 Gem::Specification.new do |s|
 
@@ -20,10 +20,11 @@ Gem::Specification.new do |s|
 
   name = File.basename(__FILE__).split("\.")[0]
   s.name = name
+  s.loaded_from = __FILE__
 
   projinf = File.expand_path("project.yaml", __dir__)
 
-  yspec = PebblApp::Project::YSpec.new(projinf)
+  yspec = PebblApp::YSpec.new(projinf)
   yspec.write_config(s)
   # s.metadata['resource_root'] = __dir__
 end

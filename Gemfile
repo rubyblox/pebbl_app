@@ -24,11 +24,11 @@ end ## $DEBUG
 ## corresponding to each <name>.gemspec file
 ## limited to the set of gems defined in project.yaml
 ##
-require 'pebbl_app/project/y_spec'
+require 'pebbl_app/y_spec'
 
 $YSPEC_DEBUG = $DEBUG
 conf = File.join(__dir__, "project.yaml")
-yspec = PebblApp::Project::YSpec.new(conf)
+yspec = PebblApp::YSpec.new(conf)
 project_gems = yspec.load_config.gems
 
 source 'https://rubygems.org'

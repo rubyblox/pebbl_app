@@ -1,33 +1,36 @@
-## signals support for PebblApp
+## signal trap support for PebblApp
 
-require 'pebbl_app/support'
+require 'pebbl_app'
 
-
-module PebblApp::Support
+module PebblApp
 
   class SignalMap
 
     class Const
       SYS_DEFAULT ||= 'SYSTEM_DEFAULT'.freeze
       DEFAULT ||= 'DEFAULT'.freeze
-      DEFAULTS ||= [SYS_DEFAULT, DEFAULT].freeze
       IGNORE ||= 'IGNORE'.freeze
       EXIT ||= 'EXIT'.freeze
+      NULL_PROC = proc { }.freeze
+      EXIT_PROC = proc { exit }.freeze
     end
 
     class << self
       def proc_for_handler(hdlr, kind)
         ## referenced on line_editor.rb from the reline gem
         case hdlr
-        when Const::DEFAULTS
-            proc { raise Interrupt.new("Default signal handler for #{kind}") }
+        when Const::SYS_DEFAULT, Const::DEFAULT
+            proc { raise Interrupt.new("Signal #{kind}") }
         when Const::IGNORE
-          ## nop
-          proc { }.freeze
+          Const::NULL_PROC
         when Const::EXIT
-          proc { exit }.freeze
+          Const::EXIT_PROC
         else
-          proc { hdlr.call if hdlr.respond_to?(:call) }
+          if hdlr.respond_to?(:call)
+            proc { hdlr.call }
+          else
+            Const::NULL_PROC
+          end
         end
       end
     end ## class <<
@@ -71,14 +74,14 @@ module PebblApp::Support
       begin
         handlers.each do |kind, hdlr|
           exists[kind] = Signal.trap(kind) do
-            proc = SignalMap.proc_for_handler(exists[kind], kind)
-            hdlr.yield(kind, proc)
+            nxt = SignalMap.proc_for_handler(exists[kind], kind)
+            hdlr.yield(kind, nxt)
           end
         end
         block.yield() if block_given?
       ensure
-        exists.each do |signal, nxt|
-          Signal.trap(signal, nxt)
+        exists.each do |kind, hdlr|
+          Signal.trap(kind, hdlr)
         end
       end
     end

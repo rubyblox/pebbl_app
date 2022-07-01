@@ -1,13 +1,13 @@
-## rspec tests for PebblApp::Support::Conf
+## rspec tests for PebblApp::Conf
 
 ## the library to test
-require 'pebbl_app/support/conf'
+require 'pebbl_app/conf'
 
 ## API used in tests
 require 'optparse'
 require 'securerandom'
 
-describe PebblApp::Support::Conf do
+describe PebblApp::Conf do
   let!(:name) { described_class.to_s }
   subject {
     described_class.new(name)

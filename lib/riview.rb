@@ -5,10 +5,10 @@
 require 'rubygems'
 
 gem 'pebbl_app-support'
-require 'pebbl_app/project/project_module'
+require 'pebbl_app/project_module'
 
 module RIView
-  include PebblApp::Project::ProjectModule
+  include PebblApp::ProjectModule
 
   RESOURCE_ROOT ||=
     Gem::Specification::find_by_name(self.to_s.downcase).full_gem_path.freeze

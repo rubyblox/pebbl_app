@@ -1,13 +1,13 @@
-## PebblApp::Support::Files module definition
+## PebblApp::Files module definition
 
 ## define modules, autoloads
-require 'pebbl_app/support'
+require 'pebbl_app'
 
 require 'forwardable'
 require 'tempfile'
 
 ## Filesystem Support
-module PebblApp::Support::Files
+module PebblApp::Files
 
   class << self
 
@@ -40,21 +40,20 @@ module PebblApp::Support::Files
     ## This method will operate similarly for file names and directory
     ## names, returning a name removed of any type extension.
     ##
-    ## This method will parse any "Dot file" or "Dot directory" similar
+    ## This method will parse a "Dot file" or "Dot directory" similar
     ## to an ordinary filename.
     ##
     ## Examples:
     ## ~~~~
-    ## using = PebblApp::Support
-    ## using::Files.shortname("/etc/login.conf") => "login"
-    ## using::Files.shortname("#{Dir.home}/.login.conf") => ".login"
-    ## using::Files.shortname(".bashrc") => ".bashrc"
-    ## using::Files.shortname(".") => "."
-    ## using::Files.shortname("..") => ".."
-    ## using::Files.shortname("/") => ""
-    ## using::Files.shortname("/a/b/") => "b"
-    ## using::Files.shortname("/b/.c/") => ".c"
-    ## using::Files.shortname(".files.d") => ".files"
+    ## PebblApp::Files.shortname("/etc/login.conf") => "login"
+    ## PebblApp::Files.shortname("#{Dir.home}/.login.conf") => ".login"
+    ## PebblApp::Files.shortname(".bashrc") => ".bashrc"
+    ## PebblApp::Files.shortname(".") => "."
+    ## PebblApp::Files.shortname("..") => ".."
+    ## PebblApp::Files.shortname("/") => ""
+    ## PebblApp::Files.shortname("/a/b/") => "b"
+    ## PebblApp::Files.shortname("/b/.c/") => ".c"
+    ## PebblApp::Files.shortname(".files.d") => ".files"
     ## ~~~~
     ##
     ## @param name [String] a filename
@@ -122,7 +121,7 @@ module PebblApp::Support::Files
       end
     end
 
-    ## create a temporary directory
+    ## create a temporary directory, forwarding to Dir.mktmpdir
     ##
     ## If a string arg is provided, this will be used as the first arg
     ## for Dir.mktmpdir
@@ -143,7 +142,8 @@ module PebblApp::Support::Files
     ## for the running operating system to determine the root directory
     ## for the temporary directory.
     ##
-    ## @param name [String, nil] first arg for Dir.mktmpdir
+    ## @param arg [String, nil] first arg for Dir.mktmpdir
+    ## @param block [Proc, nil] block for Dir.mktmpdir, if provided
     def mktmp_dir(arg = nil, &block)
       if block_given?
         Dir.mktmpdir(arg, &block)
@@ -163,11 +163,18 @@ module PebblApp::Support::Files
     ##
     ## @param path [String, Pathname] the directory to create.
     ##
-    ##        If provided as a relative filename, the filename will be
-    ##        expanded relative to Dir.pwd
+    ##  If provided as a relative filename, the filename will be
+    ##  expanded relative to Dir.pwd
+    ##
+    ## @param callback [Proc] If provided, a block accepting one
+    ##  argument.  For each directory created by this method, the
+    ##  directory will be yielded to any provided block as an absolute
+    ##  pathname in a string syntax. For example, this block can be used
+    ##  to configure file permissions on directories created in this
+    ##  method.
     ##
     ## @return [String] the directory created, as an absolute filename
-    def mkdir_p(path)
+    def mkdir_p(path, &callback)
       dirs = []
       lastdir = nil
       File.expand_path(path).split(File::SEPARATOR).each do |name|
@@ -177,7 +184,10 @@ module PebblApp::Support::Files
         else
           lastdir = dirs.join(File::SEPARATOR)
         end
-        Dir.mkdir(lastdir) if ! File.directory?(lastdir)
+        if ! File.directory?(lastdir)
+          Dir.mkdir(lastdir)
+          callback.yield(lastdir) if block_given?
+        end
       end
       return lastdir
     end

@@ -1,6 +1,5 @@
 
-require 'pebbl_app/support'
-require 'pebbl_app/gtk_support'
+require 'pebbl_app'
 
 gem 'gobject-introspection'
 require 'gobject-introspection/loader'
@@ -8,22 +7,22 @@ require 'gobject-introspection/loader'
 
 require 'forwardable'
 
-module PebblApp::GtkSupport
+module PebblApp
 
   ## Providing reader method names onto instance variables of a
   ## GObjectIntrospection::Loader::Invoker
   ##
   ## e.g usage
   ## ~~~~
-  ## invk = PebblApp::GtkSupport::InvokerP.invokers_for(Gtk).first
+  ## invk = PebblApp::GtkFramework::InvokerP.invokers_for(Gtk).first
   ##
   ## invk.callable_info
   ##
-  ## PebblApp::GtkSupport::InvokerP.invokers_for(Vte::Pty)
+  ## PebblApp::GtkFramework::InvokerP.invokers_for(Vte::Pty)
   ##
   ## ~~~~
   class InvokerP
-    extend PebblApp::Support::AttrProxy
+    extend PebblApp::AttrProxy
 
     extend Forwardable
     attr_reader :invoker
@@ -33,7 +32,7 @@ module PebblApp::GtkSupport
        valid_n_args_range in_arg_types in_arg_nils in_arg_nil_indexes
        function_info_p have_return_value_p require_callback_p
        prepared).each do |name|
-      ## attr_forward is defined via PebblApp::Support::AttrProxy
+      ## attr_forward_read is defined via PebblApp::AttrProxy
       attr_forward_read(:@invoker, ("@".freeze + name.to_s))
     end
 
@@ -125,7 +124,7 @@ module PebblApp::GtkSupport
   ## GObjectIntrospection::FunctionInfo
   class FuncInfo < CallableInfoP
 
-    extend PebblApp::Support::AttrProxy
+    extend PebblApp::AttrProxy
 
     extend Forwardable
     attr_reader :info

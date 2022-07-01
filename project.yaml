@@ -50,23 +50,23 @@ gems:
       - PebblApp::Support
     summary: PebblApp support for projects
     description:
-      A minimal Ruby toolkit for PebblApp projects
+      Ruby toolkit for PebblApp projects
     source_files:
       - lib/pebbl_app.rb
+      - lib/pebbl_app/app.rb
+      - lib/pebbl_app/app_log.rb
+      - lib/pebbl_app/attr_proxy.rb
+      - lib/pebbl_app/conf.rb
+      - lib/pebbl_app/const.rb
+      - lib/pebbl_app/exceptions.rb
+      - lib/pebbl_app/files.rb
+      - lib/pebbl_app/file_manager.rb
+      - lib/pebbl_app/framework.rb
       - lib/pebbl_app/project.rb
-      - lib/pebbl_app/project/project_module.rb
-      - lib/pebbl_app/project/spec_finder.rb
-      - lib/pebbl_app/project/y_spec.rb
-      - lib/pebbl_app/support.rb
-      - lib/pebbl_app/support/app.rb
-      - lib/pebbl_app/support/app_prototype.rb
-      - lib/pebbl_app/support/conf.rb
-      - lib/pebbl_app/support/const.rb
-      - lib/pebbl_app/support/exceptions.rb
-      - lib/pebbl_app/support/file_manager.rb
-      - lib/pebbl_app/support/files.rb
-      - lib/pebbl_app/support/logging.rb
-      - lib/pebbl_app/support/sh_proc.rb
+      - lib/pebbl_app/project_module.rb
+      - lib/pebbl_app/shell.rb
+      - lib/pebbl_app/project/spec_finder.rb ## ?? see conf. patch & remove refs
+      - lib/pebbl_app/y_spec.rb
     # sandbox_files:
     #   ## not published with the gem - FIXME unmaintained prototypes
     #   - lib/pebbl_app/project/sandbox.rb
@@ -90,19 +90,21 @@ gems:
           versions: ">=3.5.2"
       - [pebbl_app-support, ">=1.0"]
     source_files:
-      - lib/pebbl_app/gtk_support.rb
-      - lib/pebbl_app/gtk_support/gtk_app_prototype.rb
-      - lib/pebbl_app/gtk_support/gtk_conf.rb
-      - lib/pebbl_app/gtk_support/exceptions.rb
+      - lib/pebbl_app/gapp.rb
+      - lib/pebbl_app/gtk_app.rb
+      - lib/pebbl_app/gtk_conf.rb
+      - lib/pebbl_app/gtk_framework.rb
+      ## merged with upwards module
+      #- lib/pebbal_app/gtk_framework/exceptions.rb
       ## earlier prototype definitions:
-      - lib/pebbl_app/gtk_support/logging.rb ## FIXME deprecate
-      - lib/pebbl_app/gtk_support/service.rb
-      - lib/pebbl_app/gtk_support/threads.rb
-      - lib/pebbl_app/gtk_support/sysexit.rb ## FIXME deprecate
-      - lib/pebbl_app/gtk_support/gobj_type.rb
-      - lib/pebbl_app/gtk_support/builders.rb
-      - lib/pebgbl_app/gtk_support/gbuilder_app.rb
-      - lib/pebbl_app/gtk_support/basedir.rb
+      - lib/pebbl_app/gtk_framework/logging.rb
+      - lib/pebbl_app/gtk_framework/threads.rb
+      - lib/pebbl_app/gtk_framework/sysexit.rb
+      - lib/pebbl_app/gtk_framework/gobj_type.rb
+      - lib/pebbl_app/gtk_framework/builders.rb
+      - lib/pebbl_app/gtk_framework/gbuilder_app.rb
+      ## sandbox
+      #- lib/pebbl_app/gtk_framework/basedir.rb
       - sandbox/service-example.rb
 
   pebbl_app-proto-vty_test:

@@ -1,10 +1,10 @@
 ## rikit.rb - baseline module definition and autoloads
 
 gem 'pebbl_app-support'
-require 'pebbl_app/project/project_module'
+require 'pebbl_app/project_module'
 
 module RIKit
-  include PebblApp::Project::ProjectModule
+  include PebblApp::ProjectModule
 
   defautoloads({
     "rikit/storetool" =>

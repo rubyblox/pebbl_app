@@ -1,10 +1,10 @@
 ## rspec tests for Pebbl App support modules
 
-require 'pebbl_app/project/project_module'
+require 'pebbl_app/project_module'
 
 ## the libraries to test
-require 'pebbl_app/support'
-require 'pebbl_app/gtk_support'
+require 'pebbl_app/framework'
+require 'pebbl_app/gtk_framework'
 
 shared_examples_for 'a project module' do |conf|
   let(:ns) { conf[:ns] }
@@ -83,10 +83,9 @@ shared_examples_for 'a project module' do |conf|
   end ## freeze test
 end
 
-describe PebblApp::Support do
-  it_behaves_like  'a project module', ns: described_class
-end
-
-describe PebblApp::GtkSupport do
-  it_behaves_like  'a project module', ns: described_class
+##
+## ProjectModule is used for the PebblApp module when gtk_framework is required
+##
+describe PebblApp do
+   it_behaves_like  'a project module', ns: described_class
 end

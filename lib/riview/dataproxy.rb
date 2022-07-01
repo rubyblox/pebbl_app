@@ -63,8 +63,8 @@ BEGIN {
 ##   internal access to the +data+ value.
 ##
 class DataProxy < GLib::Object # < GLib::Boxed
-  extend PebblApp::GtkSupport::GTypeExt
-  self.register ## register the type, exactly once
+  extend PebblApp::GtkFramework::GObjType
+  self.register_type ## register the type, exactly once
 
   ## NB - documentation
   ## - example @ Ruby-GNOME glib2:test/test-signal.rb
@@ -152,8 +152,8 @@ end
 =begin Example
 
 class OtherProxy < DataProxy
-  extend PebblApp::GtkSupport::GTypeExt
-  self.register
+  extend PebblApp::GtkFramework::GObjType
+  self.register_type
 
   def signal_do_data_changed()
     puts "Data Changed to #{data}"

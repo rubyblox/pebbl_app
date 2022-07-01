@@ -1,6 +1,6 @@
 ## pebbl_app-support.gemspec
 
-require_relative 'lib/pebbl_app/project/y_spec'
+require_relative 'lib/pebbl_app/y_spec'
 
 Gem::Specification.new do |s|
 
@@ -9,5 +9,5 @@ Gem::Specification.new do |s|
 
   projinf = File.expand_path("project.yaml", __dir__)
 
-  PebblApp::Project::YSpec.configure_gem(s, projinf)
+  PebblApp::YSpec.configure_gem(s, projinf)
 end

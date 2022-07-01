@@ -4,11 +4,13 @@ BEGIN {
   ## When loaded from a gem, this file may be autoloaded
 
   ## Ensure that the module is defined when loaded individually
-  require(__dir__ + ".rb")
+  require __dir__ + ".rb"
 }
 
-require('logger')
-require('forwardable')
+require 'logger'
+require 'forwardable'
+
+
 
 ## Extension module for adding *log_*+ delegate methods as instance
 ## methods within an extending class.
@@ -26,7 +28,8 @@ require('forwardable')
 ##  storage within a class, and support for shadowing the *Kernel.warn*
 ##  method with s proc dispatching to an arbitrary *Logger*
 ##
-module PebblApp::GtkSupport::LoggerDelegate
+## Used in riview_app, gbuilder_app prototype
+module PebblApp::GtkFramework::LoggerDelegate
 
   def self.extended(extclass)
     extclass.extend Forwardable
@@ -45,34 +48,24 @@ module PebblApp::GtkSupport::LoggerDelegate
     ## called - see example under GBuilderApp#initialize
     ##
     ##
-    ## *Syntax*
+    ## @param instvar [String, Syumbo] name of the instance
+    ##  varible to forwarrd to
     ##
-    ## +def_logger_delegate(instvar,prefix=:log_)+
+    ## @param prefix [String, Symbol] The +prefix+ parameter for
+    ##  *def_logger_delegate* provides a prefix name for each of
+    ##  the delegate methods, such that each delegate method will
+    ##  dispatch to a matching method on the logger denoted in
+    ##  the instance variable named in +instvar+. +prefix+ may be
+    ##  provided as a string or a symbol.
     ##
-    ## The +prefix+ parameter for *def_logger_delegate* provides a
-    ## prefix name for each of the delegate methods, such that each
-    ## delegate method will dispatch to a matching method on the logger
-    ## denoted in the instance variable named in +instvar+. +prefix+ may
-    ## be provided as a string or a symbol.
-    ##
-    ## The +instvar+ param should be a symbol, denoting an instance
-    ## variable that will be initialized to a logger in instances of the
-    ## extending class.
-    ##
-    ## In applications, the instance logger may be provided in reusing a
-    ## logger stored in the extending class, such that may be managed
-    ## within a class extending the *LogManager+ module. Within
-    ## instances of the extending class, the instance variable denoted
-    ## to +def_logger_delegate+ may then be initialized to the value of
-    ## the class logger, such as within an +initialize+ method defined
-    ## in the extending class.
-    ##
-    define_method(:def_logger_delegate) do | instvar, prefix=:log_ |
-      use_prefix = prefix.to_s
+    define_method(:def_logger_delegate) do |instvar, prefix=:log_|
+      fwd_prefix = prefix.to_s
       Logger.instance_methods(false).
-        select { |elt| elt != :<< }.each do |m|
+        ## FIXME cheap delegation approach - inst.log_<%> => instvar.%
+      ## for all % not << ... in instance methods defined directly on Logger, per se.
+        select { |elt| elt != :<< }.each do |mtd|
           extclass.
-            def_instance_delegator(instvar,m,(use_prefix + m.to_s).to_sym)
+            def_instance_delegator(instvar,mtd,(fwd_prefix + mtd.to_s).to_sym)
         end
     end
   end
@@ -167,7 +160,7 @@ end
 ## @see *LogModule*, which provides an extension of this module via
 ##  a module, such that may be suitable for extension onto the Ruby
 ##  *Warning* module
-module PebblApp::GtkSupport::LogManager
+module PebblApp::GtkFramework::LogManager
   def self.extended(extender)
 
     def extender.logger=(logger)
@@ -272,7 +265,7 @@ module PebblApp::GtkSupport::LogManager
 end # LogManager module
 
 
-module PebblApp::GtkSupport::LogModule
+module PebblApp::GtkFramework::LogModule
   ## for Warning.extend(..) which will not accept a class as an arg
   ##
   ## e.g
@@ -290,10 +283,10 @@ module PebblApp::GtkSupport::LogModule
   ## about the warning
 
   ## TBD @ <app>
-  # PebblApp::GtkSupport::LogModule.logger ||= @logger
-  # PebblApp::GtkSupport::LogModule.manage_warnings
+  # PebblApp::GtkFramework::LogModule.logger ||= @logger
+  # PebblApp::GtkFramework::LogModule.manage_warnings
 
-  extend(PebblApp::GtkSupport::LogManager)
+  extend(PebblApp::GtkFramework::LogManager)
 
 end
 

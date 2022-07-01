@@ -16,83 +16,265 @@
 ## ./ui/prefs.vtytest.ui
 ##
 
-require 'pebbl_app/gtk_support/gtk_app_prototype'
+#require 'pebbl_app/gtk_app_mixin'
+require 'pebbl_app/gtk_app'
 
-require 'gtk3'
-
-if ! ENV['DISPLAY']
-  ## try to prevent a Gtk::InitError if no DISPLAY is available
-  ##
-  ## Gtk.init may accept a --display arg, unused for purposes of this test
-  Kernel.warn("#(File.basename($0)}: No X11 display found in environment", uplevel: 0)
-  exit(-1)
-end
-
+framework = PebblApp::GtkFramework.new(timeout: 10)
 begin
-  Gtk.init(*ARGV)
-  rescue Gtk::InitError => e
-    this = File.basename($0)
-    STDERR.puts "[DEBUG] #{this}: Failed in Gtk.init"
-    STDERR.puts e.full_message
-    ## FIXME could initialize either pry or irb here, if found
-    begin
-      irb = Gem::Specification.find_by_name("irb")
-    rescue
-      STDERR.puts "irb not found"
-      exit(-1)
-    end
-    ## drop into irb and disable $DEBUG
-    ## - Some $DEBUG output may interfere with tty i/o under IRB
-    irb.activate
-    $DEBUG = false
-    $INIT_ERROR = e
-    require %q(bundler/setup)
-    require %q(irb)
-    require %q(irb/completion)
-    STDERR.puts "[DEBUG] #{this}: Gtk::InitError stored as $INIT_ERROR"
-    IRB.start(__FILE__)
+  framework.init
+rescue PebblApp::FrameworkErrror => e
+  this = File.basename($0)
+  STDERR.puts "[DEBUG] #{this}: Failed in Gtk.init"
+  STDERR.puts e.full_message
+  ## FIXME could initialize either pry or irb here, if found
+  begin
+    irb = Gem::Specification.find_by_name("irb")
+  rescue
+    STDERR.puts "irb not found"
+    exit(-1)
+  end
+  ## drop into irb and disable $DEBUG
+  ## - Some $DEBUG output may interfere with tty i/o under IRB
+  irb.activate
+  $DEBUG = false
+  $INIT_ERROR = e
+  require %q(bundler/setup)
+  require %q(irb)
+  require %q(irb/completion)
+  STDERR.puts "[DEBUG] #{this}: Gtk::InitError stored as $INIT_ERROR"
+  IRB.start(__FILE__)
 end
 
 require 'vte3'
 require 'shellwords'
 
-## Prototype for GLib type extension support in PebblAPp
-module BoxedProto
+## prototyping a popover + sourceview for extended input editing
+#require 'gtksourceview3'
+## ^ DNW with glade, API needs refactoring @ Gtk::Source::View
+
+## StringIO used for portably computing a default newline
+require 'stringio'
+
+module Const
+  EOF = "\u0004".freeze
+  ## subtitle strings for pty state (TBD gettext)
+  RUNNING = "running"
+  FAILED = "failed"
+  EXITED = "exited"
+end
+
+module Util
+  ## FIXME marge the Service/ServiceContext/... definition to here
+  class << self
+    ## utility for e.g cancellable process spawn methods on Vte::Terminal, Vte::Pty
+    ## (prototype - no way to retrieve a PID with the async spawn methods here)
+    ##
+    ## FIXME test with Service/ServiceContext dispatch @ app level
+    def init_cancellable(&block)
+      cbl = Gio::Cancellable.new
+      cbl.signal_connect("cancelled") do |cancellable|
+        block.yield(cancellable)
+      end
+      return cbl
+    end
+  end
+end
+
+
+## Prototype for GLib type extension support in PebblApp
+##
+## @fixme redundant to PebblApp::GtkFramework::GObjType
+module GObjectExtension
+
   def self.extended(whence)
+
+    class << whence
+
+      ## a Gtk::Builder that can be used for class-scoped UI
+      ## definitions.
+      ##
+      ## It would not be recommended to reuse this Gtk::Builder
+      ## for UI definitions local to an instance scope
+      ##
+      ## This builder is used for faciliating access to internal
+      ## template child objects, for method definitions in the
+      ## initialize_template_children class method. That class method
+      ## will be defined in classes extending CompositeWidget
+      ##
+      def composite_builder
+        if ! class_variable_defined?(:@@builder)
+          class_variable_set(:@@builder,Gtk::Builder.new)
+        else
+          class_variable_get(:@@builder)
+        end
+      end
+    end
+
     ## register the class, at most once
     if ! whence.class_variable_defined?(:@@registered)
       ## FIXME does not detect duplcate registrations
       ## of differing implmentation classes
+      ##
+      ## TBD detecting errors in the Gtk framework layer,
+      ## during type_register -> should be handled as error here
       whence.type_register
       whence.class_variable_set(:@@registered, true)
     end
   end
 end
 
+class UIError < RuntimeError
+end
+
 ## Base module for template support in this prototype
-module CompositeProto
+module CompositeWidget
   def self.extended(whence)
-    whence.extend BoxedProto
+    whence.extend GObjectExtension
+    class << whence
 
-    ## common method for init with file-based or resource-path-based
-    ## composite classes
-    def initialize_template_children
-      self.template_children.each do |id|
-        Kernel.warn("Binding template child #{id} for #{self}", uplevel: 0) ## DEBUG
-        bind_template_child(id)
+      ## bind signal handlers to instance methods in this class
+      ##
+      ## The connect func defined internal to this method will bind
+      ## instance methods as signal handlers.
+      ##
+      ## If a signal name is provided to the connect func, such that the
+      ## signal name does not match any instance method in the composite
+      ## class, the connect func will raise a UIError, avoiding any
+      ## further processing.
+      ##
+      ## When applied together with a UI widget template in a composite
+      ## class definition, this method should be able to capture any
+      ## mismatch between signal handler names defined in the template UI
+      ## file and methods defined in the implementation of the template's
+      ## composite class.
+      ##
+      ## On success, this method will ensure that each signal handler is
+      ## bound to an instance method defined in the composite class.
+      ##
+      ## @see Gtk::Widget.set_connect_func
+      ## @see the Glade User Interface Designer
+      def set_composite_connect_func()
+        ## This generally emulates a call to the
+        ## Gtk::Widget.set_connect_func method as to bind a method to
+        ## each signal handler.
+        ##
+        ## The following definition provides a preliminary check, to test
+        ## for an instance method in the composite class, as corresponding
+        ## to each signal handler name.
+        ##
+        ## This generally corresponds to the API usage after example 7
+        ## and subsequent in the sample tutorial: Getting started with
+        ## GTK+ with the ruby-gnome2 Gtk3 module
+        ## https://github.com/ruby-gnome/ruby-gnome/tree/master/gtk3/sample/tutorial
+        ##
+        ## Not directly documented, this corresponds to a convention of
+        ## configuring a signal handler as a method name, typically
+        ## with a UI template child object selected as the user data
+        ## object, using a composite widget's UI definition in Glade.
+        ##
+        ## In Glade, the signal handlers for a widget may be configured
+        ## under the "Signals" tab in the widget's configuration data.
+        ##
+        ## The actual syntax for each named method may vary by the
+        ## nature of the signal to which the method is mapped as a
+        ## signal handler. Documentation about each signal handler is
+        ## available in GNOME Devhelp, and may be accessed via the Glade
+        ## UI designer.
+        ##
+        ## FIXME this needs normal documentation, external to the source
+        ## comments here.
+        ##
+        set_connect_func_raw do |builder, object, signal_name,
+                                 handler_name, connect_object, flags|
+          hdlr_sym = handler_name.to_sym
+          if self.instance_methods.include?(hdlr_sym)
+            Gtk::Builder.connect_signal(builder, object, signal_name,
+                                        handler_name, connect_object,
+                                        flags) do |name|
+              method name
+            end
+          else
+            raise UIError.new(
+              "No method %s found for signal %p in %p" % [
+                handler_name, signal_name, cls
+              ])
+          end
+        end
+        return self
       end
 
-      self.set_connect_func do |name|
-        Kernel.warn("Binding method #{name} for #{self}", uplevel: 0) ## DEBUG
-        method name
+      ## a common method for template initialization in composite widget
+      ## classes
+      ##
+      ## @param children [Array<String>] template children in this
+      ##  composite class' template definition.
+      ##
+      ##  Each string in this array should match the id of a widget in
+      ##  the class' template definition. For each id provided, an
+      ##  instance method of the same name will be defined in the
+      ##  composite class, as returning the widget for that ID in the
+      ##  corresponding instance of the composite class.
+      ##
+      ## @param path [String] for debugging  purposes, the filename or
+      ##  resource path of the template
+      ##
+      ## @see FileCompositeWidget, which provides a use_template method
+      ##  that will be defined in any extending class. That use_template
+      ##  method will dispatch to initialize_template_children after
+      ##  setting the template definition for the extending class.
+      ##
+      def initialize_template_children(children, path)
+        children.each do |id|
+          Kernel.warn("Binding template child #{id} for #{self}", uplevel: 0) ## DEBUG
+
+          ## an alternate approach after bind_template_child(id)
+          ## 1) bind the template child as an internal template child
+          ## 2) define a method here that will check to ensure that
+          ##    a template child object is found for each id, when
+          ##    called, rather than quietly returning nil.
+
+          ## about the second arg in the following call:
+          ## >> if 'true' => internal, no method is defined for each
+          ## >> if 'false' => a method is defined for each, albeit
+          ##    such that the method may quietly return nil
+          bind_template_child_full(id, true, 0)
+
+          ## define the accessor method here, with added checks
+          lmb = lambda {
+            if (obj = get_internal_child(self.class.composite_builder, id))
+              return obj
+            else
+              raise UIError.new("No template child found for id #{id} \
+in template for #{self.class} at #{path}")
+            end
+          }
+          define_method(id, &lmb)
+        end
+
+        ## bind signal handlers for this class, conditinally
+        ##
+        ## This will err within the class' connect func e.g if a signal
+        ## handler is defined in the UI file without a corresponding
+        ## method in this class.
+        ##
+        ## The block defined in set_composite_connect_func may be
+        ## evaluated during UI initialization
+        set_composite_connect_func()
+
+        return true
+
       end
-    end
+    end ## class <<
   end ## self.extended
 end
 
 ## prototype module for classes using a template definition with
 ## GTK Builder, when the template is initialized directly from a
 ## UI file source
+##
+## FIXME should be accompanied with a module for classes deriving a Gtk
+## Builder template definition from a UI resource path onto an
+## initiailzed GResource bundle
 ##
 module FileCompositeWidget
   def self.extended(whence)
@@ -133,7 +315,7 @@ end
 ## configuration support for VtyApp
 ##
 ## an instance of this class is returned from VtyApp#conf
-class VtyConf < PebblApp::GtkSupport::GtkConfig
+class VtyConf < PebblApp::GtkConf
 
   ## command line options parsing vor VtyApp
   def configure_option_parser(parser)
@@ -151,7 +333,12 @@ end
 class VtyPrefsWindow < Gtk::Dialog
 
   extend FileCompositeWidget
+  ## FIXME set the template file path relative to some external base directory
+  use_template(File.expand_path("../ui/prefs.vtytest.ui", __dir__),
+                 %w(shell_cmd_entry io_model_combo prefs_stack prefs_sb
+                   ))
 
+  ## FIXME integrate with the Conf API
 
   def initialize(**args)
     super(**args)
@@ -204,6 +391,10 @@ end
 class VtyAppWindow < Gtk::ApplicationWindow
 
   extend FileCompositeWidget
+  ## FIXME set the template file path relative to some external base directory
+  ## or use a resource-path-based template path && glib-compile-resources
+  ## && something to load the resource bundle at a pathnmame relative to
+  ## some external base directory
   use_template(File.expand_path("../ui/appwindow.vtytest.ui", __dir__),
                %w(vty vty_send vtwin_vty_menu vty_app_menu vty_menu
                   vty_entry vty_entry_buffer vty_entry_completion
@@ -213,6 +404,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
                   vtwin_header
                  ))
 
+  ## FIXME args parsing, app conf, app packaging, ...
 
   def shell=(sh)
     @shell = (String === sh) ? Shellwords.split(sh) : sh
@@ -307,6 +499,17 @@ class VtyAppWindow < Gtk::ApplicationWindow
     sh = self.shell
     vty_env = ENV.map { |elt| "%s=%s" % elt }
     Kernel.warn("Using shell #{sh.inspect}", uplevel: 0)
+    # it = self.vty.spawn_async(Vte::PtyFlags::DEFAULT, Dir.pwd,
+    #                           sh, vty_env, GLib::Spawn::SEARCH_PATH, -1)
+    ## ^ can add an additional arg of type Gio::Cancellable
+    ##   - FIXME no other callbacks here
+    ## ^ returns a Vte::Terminal, the same value as self.vty here
+    ## ^ should accept a block, translated to a setup function for the
+    ##   subprocess pre-exec environment
+    ## ^ should return the PID, returning in the parent process
+
+    #Kernel.warn("Using vty: #{self.vty.inspect}", uplevel: 0)
+
     ## before starting any shell ... binding a signal on pty activation
     self.vty.signal_connect_after("notify::pty") do |obj, prop|
       ## OBJ should be the Vte::Terminal for this app window
@@ -351,6 +554,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
       self.vtwin_header.subtitle = Const::RUNNING
     else
       self.vtwin_header.subtitle = Const::FAILED
+      ## FIXME needs a more graceful handler
       Kernel.warn("Failed. closing window")
       self.close
     end
@@ -373,6 +577,8 @@ class VtyAppWindow < Gtk::ApplicationWindow
   end
 
   def vty_eof
+    ## TBD UI (submenu) for sending invidual signals to the subprocess,
+    ## using portable signal names onto some standard naming scheme
     self.vty.feed_child(Const::EOF)
   end
 
@@ -397,14 +603,39 @@ class VtyAppWindow < Gtk::ApplicationWindow
   end
 
   def vtwin_save_data
+    ## TBD conf options - output recording (for pty/pipe out, needs threads)
+    ## self.class.save_vte_data(...)
   end
 
   def vtwin_save_text
+    ## TBD filtering escape sequences out of the the output history text
+    ## such that vtwin_save_data would use
+    ##
+    ## Vte::Terminal#text would access only the visible region of text?
+    ##
     ## self.class.save_vte_text(...)
   end
 
 
   def vtwin_send
+    ## FIXME further requirements for this method
+    ## - input history recording, on activation with the #vty_send button
+    ## - input history browsing, to be available in the #vty_entry widget
+    ## - ensure this is extensible for an AltVtyAppWindow in which all
+    ##   input to the subprocess would be mapped through a pipe
+    ##   coordinated via a pre-spawn setup function for a process
+    ##   wrapper for the actual command.
+    ##   - the actual command would be initialized on a pty
+    ##   - the process wrapper would use at least three pipes
+    ##     for bridged communication beween the AltPty GUI
+    ##     and the main process
+    ##   - I/O could still be mapped directly to the PTY spawned by the
+    ##     process wrapper
+    ##   - this could be ported easily enough for any application
+    ##     that would need only the pipe i/o under a piped process
+    ##     wrapper, no pty (TBD as to how to update the Vte::Terminal
+    ##     GUI with such a hack)
+    ##
 
     popover = self.editpop_popover
     if popover.visible?
@@ -432,6 +663,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
   end
 
   def vtwin_received_eof(vty)
+    ## prepare before subprocess exit (??)
   end
 
   def vtwin_subprocess_exit(vty, status)
@@ -449,7 +681,8 @@ end
 
 
 class VtyApp < Gtk::Application
-  include PebblApp::GtkSupport::GtkAppPrototype
+  ## FIXME GtkFramework integration - see start of source file
+  # include PebblApp::GtkAppMixin
 
   class << self
     ## internal instance tracking for VtyApp
@@ -462,7 +695,7 @@ class VtyApp < Gtk::Application
       end
     end
 
-    def started=(inst)
+    def started=(inst) # ...
       @@started = inst
     end
   end ## class << self
@@ -553,7 +786,8 @@ class VtyApp < Gtk::Application
     super()
   end
 
-  ## TBD accessor for the 'active-window' property on this Gtk::Application
+  ## TBD accessor for the 'active-window' property on Gtk::Application
+  ## : does it return a Gdk X11 Window?
 
   def initialize()
     ## the first arg for the Gtk::Application constructor is required,
@@ -645,11 +879,11 @@ class VtyApp < Gtk::Application
 
   def quit()
     super()
-    Kernel.warn("Calling Gtk.main_quit in Thread 0x%06x" % [Thread.current.__id__],
-                uplevel: 0)
     self.windows.each do |wdw|
       wdw.close
     end
+    Kernel.warn("Calling Gtk.main_quit in Thread 0x%06x" % [Thread.current.__id__],
+                uplevel: 0)
     Gtk.main_quit
   end
 
@@ -682,9 +916,9 @@ class VtyApp < Gtk::Application
     super
   end
 
-  ## called from #activate, via inclusion of
-  ## PebblApp::GtkSupport::GtkAppPrototype
   def start(args = nil)
+    ## originally called from #main, via inclusion of PebblApp::GtkAppMixin,
+    ## after Gtk framework init
     if args && (! args.empty?)
       Kernel.warn("Discarding args: #{args.inspect}", uplevel: 0)
     end
@@ -692,6 +926,9 @@ class VtyApp < Gtk::Application
     Kernel.warn("Starting #{self} with default shell #{self.default_shell}",
                 uplevel: 0)
 
+
+    ## FIXME first map a handler for the "startup" signal
+    ## in this application, before self.register
     begin
       self.class.started = self
       ## calling this class' own #register directly
@@ -706,4 +943,3 @@ class VtyApp < Gtk::Application
     ## TBD dispatching for run <...> start here
   end
 end
-

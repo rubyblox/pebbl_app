@@ -1,12 +1,6 @@
 ## yspec.rb --- YAML-based configuration tooling for gemspecs
 
-## bootstrap module definition, without autoloads
-if !defined?(::PebblApp::Project)
-  module PebblApp
-    module Project
-    end
-  end
-end
+require 'pebbl_app'
 
 require 'rubygems'
 require 'pathname'
@@ -37,9 +31,9 @@ require 'psych'
 ## of a format configuration declaration and/or a general guess from
 ## configuration data initially read from any output YAML file.
 ##
-class PebblApp::Project::YSpec
+class PebblApp::YSpec
 
-  ## Constants forPebblApp::Project::YSpec
+  ## Constants forPebblApp::YSpec
   module Const
     GEMS_FIELD		||= 'gems'.freeze
     FILENAME_FIELD	||= 'filename'.freeze

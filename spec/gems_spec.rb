@@ -2,11 +2,11 @@
 
 ## FIXME should be evaluated after tests for YSpec
 
-require 'pebbl_app/project/y_spec'
+require 'pebbl_app/y_spec'
 
 data_file = File.join($DATA_ROOT, "project.yaml")
 if File.exists?(data_file)
-  $YSPEC= PebblApp::Project::YSpec.new(data_file)
+  $YSPEC= PebblApp::YSpec.new(data_file)
 else
    RSpec::Expectations.fail_with("Project data not found: #{data_file}")
 end

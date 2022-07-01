@@ -1,6 +1,6 @@
 ## glib_type_ext.rb - type extensions for GLib
 
-require 'pebbl_app/gtk_support'
+require 'pebbl_app/gtk_framework'
 
 require 'glib2'
 
@@ -38,7 +38,7 @@ require 'glib2'
 ##
 ## It's assumed that this module will be extended from some direct or
 ## indirect subclass of *+GLib::Object+*
-module PebblApp::GtkSupport::GObjType
+module PebblApp::GtkFramework::GObjType
   def self.extended(extclass)
 
     class << extclass

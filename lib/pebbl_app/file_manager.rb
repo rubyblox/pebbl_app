@@ -1,23 +1,22 @@
-require 'pebbl_app/project/project_module'
-require 'pebbl_app/support'
+
+require 'pebbl_app'
 
 require 'open3'
 require 'optparse'
 
-module PebblApp::Support
+module PebblApp
 
-
-  ## This class provides access to environment variables and default
-  ## values for application pathnames per the XDG Base Directory
+  ## FileManager provides access to environment variables and default
+  ## values for application pathnames, per the XDG Base Directory
   ## specification. More info:
   ## https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
   ## https://wiki.archlinux.org/title/XDG_Base_Directory
   ##
-  ## This class alsp provides support for appliation pathnames under
+  ## This class also provides support for application pathnames under
   ## each of the XDG home-relative directory paths.
   ##
-  ## This class will be extended in any class including
-  ## PebblApp::Support::AppPrototype
+  ## A FileManager will be available as a utility for application pathname
+  ## management in each PebblApp::App
   ##
   class FileManager
 
@@ -56,7 +55,7 @@ module PebblApp::Support
         if dir
           return dir
         else
-          raise PebblApp::Support::EnvironmentError.new("No HOME available in environment")
+          raise PebblApp::EnvironmentError.new("No HOME available in environment")
         end
       end
 
@@ -170,13 +169,13 @@ module PebblApp::Support
               ## POSIX-like 'whoami' cmd would be available under PATH
               return Files.basename(who_str.chomp)
             else
-              raise PebblApp::Support::EnvironmentError.new(
+              raise PebblApp::EnvironmentError.new(
                 "Unable to determine username. Shell command %p failed (%d): %p" % [
                   Const::WHOAMI_CMD, st.exitstatus, err_str
                 ])
             end
           rescue SystemCallError => e
-            raise PebblApp::Support::EnvironmentError.new(
+            raise PebblApp::EnvironmentError.new(
               "Failed when calling %p : %s" % [Const::WHOAMI_CMD, e]
             )
           end

@@ -1,14 +1,24 @@
 ## GtkConf for Pebbl App
 
-require 'pebbl_app/support/conf'
+require 'pebbl_app'
 
 require 'optparse'
 
-class PebblApp::GtkSupport::GtkConf < PebblApp::Support::Conf
+class PebblApp::GtkConf < PebblApp::Conf
 
-  ## Constants for PebblApp::GtkSupport::GtkConf
+  ## Constants for PebblApp::GtkConf
   module Const
     DISPLAY_ENV ||= 'DISPLAY'.freeze
+    GTK_INIT_TIMEOUT_DEFAULT ||= 15
+  end
+
+
+  def initialize(cmd_name = nil, options = nil, &cmd_name_block)
+    super(cmd_name, options, &cmd_name_block)
+    if ! options
+      ## set default options
+      self.options[:gtk_init_timeout] = Const::GTK_INIT_TIMEOUT_DEFAULT
+    end
   end
 
   ## set a display option for this instance
@@ -55,6 +65,15 @@ class PebblApp::GtkSupport::GtkConf < PebblApp::Support::Conf
       ENV.has_key?(Const::DISPLAY_ENV)
   end
 
+  def gtk_init_timeout
+    self.option(:gtk_init_timeout, Const::GTK_INIT_TIMEOUT_DEFAULT)
+  end
+
+  def gtk_init_timeout=(timeout)
+    self.set_option(:gtk_init_timeout, timeout)
+  end
+
+
   ## configure an argv options parser for this instance
   ##
   ## @param parser [OptionParser] the parser to configure
@@ -76,7 +95,7 @@ class PebblApp::GtkSupport::GtkConf < PebblApp::Support::Conf
   def gtk_args()
     args = self.parsed_args.dup
     if ! self.display?
-      raise PebblApp::GtkSupport::ConfigurationError.new("No display configured")
+      raise PebblApp::ConfigurationError.new("No display configured")
     elsif self.option?(:display)
       args.push(%(--display))
       args.push(self.option(:display))

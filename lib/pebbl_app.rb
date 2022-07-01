@@ -28,18 +28,40 @@ module PebblApp
         super(name, path)
       else
         Kernel.warn(
-          "Not definining autoload for %s::%s - file not found; %s" % [
+          "Not defining autoload for %s::%s - file not found: %s" % [
             self, name, file
-          ]) if $DEBUG
+          ]) # if $DEBUG
       end
     end ## self.autoload method
   end ## class << self
 
-  ## distributed with the pebbl_app-support gem
+  autoload(:App, 'pebbl_app/app.rb')
+  autoload(:Const, 'pebbl_app/const.rb')
+  autoload(:Files, 'pebbl_app/files.rb')
+  autoload(:FileManager, 'pebbl_app/file_manager.rb')
+  autoload(:Framework, 'pebbl_app/framework.rb')
+  autoload(:EnvironmentError, 'pebbl_app/exceptions.rb')
   autoload(:Project, 'pebbl_app/project.rb')
-  autoload(:Support, 'pebbl_app/support.rb')
+  autoload(:ProjectModule, 'pebbl_app/project_module.rb')
+  autoload(:Shell, 'pebbl_app/shell.rb')
+  autoload(:SignalMap, 'pebbl_app/signals.rb')
+  autoload(:YSpec, 'pebbl_app/y_spec.rb')
+
+  %i(ConfigurationError Conf).each do |cls|
+    autoload(cls, 'pebbl_app/conf.rb')
+  end
+
+  %i(IVarUnbound AttrProxy).each do |cls|
+    autoload(cls, 'pebbl_app/attr_proxy.rb')
+  end
+
+  %i(AppLogFormatter AppLogDev StreamLogDev ConsoleLogDev
+     ProcessLogDev MultilogDev AppLog).each do |cls|
+    autoload(cls, 'pebbl_app/app_log.rb')
+  end
 
   ## distributed with the pebbl_app-gtk_suport gem
-  autoload(:GtkSupport, 'pebbl_app/gtk_support.rb')
+  ## (require separately)
+  # autoload(:GtkFramework, 'pebbl_app/gtk_framework.rb')
 
 end

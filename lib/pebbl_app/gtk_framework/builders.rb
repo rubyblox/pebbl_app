@@ -79,10 +79,10 @@ end
 ##
 ## @see ResourceTemplateBuilder
 ## @see FileTemplateBuilder
-module PebblApp::GtkSupport::TemplateBuilder
+module PebblApp::GtkFramework::TemplateBuilder
   def self.included(extclass)
-    extclass.extend PebblApp::GtkSupport::GObjType
-    extclass.extend PebblApp::GtkSupport::UIBuilder
+    extclass.extend PebblApp::GtkFramework::GObjType
+    extclass.extend PebblApp::GtkFramework::UIBuilder
 
     ## set the template path to be used for this class
     ##
@@ -170,9 +170,9 @@ module PebblApp::GtkSupport::TemplateBuilder
 end
 
 
-module PebblApp::GtkSupport::ResourceTemplateBuilder
+module PebblApp::GtkFramework::ResourceTemplateBuilder
   def self.extended(extclass)
-    extclass.include PebblApp::GtkSupport::TemplateBuilder
+    extclass.include PebblApp::GtkFramework::TemplateBuilder
 
     ## ensure that a resource bundle at the provided +path+ is
     ## registered at most once, for this class
@@ -237,6 +237,8 @@ module PebblApp::GtkSupport::ResourceTemplateBuilder
       ##  ... --generate riview.gresource.xml ...
       ##
       ## NB glib-compile-schemas(1) && GApplication (&& Rake)
+      ##
+      ## usage testing: riview
 
       ## NB here, @template must represent a GResource path, not a filename
       set_template(resource: @template)
@@ -245,9 +247,9 @@ module PebblApp::GtkSupport::ResourceTemplateBuilder
   end
 end
 
-module PebblApp::GtkSupport::FileTemplateBuilder
+module PebblApp::GtkFramework::FileTemplateBuilder
   def self.extended(extclass)
-    extclass.include PebblApp::GtkSupport::TemplateBuilder
+    extclass.include PebblApp::GtkFramework::TemplateBuilder
 
     ## load this class' template as a file
     ##
@@ -258,8 +260,8 @@ module PebblApp::GtkSupport::FileTemplateBuilder
       ## FIXME this pathname expansion needs cleanup
       use_path = File.expand_path(@template)
       if File.exists?(use_path)
-        ## NB ~/.local/share/gem/ruby/3.0.0/gems/gio2-3.4.9/lib/gio2/file.rb
-        ## && GFile, GFileInputStream pages under GNOME devhelp
+        ## NB Gio::File @ gem gio2 lib/gio2/file.rb
+        ## File, GFileInputStream topics under GNOME devhelp
         gfile = Gio::File.open(path: use_path)
         fio = false
         begin

@@ -1,9 +1,9 @@
 
-require 'pebbl_app/support'
+require 'pebbl_app'
 
-module PebblApp::Support
+module PebblApp
 
-  class ShProc
+  module Shell
 
     class << self
 
@@ -63,10 +63,10 @@ module PebblApp::Support
           end
           return false
         end
-      end ## ShProc.which
+      end ## Shell.which
 
     end ## class << self
 
-  end ## ShProc class
+  end ## Shell class
 
-end ## PebblApp::Support
+end ## PebblApp module

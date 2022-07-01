@@ -10,7 +10,7 @@ BEGIN {
 require 'logger'
 require 'gtk3'
 
-module PebblApp::GtkSupport
+module PebblApp::GtkFramework
 
 #class GLibApp < GLib::Application
 ## FIXME define in glib_app.rb
@@ -379,7 +379,7 @@ class GBuilderApp < Gtk::Application
 
 end
 
-end ## PebblApp::GtkSupport module
+end ## PebblApp::GtkFramework module
 
 # Local Variables:
 # fill-column: 65

@@ -11,14 +11,15 @@ BEGIN {
 gem 'pebbl_app-gtk_support'
 ## FIXME the next two source lines only needed until y_spec
 ## activation support, pursuant of closing a bug
-## about the default source path determined for PebblApp::GtkSupport
+## about the default source path determined for PebblApp::GtkFramework
 require 'pebbl_app'
-require 'pebbl_app/gtk_support'
+require 'pebbl_app/gtk_framework'
 
 require 'rikit'
 require 'gtk3'
 
 require 'timeout'
+
 
 success = false
 Timeout::timeout(5) {
@@ -54,12 +55,12 @@ end
 
 class AppWindow < Gtk::ApplicationWindow
 
-  extend(PebblApp::GtkSupport::LoggerDelegate)
+  extend(PebblApp::GtkFramework::LoggerDelegate)
   def_logger_delegate(:@logger)
   attr_reader :logger
-  LOG_LEVEL_DEFAULT = Logger::DEBUG
+  LOG_LEVEL_DEFAULT ||= Logger::DEBUG
 
-  extend(PebblApp::GtkSupport::FileTemplateBuilder)
+  extend(PebblApp::GtkFramework::FileTemplateBuilder)
   self.use_template(File.join(RESOURCE_ROOT, "ui/appwindow.riview.ui"))
 
   def set_window_action(name, &block)
@@ -218,7 +219,7 @@ end
 
 
 class RIDocView < Gtk::TextView
-  extend(PebblApp::GtkSupport::FileTemplateBuilder)
+  extend(PebblApp::GtkFramework::FileTemplateBuilder)
   ## FIXME only one template-based class per UI file...?
   self.use_template(File.join(RESOURCE_ROOT,"ui/docview.riview.ui"))
 
@@ -255,7 +256,7 @@ end
 
 
 class PrefsWindow < Gtk::Dialog
-  extend(PebblApp::GtkSupport::LoggerDelegate)
+  extend(PebblApp::GtkFramework::LoggerDelegate)
   def_logger_delegate(:@logger)
   attr_reader :logger
   LOG_LEVEL_DEFAULT = Logger::DEBUG
@@ -263,7 +264,7 @@ class PrefsWindow < Gtk::Dialog
   ## TBD GLib::Log usage in e.g
   ## ~/.local/share/gem/ruby/3.0.0/gems/glib2-3.4.9/lib/glib2.rb
 
-  extend(PebblApp::GtkSupport::FileTemplateBuilder)
+  extend(PebblApp::GtkFramework::FileTemplateBuilder)
   self.use_template(File.join(RESOURCE_ROOT, "ui/prefs.riview.ui"))
 
   ## ensure that some objects from the template will be accessible
@@ -315,7 +316,7 @@ class PrefsWindow < Gtk::Dialog
 end
 
 
-class RIViewApp < PebblApp::GtkSupport::GBuilderApp
+class RIViewApp < PebblApp::GtkFramework::GBuilderApp
 
   attr_reader :system_store, :site_store, :home_store, :gem_stores
 

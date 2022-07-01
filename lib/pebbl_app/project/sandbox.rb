@@ -8,10 +8,12 @@ BEGIN {
   require(__dir__ + ".rb")
 }
 
-require 'pebbl_app/project/project_module'
+require 'pebbl_app/project_module'
 
 module PebblApp::Project::Sandbox
-  include PebblApp::Project::ProjectModule
+  include PebblApp::ProjectModule
+
+  ## FIXME required for RIView @ latest
 
   defautoloads({
     'sandbox/spec_tool' =>

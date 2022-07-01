@@ -1,9 +1,9 @@
 
-require 'pebbl_app/support'
+require 'pebbl_app'
 
-module PebblApp::Support
+module PebblApp
 
-  class IvarUnbound < StandardError
+  class IVarUnbound < StandardError
     attr_reader :instance
     attr_reader :accessor
     def initialize(*args)
@@ -134,7 +134,7 @@ module PebblApp::Support
         ## ensure that a fallback_lmb is initialized, for application
         ## in subsequent lambda forms
         fallback_lmb = lambda { |instance, field|
-          IvarUnbound.new(variable: attrname, instance: delegate)
+          IVarUnbound.new(variable: attrname, instance: delegate)
         }
       end
 

@@ -1,28 +1,27 @@
-## rspec for PebblApp::Support::Files
+## rspec for PebblApp::Files
 
 ## the library to test
-require 'pebbl_app/support/files'
+require 'pebbl_app/files'
 
 ## tools for the tests
 require 'securerandom'
 
-describe PebblApp::Support::Files do
+describe PebblApp::Files do
   let(:t_zero) { Time.new(0) }
   let(:t_start) { Time.now }
 
   it "parses filenames in shortname" do
-    using = PebblApp::Support
-    expect(using::Files.shortname("/etc/login.conf")).to be == "login"
-    expect(using::Files.shortname(".login.conf")).to be  == ".login"
-    expect(using::Files.shortname(".bashrc")) .to be  == ".bashrc"
-    expect(using::Files.shortname(".")).to be  == "."
-    expect(using::Files.shortname("..")).to be  == ".."
-    expect(using::Files.shortname("/")).to be  == ""
-    expect(using::Files.shortname("/a/b/")).to be  == "b"
-    expect(using::Files.shortname("/b/.c/")).to be  == ".c"
-    expect(using::Files.shortname(".files.d")).to be  == ".files"
-    expect(using::Files.shortname(".a.b.c.d.e.f")).to be  == ".a.b.c.d.e"
-    expect(using::Files.shortname("m.n.o")).to be  == "m.n"
+    expect(PebblApp::Files.shortname("/etc/login.conf")).to be == "login"
+    expect(PebblApp::Files.shortname(".login.conf")).to be  == ".login"
+    expect(PebblApp::Files.shortname(".bashrc")) .to be  == ".bashrc"
+    expect(PebblApp::Files.shortname(".")).to be  == "."
+    expect(PebblApp::Files.shortname("..")).to be  == ".."
+    expect(PebblApp::Files.shortname("/")).to be  == ""
+    expect(PebblApp::Files.shortname("/a/b/")).to be  == "b"
+    expect(PebblApp::Files.shortname("/b/.c/")).to be  == ".c"
+    expect(PebblApp::Files.shortname(".files.d")).to be  == ".files"
+    expect(PebblApp::Files.shortname(".a.b.c.d.e.f")).to be  == ".a.b.c.d.e"
+    expect(PebblApp::Files.shortname("m.n.o")).to be  == "m.n"
   end
 
   it "provides the temporary file to a block in mktmp" do

@@ -19,8 +19,8 @@ if ENV['BUNDLE_GEMFILE'] &&
   ##
 
   gem 'rspec'
-  require "rspec/core/rake_task"
-  require 'pebbl_app/support/sh_proc' ## local file
+  require 'rspec/core/rake_task'
+  require 'pebbl_app/shell'
 
   ## Some rspec tests in this project's Gtk support will require an
   ## active X Window System display.
@@ -44,7 +44,7 @@ if ENV['BUNDLE_GEMFILE'] &&
   task spec: [] do
     ## when configured first, this task should be run before the :spec
     ## task from RSpec
-    cmd = PebblApp::Support::ShProc.which('Xvfb')
+    cmd = PebblApp::Shell.which('Xvfb')
     this = File.basename($0)
     ## unset DISPLAY in the rake environment, only if Xvfb is available
     if cmd
@@ -151,6 +151,17 @@ if ENV['BUNDLE_GEMFILE'] &&
     libs_names = libs.values.flatten.sort.uniq
     libs_libs = libs_names.map { |l| "lib" + l }.join(" ")
     puts "LIBS: #{libs_libs}"
+  end
+
+
+  desc "test ptytest"
+  task :ptytest do
+    sh %(bundle exec ruby -e "require_relative './sandbox/ptytest.rb'"  -e 'Object.test_pty_cmd')
+  end
+
+  desc "test pipetest"
+  task :pipetest do
+    sh %(bundle exec ruby -e "require_relative './sandbox/pipetest.rb'")
   end
 
 else

@@ -11,6 +11,7 @@ BEGIN {
 
 require 'rubygems'
 
+require 'pathname'
 
 ## a support module for inclusion within other project source modules
 ##
@@ -23,10 +24,10 @@ require 'rubygems'
 ##
 ## ~~~~
 ## gem 'pebbl_app-project'
-## require 'pebbl_app/project/project_module'
+## require 'pebbl_app/project_module'
 ##
 ## module AppModule
-##   include PebblApp::Project::ProjectModule
+##   include PebblApp::ProjectModule
 ##   self.source_path = __dir__
 ##   defautoloads({'app_module/app' => %w(App AppClass AppError)})
 ## end
@@ -57,7 +58,7 @@ require 'rubygems'
 ## Example:
 ## ~~~~
 ## module AppModule
-##   include PebblApp::Project::ProjectModule
+##   include PebblApp::ProjectModule
 ##   self.source_path = __dir__
 ##   begin
 ##     autoloads_defer = true
@@ -115,7 +116,7 @@ require 'rubygems'
 ##
 ## ~~~~
 ## module AppModule
-##   include PebblApp::Project::ProjectModule
+##   include PebblApp::ProjectModule
 ##   self.source_path = __dir__
 ##   defautoloads({%(app_module/app} => %w(App AppClass AppError)})
 ## end
@@ -133,7 +134,7 @@ require 'rubygems'
 ## constant has been defined in some Ruby source file. This is known to
 ## affect Ruby releases up to and including Ruby 3.1.2.
 ##
-## For appliations of `PebblApp::Project::ProjectModule`, there is a
+## For appliations of `PebblApp::ProjectModule`, there is a
 ## known workaround as to directly set the `source_path` for any
 ## including module.
 ##
@@ -148,7 +149,7 @@ require 'rubygems'
 ##
 ## The primary configuration would be in evaluating:
 ##
-## > `include PebblApp::Project::ProjectModule`
+## > `include PebblApp::ProjectModule`
 ##
 ## ... as within a containing namespace, i.e. within a module or class
 ## definition. This would ensure that the `defautoloads` methods
@@ -156,15 +157,15 @@ require 'rubygems'
 ## module.
 ##
 ## As denoted in the previous, the `source_path` should be set directly
-## for any module or class applying `PebblApp::Project::ProjectModule`
+## for any module or class applying `PebblApp::ProjectModule`
 ## by way of include.
 ##
 ## A module or class definition may override any methods defined by
 ## including this module.
 ##
-module PebblApp::Project::ProjectModule
+module PebblApp::ProjectModule
 
-  ## Constants for PebblApp::Project::ProjectModule
+  ## Constants for PebblApp::ProjectModule
   module Const
     UPCASE_RE ||= /[[:upper:]]/.freeze
     ALNUM_RE ||= /[[:alnum:]]/.freeze
@@ -339,11 +340,11 @@ module PebblApp::Project::ProjectModule
     ##
     ## The returned pathname will have the suffix ".rb" appended, if
     ## that suffix is not already present in the provided `path`
-    def autoload_source_path(path)
-      if (dir = self.source_path)
+    def autoload_source_path(path, basedir = self.source_path)
+      if basedir
         ## source path available at time of call - expand the filename
         ## at now
-        usepath = File.expand_path(path, dir)
+        usepath = File.expand_path(path, basedir)
       else
         ## no source_path available
         ##
@@ -353,7 +354,7 @@ module PebblApp::Project::ProjectModule
         usepath = path
         ## and FIXME defer autoload
       end
-      sfx = PebblApp::Project::ProjectModule::Const::SOURCE_SUFFIX
+      sfx = PebblApp::ProjectModule::Const::SOURCE_SUFFIX
       sfxlen = sfx.length
       if (path.length <= sfxlen) || (path[-sfxlen..] != sfx)
         usepath = usepath + sfx
@@ -366,13 +367,13 @@ module PebblApp::Project::ProjectModule
     ## localized syntax should be applied for interpolating a file name
     ## from a symbol name.
     ##
-    ## This method will calls PebblApp::Project::ProjectModule.s_to_filename(s, delim)
+    ## This method will calls PebblApp::ProjectModule.s_to_filename(s, delim)
     ## with the provided argument values.
     ##
     ## This method will be used for filename interpolation in calls to
     ## `defautoloads` that have not provided a direct filename.
-    def s_to_filename(s, delim = PebblApp::Project::ProjectModule::Const::DASH)
-      PebblApp::Project::ProjectModule.s_to_filename(s, delim)
+    def s_to_filename(s, delim = PebblApp::ProjectModule::Const::DASH)
+      PebblApp::ProjectModule.s_to_filename(s, delim)
     end
 
 
@@ -433,7 +434,7 @@ module PebblApp::Project::ProjectModule
     ## Example:
     ## ~~~~
     ## module AppModule
-    ##   include PebblApp::Project::ProjectModule
+    ##   include PebblApp::ProjectModule
     ##   self.source_path = __dir__
     ##   defautoloads({'app_module/app' => %w(App AppClass AppError)})
     ## end
@@ -444,28 +445,41 @@ module PebblApp::Project::ProjectModule
     ## - autoloads_apply
     ## - autoloads_defer, autoloads_defer=
     ## - source_path, source_path=
-    def defautoloads(*names)
-      case names[0]
-      when Hash
-        ## assuming every element in names is a hash, here
+    def defautoloads(*args)
+      last = args.last
+
+      if Hash === last
         ## e.g reached from
         ##  defautoloads({ filename => %w(SymbolName ...), ... })
-        names.each do |sub|
-          sub.each do |file,names|
-            self.defautoloads_file(file, names)
+        ## or
+        ##  defautoloads(__dir__, { filename = %w(Symbolname) ...})
+        first = args.first
+        ## supporting as base directory as a first arg, in this case
+        if (! first.eql?(last) && ! (Hash === first))
+          dir = first
+          sub = args[1..]
+        else
+          dir = self.source_path
+          sub = args
+        end
+        ## process all hash values in args, after any dir prefix
+        sub.each do |map|
+          map.each do |file,names|
+            path = File.expand_path(file, dir)
+            self.defautoloads_file(path, names)
           end
         end
-      when Enumerable
-        ## applying the names value as a sequence of other enumerable
+      elsif Enumerable === last
+        ## parsing args as a sequence of other enumerable
         ## values. recurse onto each
-        names.each do |sub|
+        args.each do |sub|
           self.defautoloads(sub)
         end
       else
-        ## parsing the names value as an array of defautoload symbol names
+        ## parsing the args as an array of defautoload symbol names
         ## whose interpolated filename should each match a file in the
         ## source directory for this module
-        names.each do |name|
+        args.each do |name|
           fname = s_to_filename(name, delim: File::SEPARATOR)
           path = self.autoload_source_path(fname)
           self.defautoload(path, name)
