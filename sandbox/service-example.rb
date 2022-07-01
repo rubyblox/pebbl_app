@@ -173,12 +173,14 @@ class DispatchTest < PebblApp::GMain
     initial_debug = $DEBUG
     $DEBUG = true
 
-    begin
+    debug("in #main(#{wait}) @ #{self}")
+
+    begin ## debug block
       data = self.data
       context = context_new(data)
 
-      ## temporary value, initializing the variable
-      main_thread = Thread.current
+      ## thread for join in handlers, if set
+      main_thread = nil
 
       ##
       ## Signal trap functions
@@ -275,17 +277,15 @@ class DispatchTest < PebblApp::GMain
       catch(interrupt_tag) do
         handlers.with_handlers do ## outside of the main block
           super(context) do |main|
-            ## This block will be run in the current thread,
-            ##
-            ## The event loop's thread will exit after this block exits
-
-            ##  set the value of main_thread for Thread.join in handlers
+            ## set the main_thread for handlers
             main_thread = main
-
             ## simulating a duration in application runtime,
-            ## while the main loop runs
-            sleep wait
+            ## while the main loop runs, then cancelling
+            ## to ensure the main loop exits.
+            ##
             ## logging before return
+            sleep wait
+            context.cancellation.cancel(:end)
             debug("Done")
             context.log_event(:ext_return)
           end
@@ -293,7 +293,7 @@ class DispatchTest < PebblApp::GMain
         return context.data ## not returned on event of interrupt
       ensure
         $DEBUG = initial_debug
-      end  ## catch interrupt_tag
-    end
-  end
+      end  ## catch interrupt_tag ... super(...) &block
+    end ## debug block
+  end ## main
 end

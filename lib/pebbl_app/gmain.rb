@@ -108,7 +108,10 @@ module PebblApp
       end
     end
 
-    attr_reader :conf_mtx, :main_mtx, :cancellation
+    attr_reader :main_mtx, :main_cv, :cancellation
+
+    ## trivial barrier flag
+    attr_accessor :configured
 
     ## If true (the default) then the GMain#context_dispatch method
     ## should block for source availability during main loop iteration
@@ -116,15 +119,17 @@ module PebblApp
 
     def initialize(blocking: true, logger: AppLog.new)
       super()
+      @configured = false
+
       ## in application with GMain subclasses, the main loop will run
       ## in a thread separate to the main thread, i.e the thread in which
       ## the GLib::MainContext was configured
       ##
-      ## the conf_mtx value here is applied to prevent the loop from
-      ## dispatching events until after all sources have been configured
-      ## for the context
-      @conf_mtx = Mutex.new
+      ## the main_mtx and main_cv may are used generally for
+      ## synchronization between the #main thread and the main loop
+      ## thread
       @main_mtx = Mutex.new
+      @main_cv = ConditionVariable.new
       @cancellation = GMainCancellation.new
       ## used in GMain#context_dispatch
       @blocking = blocking
@@ -132,7 +137,6 @@ module PebblApp
     end
 
   end
-
 
   ## This class is an adaptation after [the Main Contexts tutorial]
   ## (https://developer.gnome.org/documentation/tutorials/main-contexts.html)
@@ -154,19 +158,21 @@ module PebblApp
   ##
   ## - This `GMain` implementation requires a `GMainContext`. The
   ##   `GMainContext` class extends GLib::MainContext as to
-  ##   provide mutex objects for synchronization in the _configure_  and
-  ##   _application_ sections of the GMain#main method.
+  ##   provide a mutex objects and condition variable for
+  ##   synchronization in the _configure_  and _application_ sections of
+  ##   the GMain#main method.
   ##
-  ## - Applications defining a subclass e.g GMainImpl on GMain may
-  ##   extend the `GMainContext` class, e.g as GMainImplContext. This
+  ## - Applications defining a subclass e.g GMainExt on GMain may
+  ##   extend the GMainContext class, e.g as GMainContextExt. This
   ##   may be of use, for instance to provide a custom API in the
-  ##   GMainImplContext. The custom API on the GMainImplContext may be
-  ##   used, for example, in the SeviceImpl's #map_sources and #main methods,
-  ##   for configuring sources/callbacks for the  GMainImplContext and
-  ##   for any runtime logic in the #main thread.
+  ##   GMainContextExt implementation. The custom API on the
+  ##   GMainContextExt may be of use, for example, in the GMainExt's
+  ##   #map_sources method as when configuring sources and callbacks
+  ##   for the GMainContextExt, and may be of use in the #main method of
+  ##   the GMainExt, for general application purposes.
   ##
-  ##   The DispatchTest source code may provide an example of this
-  ##   extensional logic.
+  ##   The DispatchTest source code (service-example.rb) may provide an
+  ##   example of this extensional logic.
   ##
   ## - An application extending `GMain` should provide at least a
   ##   #map_sources method and a #main method.
@@ -175,52 +181,53 @@ module PebblApp
   ##   objects to the GMainContext provided to the method, also
   ##   configuring any properties on each source, e.g source priority.
   ##   Each GLib::Source object should provide a custom callback, such that
-  ##   will be available in each iteration of the main loop initialized via
-  ##   #context_main. This can be accomplished with #map_idle_source and
-  ##   other Source-initializing methods on GMain.
+  ##   will be available on activation of the source, in each iteration
+  ##   of the main loop initialized via #context_main.
   ##
-  ##   The service main loop will run within a thread returned by
-  ##   #context_main. The main loop will not begin in this thread, until
-  ##   after the service's #map_sources method has returned.
+  ##   A GLib::Source object can be initialized and configured to a
+  ##   GMainContext, using  GMain.map_idle_source and other
+  ##   GLib::Source-initializing class methods on GMain.
   ##
   ##   The #main method in a subclass of `GMain` should call
   ##   `super(...) do |thread| ...` i.e calling GMain#main, there
-  ##    providing a new GMainContext object and a custom block in the
-  ##    call to `super`. This block should accept a single argument, the
-  ##    main loop thread initialized for the call to GMain#main.
+  ##   providing a new GMainContext object and a custom block in the
+  ##   call to `super`.
+  ##
+  ##   The block provided to GMain#main should accept a single
+  ##   argument. The block will receive the main loop thread
+  ##   initialized for the call to GMain#main.
   ##
   ##   The call to GMain#main will initialize the main loop for the
-  ##   service. This main loop will operate on the GMainContext for the
+  ##   GMain. This main loop will operate on the GMainContext for the
   ##   call to #main and all sources initialized under #map_sources.
   ##
   ##   It can be assumed that the main loop's thread will be in a running
   ##   state, when received to the block provided to GMain#main.
   ##   Internally, the thread will wait  until the #map_sources method on
   ##   the implementing class has returned, before beginning iteration in
-  ##   the service main loop.
+  ##   the GMain main loop.
   ##
   ##   The block provided to `super(...`) should implement any
-  ##   _Application Background Logic_ for the service. This would be
+  ##   _Application Background Logic_ for the GMain object. This would be
   ##   independent to any logic implemented via callbacks or any other
-  ##   framework events in the service main loop.
+  ##   framework events in the GMain main loop.
   ##
-  ##   After the block provided to GMain#main returns, the main loop
-  ##   on the extending class will return, thus ending the runtime of the
-  ##   main loop's thread.
+  ##   It should be assumed that the GMain main loop may have begun
+  ##   iteration, once the block provided to GMain#super is reached
   ##
-  ##   If no block is provided to GMain#main, the service's main
-  ##   loop will not be run.
+  ## - The GMain main loop will run within a thread returned by
+  ##   #context_main. The main loop will not begin in this thread until
+  ##   after the GMain#map_sources method has returned. The main loop
+  ##   will continue iteration until the cancellation for the
+  ##   GMainContext of the main loop has been set to a cancelled state,
+  ##   or if the main loop's thread exits on event of error
   ##
   ## - GMain#main can be called more than once, within any one or more
-  ##   consecutive threads. A new GMainContext object could be provided
-  ##   in each call to GMain#main.
+  ##   consecutive threads.
   ##
-  ## - Once dispatching on event soures, the main loop created via
-  ##   #context_main will continue until the _cancellation_ object for
-  ##   the GMainContext has been set to a _cancelled_ state, or until
-  ##   any uncaught error occurs during event dispatch. After a
-  ##   cancellcation event, the main loop thread will return
-  ##   normally. On event of error (FIXME needs docs)
+  ##   A new GMainContext object should be provied for each consecutive
+  ##   call to GMain#main
+  ##
 
   class GMain
 
@@ -542,6 +549,10 @@ module PebblApp
       GMainContext.new(logger: logger)
     end
 
+    def main_loop_new(context)
+      GLib::MainLoop.new(context, false) ## false => not run
+    end
+
     ## an adaptation after `main` in
     ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
     def main(context = context_new, &block)
@@ -550,45 +561,52 @@ module PebblApp
       debug "Init locals"
       ## Initialize and hold a mutex during configuration and application runtime
       main_mtx = context.main_mtx
-      ## using a separate mutex for blocking the main loop
-      ## during event source configuration
-      conf_mtx = context.conf_mtx
+      ## condition variable for synchronization after map_sources
+      main_cv = context.main_cv
+
       main_thr = false
+      main_thr = context_main(context)
 
-      begin
-        conf_mtx.lock
-
+      main_mtx.synchronize do
         begin
           debug "Configure sources"
           ## configure event sources for this instance of the implementing class
           self.map_sources(context)
-          debug "Call for main thread"
-          main_thr = context_main(context)
+          context.configured = true
         rescue
           debug_event(context, $!)
           main_thr.exit if main_thr
           return false
+        ensure
+          debug "cv broadcast"
+          main_cv.broadcast
         end
+      end ## main sync for initial conf
 
-        ## yield to the provided block, outside of the main event loop
-        ##
-        ## after this section returns, the main loop will exit
-
+      ## yield to the provided block
+      ##
+      ## the main loop may have begun iteration,
+      ## parallel to this section
+      begin
         catch(:main) do
-          main_mtx.synchronize do
-            conf_mtx.unlock
-            block.yield(main_thr) if block_given?
-          end
+          debug "yielding to block in main thread"
+          block.yield(main_thr) if block_given?
         end
+      ensure
+        ## cleanup after the main loop releases main_mtx and exits
+        main_mtx.synchronize do
+          ## reached far too soon
+          debug "post-configure in main thread"
+          main_thr.join
+        end
+      end
 
-        # context.unref # no unref needed here
-        main_thr.join
-        return true
-      end ## conf_mtx
+      debug "returning in main thread"
+      return true
     end
 
 
-    ## Configure all sources for the service's context.
+    ## Configure all sources for the GMain's context.
     ##
     ## @abstract This is a prototype method. A map_sources method should be
     ## implemented in any subclass, independent of this method. If reached
@@ -632,7 +650,7 @@ module PebblApp
     ## thread.
     ##
     ## This method can be overridden and/or extended, to provide
-    ## custom framework dispatch in the service main event loop.
+    ## custom framework dispatch in the GMain main event loop.
     ##
     def context_dispatch(context)
       context.iteration(context.blocking)
@@ -681,7 +699,7 @@ module PebblApp
     ##
     def context_main(context)
       main_mtx = context.main_mtx
-      conf_mtx = context.conf_mtx
+      main_cv = context.main_cv
 
       Thread.new do
         debug "main context thread begins"
@@ -697,37 +715,42 @@ in #{self} thread #{Thread.current}", uplevel: 0)
           Thread.exit
         end
 
-        main = GLib::MainLoop.new(context, false) ## false => not run
-        # @main = main ## not recommended to store this outside of #main
-        ## hold for conf_mtx, while caller is configuring event sources
-        conf_mtx.synchronize do
+        main = main_loop_new(context)
 
-          ## Iterate in the event loop until the main_mtx can be held, or
-          ## until the cancellation object for this context is cancelled.
-          ##
-          ## Once the mutex can be held here: Cleanup; Release the mutex
-          ## if held, and return
-          debug_event(context, :main_iterate)
-          catch(:main_loop) do |tag|
-            while ! main_mtx.try_lock
-              if context.cancellation.cancelled?
-                ## lock not held, but cancellation is indicated
-                throw tag
-              else
-                context_dispatch(context)
+        main_mtx.synchronize do
+          debug "main loop pre-cv wait"
+          cv_reached = false
+          if ! context.configured
+            ## block for configuration section if not configured
+            ##
+            ## not reached in tests - configuration is performed
+            ## while main_mtx is held
+            cv_reached = main_cv.wait(main_mtx)
+            debug "reached cv #{cv_reached.inspect}"
+          end
+
+          debug "main loop post-cv wait"
+          begin
+            ## iterating in the event loop until the cancellation
+            ## object for this context is cancelled.
+            debug_event(context, :main_iterate)
+            catch(:main_iterate) do |tag|
+              while true
+                if context.cancellation.cancelled?
+                  throw tag
+                else
+                  ## dispatch for this iteration of the main loop
+                  context_dispatch(context)
+                end
               end
             end
-          end
-          begin
+          ensure
             debug_event(context, :main_context_end)
             debug "end of main context"
-            ## cleanup
+            ## cleanups
+            context.release
             main.quit
-            # main.unref # no unref needed here
-          ensure
-            ## own thread may not have held the mutex, when this
-            ## is reached under cancellation
-            main_mtx.unlock if main_mtx.owned?
+            main_cv.broadcast if cv_reached
           end
         end ## conf_mtx
       end ## thread
