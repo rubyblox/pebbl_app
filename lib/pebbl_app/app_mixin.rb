@@ -1,6 +1,6 @@
-## Definition of PebblApp::App
+## Definition of PebblApp::AppMixin
 
-require 'pebbl_app/framework'
+require 'pebbl_app'
 
 require 'forwardable'
 require 'open3'
@@ -22,8 +22,81 @@ module PebblApp
   ## - #app_command_name
   ## - #file_manager and methods forwarding to the same
   ## - #config
-  class App
+  module AppMixin
 
+    class << self
+
+      ## Utility method for parsing an arbitrary args list, such that
+      ## may be suffixed with options in a hash syntax.
+      ##
+      ## If the last element in args is a hash object, returns a
+      ## subsequence of args excluding the last element, else returns
+      ## args
+      ##
+      ## @param args [Array] args array, in a syntax as when receiving a
+      ## "splat" array
+      def args_main(args)
+        last = args.last
+        if (Hash === last)
+          args[0...-1]
+        else
+          args
+        end
+      end
+
+      ## Utility method for parsing an arbitrary args list, such that
+      ## may be suffixed with options in a hash syntax.
+      ##
+      ## If the last element in args is a hash object, returns that hash
+      ## object, else returns false
+      ##
+      ## @param args (see args_main)
+      ## @return a Hash, or false
+      def args_rest(args)
+        last = args.last
+        if (Hash === last)
+          last
+        else
+          false
+        end
+      end
+
+      ## Utility method for parsing an arbitrary args list, such that
+      ## may be suffixed with options in a hash syntax.
+      ##
+      ## If the last element in args is a hash, returns the value of the
+      ## named option in that hash. Else, returns false
+      ##
+      ## @param opt [Symbol, String] args option. If provided as a
+      ##  string, the symbol representation of that string will be used
+      ##
+      ## @param args (see args_main)
+      def args_opt(opt, args)
+        if (last = args_rest args) && (Hash === last)
+          opt_s = opt.to_sym
+          return last[opt_s]
+        else
+          return false
+        end
+      end
+
+    end ## class <<
+
+    def self.included(whence)
+      whence.include LoggerMixin
+    end
+
+    def initialize(*args)
+      ## super() may forward to the actual superclass of the
+      ## implementing class
+      if (logger = AppMixin.args_opt(:logger, args))
+        logger = rest[:logger]
+      else
+        logger = AppLog.new
+      end
+      super(*AppMixin.args_main(args))
+      AppLog.app_log = (@logger = logger)
+    end
 
     ## configure this application
     ##
@@ -44,16 +117,17 @@ module PebblApp
       Kernel.warn("Reached prototype #{__method__} method", uplevel: 0)
     end
 
-    ## activate the application
+    ## run the application
     ##
-    ## The method provided here will pass the provided argv array to
-    ## #configure.
+    ## This method will pass the provided argv array to #configure, then
+    ## calling #start
     ##
-    ## the provided argv may be destructively modified by this method
-    def main(argv: ARGV)
-      configure(argv: argv)
-      start()
-    end
+    ## The provided argv may be destructively modified by this method
+    ##
+    # def main(argv: ARGV)
+    #   configure(argv: argv)
+    #   start()
+    # end
 
     ## return the app name for this module
     ##

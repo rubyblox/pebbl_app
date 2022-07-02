@@ -55,6 +55,7 @@ gems:
       - lib/pebbl_app.rb
       - lib/pebbl_app/app.rb
       - lib/pebbl_app/app_log.rb
+      - lib/pebbl_app/app_mixin.rb
       - lib/pebbl_app/attr_proxy.rb
       - lib/pebbl_app/conf.rb
       - lib/pebbl_app/const.rb
@@ -62,7 +63,6 @@ gems:
       - lib/pebbl_app/files.rb
       - lib/pebbl_app/file_manager.rb
       - lib/pebbl_app/framework.rb
-      - lib/pebbl_app/project.rb
       - lib/pebbl_app/logger_mixin.rb
       - lib/pebbl_app/project_module.rb
       - lib/pebbl_app/shell.rb

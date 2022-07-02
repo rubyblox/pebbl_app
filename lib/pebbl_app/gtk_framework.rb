@@ -16,31 +16,30 @@ module PebblApp
   include ProjectModule
 
   defautoloads(
-    __dir__,
-    {"gapp" =>
-     %w(GAppCancellation GAppContext GApp),
-   "gtk_app" =>
-     %w(GtkApp),
-   "gtk_conf" =>
-     %w(GtkConf),
-   "gir_proxy" =>
-     %w(InvokerP FuncInfo),
-   "gtk_framework/logging" =>
-     ## FIXME remove, update usage onto ServiceLogger
-   %w(LoggerDelegate LogManager LogModule),
-   "gtk_framework/threads" => ## FIXME remove, refactor legacy to use "anonymous threads"
-     %w(NamedThread),
-   ## FIXME move the next three files to ./
-   "gtk_framework/gobj_type" =>
-     %w(GObjType),
-   "gtk_framework/builders" =>
-     %w(UIBuilder TemplateBuilder
-        ResourceTemplateBuilder FileTemplateBuilder),
-   "gtk_framework/gbuilder_app" =>
-     %w(GBuilderApp),
-   ## FIXME deprecate SysExit / integrate with the Service class
-   "gtk_framework/sysexit" =>
-     %w(SysExit)
+    __dir__, {
+      "gapp_mixin.rb" =>
+        %w(GAppMixin),
+      "gmain" =>
+        %w(GMainCancellation GMainContext GMain),
+      "gtk_app" =>
+        %w(GtkMain GtkApp),
+      "gtk_conf" =>
+        %w(GtkConf),
+      "gir_proxy" =>
+        %w(InvokerP FuncInfo),
+      "gtk_framework/logging" =>
+      %w(LoggerDelegate LogManager LogModule),
+      "gtk_framework/threads" => ## FIXME remove, refactor legacy to use "anonymous threads"
+        %w(NamedThread),
+      "gtk_framework/gobj_type" =>
+        %w(GObjType),
+      "gtk_framework/builders" =>
+        %w(UIBuilder TemplateBuilder
+           ResourceTemplateBuilder FileTemplateBuilder),
+      "gtk_framework/gbuilder_app" =>
+        %w(GBuilderApp),
+      "gtk_framework/sysexit" =>
+        %w(SysExit)
     })
 
   ## prototype implementation of independent framework support for

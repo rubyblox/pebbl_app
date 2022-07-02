@@ -25,43 +25,79 @@ require 'timeout'
 ## - provide support for issue tracking for applications
 module PebblApp
 
-  class GtkApp < GApp
+  class GtkMain < GMain
+    def context_dispatch(context)
+      super(context)
+      Gtk.main_iteration_do(true)
+    end
+  end
+
+
+  class GtkApp < Gtk::Application
+    include GAppMixin ## TBD this && GtkAppMixin
 
     def conf
       @conf ||= PebblApp::GtkConf.new() do
         ## FIXME store this deferred app_cmd_name block as a proc
-        ## in an AppMixin const, use by default with some config_class
+        ## in an AppMixin const, use; by default with some config_class
         ## method on the class in AppMixin
         self.app_cmd_name
       end
     end
 
-    ## prototype method, should be overridden in implementing classes
-    ##
-    ## called from #main, after framwork initialization start(args)
-    warn("Reached prototype #{__method__} method", uplevel: 0)
-  end
 
-  def context_dispatch(context)
-    super()
-    throw :main if Gtk.main_iteration_do(false)
-  end
+    def main_new()
+      GtkMain.new(logger: AppLog.app_log)
+    end
 
-  def main(argv: ARGV)
-    configure(argv: argv)
+    def context_default()
+      ## a while there is no API onto g_main_context_push_thread_default
+      ## in Ruby-GNOME, a workaround: always using the default context,
+      ## across all threads in the process environment (needs further testing)
+      ##
+      ## may not be interoperable with Gtk.main, like anything except Gtk.main
+      ##
+      if GtkApp.class_variable_defined?(:@@default_context)
+        GtkApp.class_variable_get(:@@default_context)
+      else
+        default = DefaultContext.new(logger: logger)
+        GtkApp.class_variable_set(:@@default_context, default)
+      end
+    end
 
+    ## [needs docs, subsq. of the next iteration in API refactoring]
+    def main(argv: ARGV, &block)
+      AppLog.app_log ||= AppLog.new
+      configure(argv: argv)
 
-    timeout = self.conf.gtk_init_timeout
-    app_args = self.conf.gtk_args
-    ## TBD instance storage for the framework obj
-    framework = PebblApp::GtkFramework.new(timeout: timeout)
-    ## Not Reached
-    Kernel.warn("Calling framework.init in #{self}#{__method__}", uplevel: 0) if $DEBUG
-    next_args = framework.init(argv: app_args)
-    context = self.context_new
-    super(context) do |thread|
-      self.start(next_args)
+      timeout = self.conf.gtk_init_timeout
+      ## TBD instance storage for the framework obj
+      framework = PebblApp::GtkFramework.new(timeout: timeout)
+
+      gmain = (@gmain ||= main_new)
+      gmain.debug("framework.init in #{self}#{__method__}")
+      app_args = self.conf.gtk_args
+      open_args = framework.init(argv: app_args)
+
+      def gmain.context_acquired(context)
+        ## FIXME ...
+        context.debug("Context acquired")
+      end
+
+      if block_given?
+        cb = block
+      else
+        cb = proc do |thr|
+          info("Activate")
+          register()
+          if open_args.empty?
+            activate()
+          else
+          end
+        end ## proc
+      end
+
+      gmain.main(context_default, &cb)
     end
   end
-
 end

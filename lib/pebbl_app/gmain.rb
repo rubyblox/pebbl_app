@@ -99,9 +99,14 @@ module PebblApp
   end
 
   ## see GMain
-  class GMainContext < GLib::MainContext
+  module ContextProxy # < GLib::MainContext
 
-    include LoggerMixin
+    def self.included(whence)
+      whence.include LoggerMixin
+      whence.extend Forwardable
+      whence.def_delegators(:@cancellation, :cancel, :cancelled?, :reset)
+    end
+
     def debug_event(tag)
       if $DEBUG && respond_to?(:log_event)
         log_event(tag)
@@ -134,6 +139,27 @@ module PebblApp
       ## used in GMain#context_dispatch
       @blocking = blocking
       @logger = logger
+    end
+
+  end
+
+  class GMainContext < GLib::MainContext
+    include ContextProxy
+  end
+
+
+  class DefaultContext
+    include ContextProxy
+
+    attr_reader :context
+    self.extend Forwardable
+    GLib::MainContext.instance_methods(false).each do |mtd|
+      def_delegator(:@context, mtd)
+    end
+
+    def initialize(blocking: true, logger: AppLog.new)
+      super(blocking: blocking, logger: logger)
+      @context = GLib::MainContext.default
     end
 
   end
@@ -418,8 +444,8 @@ module PebblApp
       ##
       def map_idle_source(context, priority: :default_idle,
                           remove_on_nil: false, &callback)
-        context.debug "adding idle source for context"
-        context.debug_event(__method__)
+        context.debug "adding idle source for context #{context}" if context.respond_to?(:debug)
+        context.debug_event(__method__) if context.respond_to?(:debug_event)
 
         src = GLib::Idle.source_new
         configure_source(context, src, priority, remove_on_nil, callback)
@@ -533,7 +559,8 @@ module PebblApp
 
     include LoggerMixin
 
-    def initialize(logger: PebblApp::AppLog.new)
+    def initialize(logger: PebblApp::AppLog.new(domain: AppLog.iname(self)))
+
       ## NB this class does not provide  any #configure method
       ## for application config or any #gapp initialization
       @logger = logger
@@ -563,9 +590,7 @@ module PebblApp
       main_mtx = context.main_mtx
       ## condition variable for synchronization after map_sources
       main_cv = context.main_cv
-
       main_thr = false
-      main_thr = context_main(context)
 
       main_mtx.synchronize do
         begin
@@ -573,8 +598,10 @@ module PebblApp
           ## configure event sources for this instance of the implementing class
           self.map_sources(context)
           context.configured = true
+          main_thr = context_main(context)
         rescue
           debug_event(context, $!)
+          context.cancel($!)
           main_thr.exit if main_thr
           return false
         ensure
@@ -593,10 +620,10 @@ module PebblApp
           block.yield(main_thr) if block_given?
         end
       ensure
-        ## cleanup after the main loop releases main_mtx and exits
+        ## cleanup after the main loop
         main_mtx.synchronize do
           ## reached far too soon
-          debug "post-configure in main thread"
+          debug "post-loop in main thread"
           main_thr.join
         end
       end
@@ -604,7 +631,6 @@ module PebblApp
       debug "returning in main thread"
       return true
     end
-
 
     ## Configure all sources for the GMain's context.
     ##
@@ -684,9 +710,10 @@ module PebblApp
     def context_error(context, exception)
       ## the following should result in the main loop returning before any
       ## subsequent context#iteration call
-      context.cancellation.cancel(exception)
+      context.cancel(exception)
       debug_event(context, exception)
     end
+
 
     ## an adaptation after `thread1_main` in
     ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
@@ -715,16 +742,15 @@ in #{self} thread #{Thread.current}", uplevel: 0)
           Thread.exit
         end
 
-        main = main_loop_new(context)
+        context_acquired(context)
+
+        # main = main_loop_new(context) ## only used for main.quit subsq? (FIXME)
 
         main_mtx.synchronize do
           debug "main loop pre-cv wait"
           cv_reached = false
           if ! context.configured
             ## block for configuration section if not configured
-            ##
-            ## not reached in tests - configuration is performed
-            ## while main_mtx is held
             cv_reached = main_cv.wait(main_mtx)
             debug "reached cv #{cv_reached.inspect}"
           end
@@ -736,7 +762,7 @@ in #{self} thread #{Thread.current}", uplevel: 0)
             debug_event(context, :main_iterate)
             catch(:main_iterate) do |tag|
               while true
-                if context.cancellation.cancelled?
+                if context.cancelled?
                   throw tag
                 else
                   ## dispatch for this iteration of the main loop
@@ -749,7 +775,7 @@ in #{self} thread #{Thread.current}", uplevel: 0)
             debug "end of main context"
             ## cleanups
             context.release
-            main.quit
+            # main.quit ## 'main' object unused here, otherwise ...
             main_cv.broadcast if cv_reached
           end
         end ## conf_mtx

@@ -121,7 +121,6 @@ class DispatchTest < PebblApp::GMain
   def initialize()
     super()
     self.logger.level = "DEBUG" ## for purpose of tests
-    self.logger.domain = PebblApp::AppLog.iname(self)
     @handlers = PebblApp::SignalMap.new
     @data = TestData.new
   end
@@ -145,7 +144,7 @@ class DispatchTest < PebblApp::GMain
     PebblApp::GMain.map_idle_source(context, priority: :default) do
       ## each idle source's callback will be called
       ## in each main loop iteration
-      if context.cancellation.cancelled?
+      if context.cancelled?
         ## not yet reached under tests
         debug("In callback (cancelled)")
       else
@@ -173,7 +172,7 @@ class DispatchTest < PebblApp::GMain
     initial_debug = $DEBUG
     $DEBUG = true
 
-    debug("in #main(#{wait}) @ #{self}")
+    debug("in #main(#{wait})")
 
     begin ## debug block
       data = self.data

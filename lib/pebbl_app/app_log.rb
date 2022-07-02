@@ -241,6 +241,8 @@ module PebblApp
     def write(text)
       begin
         @io.write(text)
+        @io.flush
+        text
       rescue
         warn "Error when writing log to #{io}: #{$!}"
       end
@@ -553,7 +555,22 @@ module PebblApp
           false
         end
       end
-    end
+
+      def app_log=(logger)
+        class_variable_set(:@@app_log, logger)
+      end
+
+      def app_log()
+        if class_variable_defined?(:@@app_log)
+          class_variable_get(:@@app_log)
+        else
+          false
+        end
+      end
+
+    end ## class << AppLog
+
+    extend AppLoggerMixin
 
     ## Initialize a new AppLog
     ##

@@ -18,10 +18,137 @@ module PebblApp
     def self.included(whence)
       ## Logger for this class
       whence.attr_reader :logger
-
-      whence.extend Forwardable
-      whence.def_delegators(:@logger, :debug, :error, :fatal, :info, :warn)
     end
-  end
+    def debug(message)
+      if instance_variable_defined?(:@logger)
+        log = instance_variable_get(:@logger)
+        log.add(Logger::DEBUG, message)
+      else
+        Kernel.warn(message, uplevel: 1)
+      end
+    end
+    def error(message)
+      if instance_variable_defined?(:@logger)
+        log = instance_variable_get(:@logger)
+        log.add(Logger::ERROR, message)
+      else
+        Kernel.warn(message, uplevel: 1)
+      end
+    end
+    def fatal(message)
+      if instance_variable_defined?(:@logger)
+        log = instance_variable_get(:@logger)
+        log.add(Logger::FATAL, message)
+      else
+        Kernel.warn(message, uplevel: 1)
+      end
+    end
+    def info(message)
+      if instance_variable_defined?(:@logger)
+        log = instance_variable_get(:@logger)
+        log.add(Logger::INFO, message)
+      else
+        Kernel.warn(message, uplevel: 1)
+      end
+    end
+    def warn(message)
+      if instance_variable_defined?(:@logger)
+        log = instance_variable_get(:@logger)
+        log.add(Logger::WARN, message)
+      else
+        Kernel.warn(message, uplevel: 1)
+      end
+    end
 
+  end ## LoggerMixinin
+
+  module AppLoggerMixin
+    def self.included(whence)
+      def debug(message)
+        if instance_variable_defined?(:@app_log)
+          log = instance_variable_get(:@app_log)
+          log.add(Logger::DEBUG, message)
+        else
+          Kernel.warn(message, uplevel: 1)
+        end
+      end
+      def error(message)
+        if instance_variable_defined?(:@app_log)
+          log = instance_variable_get(:@app_log)
+          log.add(Logger::ERROR, message)
+        else
+          Kernel.warn(message, uplevel: 1)
+        end
+      end
+      def fatal(message)
+        if instance_variable_defined?(:@app_log)
+          log = instance_variable_get(:@app_log)
+          log.add(Logger::FATAL, message)
+        else
+          Kernel.warn(message, uplevel: 1)
+        end
+      end
+      def info(message)
+        if instance_variable_defined?(:@app_log)
+          log = instance_variable_get(:@app_log)
+          log.add(Logger::INFO, message)
+        else
+          Kernel.warn(message, uplevel: 1)
+        end
+      end
+      def warn(message)
+        if instance_variable_defined?(:@app_log)
+          log = instance_variable_get(:@app_log)
+          log.add(Logger::WARN, message)
+        else
+          Kernel.warn(message, uplevel: 1)
+        end
+      end
+    end ## AppLoggerMixin included
+
+    def self.extended(whence)
+      class << whence
+        def debug(message)
+          if class_variable_defined?(:@@app_log)
+            log = class_variable_get(:@@app_log)
+            log.add(Logger::DEBUG, message)
+          else
+            Kernel.warn(message, uplevel: 1)
+          end
+        end
+        def error(message)
+          if class_variable_defined?(:@@app_log)
+            log = class_variable_get(:@@app_log)
+            log.add(Logger::ERROR, message)
+          else
+            Kernel.warn(message, uplevel: 1)
+          end
+        end
+        def fatal(message)
+          if class_variable_defined?(:@@app_log)
+            log = class_variable_get(:@@app_log)
+            log.add(Logger::FATAL, message)
+          else
+            Kernel.warn(message, uplevel: 1)
+          end
+        end
+        def info(message)
+          if class_variable_defined?(:@@app_log)
+            log = class_variable_get(:@@app_log)
+            log.add(Logger::INFO, message)
+          else
+            Kernel.warn(message, uplevel: 1)
+          end
+        end
+        def warn(message)
+          if class_variable_defined?(:@@app_log)
+            log = class_variable_get(:@@app_log)
+            log.add(Logger::WARN, message)
+          else
+            Kernel.warn(message, uplevel: 1)
+          end
+        end
+      end
+    end ## AppLoggerMixin extended
+  end
 end

@@ -35,6 +35,7 @@ module PebblApp
     end ## self.autoload method
   end ## class << self
 
+  autoload(:AppMixin, 'pebbl_app/app_mixin.rb')
   autoload(:App, 'pebbl_app/app.rb')
   autoload(:Const, 'pebbl_app/const.rb')
   autoload(:Files, 'pebbl_app/files.rb')
@@ -42,6 +43,7 @@ module PebblApp
   autoload(:Framework, 'pebbl_app/framework.rb')
   autoload(:EnvironmentError, 'pebbl_app/exceptions.rb')
   autoload(:LoggerMixin, "pebbl_app/logger_mixin.rb")
+  autoload(:AppLoggerMixin, "pebbl_app/logger_mixin.rb")
   autoload(:Project, 'pebbl_app/project.rb')
   autoload(:ProjectModule, 'pebbl_app/project_module.rb')
   autoload(:Shell, 'pebbl_app/shell.rb')

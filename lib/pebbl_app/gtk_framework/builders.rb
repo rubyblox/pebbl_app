@@ -11,7 +11,7 @@ BEGIN {
 # require 'gtk3'
 
 ## encapsulation for Gtk::Builkder
-module PebblApp::GtkSupport::UIBuilder
+module PebblApp::GtkFramework::UIBuilder
   def self.extended(extclass)
 
     ## FIXME the following should be defined as instance methods

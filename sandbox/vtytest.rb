@@ -19,31 +19,32 @@
 #require 'pebbl_app/gtk_app_mixin'
 require 'pebbl_app/gtk_app'
 
-framework = PebblApp::GtkFramework.new(timeout: 10)
-begin
-  framework.init
-rescue PebblApp::FrameworkErrror => e
-  this = File.basename($0)
-  STDERR.puts "[DEBUG] #{this}: Failed in Gtk.init"
-  STDERR.puts e.full_message
-  ## FIXME could initialize either pry or irb here, if found
-  begin
-    irb = Gem::Specification.find_by_name("irb")
-  rescue
-    STDERR.puts "irb not found"
-    exit(-1)
-  end
-  ## drop into irb and disable $DEBUG
-  ## - Some $DEBUG output may interfere with tty i/o under IRB
-  irb.activate
-  $DEBUG = false
-  $INIT_ERROR = e
-  require %q(bundler/setup)
-  require %q(irb)
-  require %q(irb/completion)
-  STDERR.puts "[DEBUG] #{this}: Gtk::InitError stored as $INIT_ERROR"
-  IRB.start(__FILE__)
-end
+## FIXME integrate with GtkApp
+# framework = PebblApp::GtkFramework.new(timeout: 10)
+# begin
+#   framework.init
+# rescue PebblApp::FrameworkErrror => e
+#   this = File.basename($0)
+#   STDERR.puts "[DEBUG] #{this}: Failed in Gtk.init"
+#   STDERR.puts e.full_message
+#   ## FIXME could initialize either pry or irb here, if found
+#   begin
+#     irb = Gem::Specification.find_by_name("irb")
+#   rescue
+#     STDERR.puts "irb not found"
+#     exit(-1)
+#   end
+#   ## drop into irb and disable $DEBUG
+#   ## - Some $DEBUG output may interfere with tty i/o under IRB
+#   irb.activate
+#   $DEBUG = false
+#   $INIT_ERROR = e
+#   require %q(bundler/setup)
+#   require %q(irb)
+#   require %q(irb/completion)
+#   STDERR.puts "[DEBUG] #{this}: Gtk::InitError stored as $INIT_ERROR"
+#   IRB.start(__FILE__)
+# end
 
 require 'vte3'
 require 'shellwords'
@@ -87,6 +88,7 @@ end
 module GObjectExtension
 
   def self.extended(whence)
+    whence.include PebblApp::AppLoggerMixin ## instance methods for logging
 
     class << whence
 
@@ -225,7 +227,7 @@ module CompositeWidget
       ##
       def initialize_template_children(children, path)
         children.each do |id|
-          Kernel.warn("Binding template child #{id} for #{self}", uplevel: 0) ## DEBUG
+          PebblApp::AppLog.debug("Binding template child #{id} for #{self}")
 
           ## an alternate approach after bind_template_child(id)
           ## 1) bind the template child as an internal template child
@@ -295,8 +297,7 @@ module FileCompositeWidget
           fio = gfile.read
           nbytes = File.size(filename)
           bytes = fio.read_bytes(nbytes)
-          Kernel.warn("Setting template data for #{self} @ #{filename}",
-                      uplevel: 0) ## DEBUG
+          PebblApp::AppLog.debug("Setting template data for #{self} @ #{filename}")
           self.set_template(data: bytes)
         ensure
           fio.unref() if fio
@@ -368,7 +369,7 @@ class VtyPrefsWindow < Gtk::Dialog
   ## close the prefs window without updating configuration changes
   def prefs_cancel(obj)
     ## mapped to the "clicked" signal for a button in the dialog window
-    Kernel.warn("cancel @ #{obj} => #{self}", uplevel: 0)
+    debug("cancel @ #{obj} => #{self}")
     self.close
   end
 
@@ -449,18 +450,17 @@ class VtyAppWindow < Gtk::ApplicationWindow
 
 
   def initialize(app)
-    Kernel.warn("Initializing #{self}", uplevel: 0)
-
+    PebblApp::AppLog.debug("Initializing #{self}")
     super(application: app)
     ##
     ## local conf
     ##
 
     # prefixes = self.action_prefixes
-    # Kernel.warn("Action prefixes (#{prefixes.length})")
+    # debug("Action prefixes (#{prefixes.length})")
     # prefixes.each do |pfx|
     #   ## >> win, app
-    #   Kernel.warn pfx
+    #   debug pfx
     # end
 
     ## hack in a default newline for the Vte::Pty in the Vte::Terminal
@@ -498,7 +498,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
     ## for a pty I/O mode, though the Vte::Pty is not accessible here (FIXME)
     sh = self.shell
     vty_env = ENV.map { |elt| "%s=%s" % elt }
-    Kernel.warn("Using shell #{sh.inspect}", uplevel: 0)
+    debug("Using shell #{sh.inspect}")
     # it = self.vty.spawn_async(Vte::PtyFlags::DEFAULT, Dir.pwd,
     #                           sh, vty_env, GLib::Spawn::SEARCH_PATH, -1)
     ## ^ can add an additional arg of type Gio::Cancellable
@@ -508,7 +508,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
     ##   subprocess pre-exec environment
     ## ^ should return the PID, returning in the parent process
 
-    #Kernel.warn("Using vty: #{self.vty.inspect}", uplevel: 0)
+    #debug("Using vty: #{self.vty.inspect}")
 
     ## before starting any shell ... binding a signal on pty activation
     self.vty.signal_connect_after("notify::pty") do |obj, prop|
@@ -518,7 +518,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
       ## update the subprocess_pty for this app window
       was_pty = self.subprocess_pty
       self.subprocess_pty = obj.pty
-      Kernel.warn(
+      debug(
         "PTY updated for %s : %p => %p" % [
           self, was_pty, obj.pty
         ])
@@ -538,7 +538,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
       ## PTY, as well as for any full-string send
       ##
       ## of course, this is not activated on direct send to the PTY FD
-      Kernel.warn("Commit: #{text.inspect}")
+      debug("Commit: #{text.inspect}")
     end
 
     ## TBD move this to a ManagedPty adapter
@@ -546,7 +546,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
                                         sh, vty_env, GLib::Spawn::SEARCH_PATH)
 
     if success
-      Kernel.warn("Initializing #{pid} for #{self}")
+      debug("Initializing #{pid} for #{self}")
       sh_shortname = File.basename(self.shell.first)
       self.title = sh_shortname
       self.vtwin_header.title = sh_shortname
@@ -555,7 +555,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
     else
       self.vtwin_header.subtitle = Const::FAILED
       ## FIXME needs a more graceful handler
-      Kernel.warn("Failed. closing window")
+      debug("Failed. closing window")
       self.close
     end
 
@@ -651,13 +651,13 @@ class VtyAppWindow < Gtk::ApplicationWindow
     ## using feed_child_raw (if defined)
     ## or feed_child (if local sources / updated)
     text = vty_entry_buffer.text + self.newline
-    Kernel.warn("Sending text: #{text.inspect}")
+    debug("Sending text: #{text.inspect}")
     if vty.respond_to?(:feed_child_raw)
-      Kernel.warn("DEBUG using feed_child_raw")
+      # debug("using feed_child_raw")
       vty.feed_child_raw(text)
     else
       ## patch
-      Kernel.warn("DEBUG using feed_child")
+      # debug("using feed_child")
       vty.feed_child(text)
     end
   end
@@ -680,9 +680,15 @@ class VtyAppWindow < Gtk::ApplicationWindow
 end
 
 
-class VtyApp < Gtk::Application
+##
+## VtyApp
+##
+class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
+#class VtyApp < Gtk::Application
   ## FIXME GtkFramework integration - see start of source file
   # include PebblApp::GtkAppMixin
+
+  include PebblApp::LoggerMixin
 
   class << self
     ## internal instance tracking for VtyApp
@@ -760,7 +766,7 @@ class VtyApp < Gtk::Application
       end
     end
 
-    Kernel.warn("Binding action #{prefix}.#{name} for #{self}", uplevel: 1)
+    debug("Binding action #{prefix}.#{name} for #{self}")
 
     act = Gio::SimpleAction.new(name)
     if block_given?
@@ -782,7 +788,7 @@ class VtyApp < Gtk::Application
     ## may not be reached in the underlying API when this method is
     ## overridden, unless this method is called directly as from this
     ## class or a subclass
-    Kernel.warn("Registering #{self.inspect}", uplevel: 0)
+    debug("Registering #{self.inspect}")
     super()
   end
 
@@ -827,11 +833,9 @@ class VtyApp < Gtk::Application
   def handle_startup()
 
     if ((started = self.class.started) && !started.eql?(self))
-      Kernel.warn("Starting duplicate instance for #{self.class}: #{self.inspect} - existing: #{started.inspect}",
-                  uplevel: 1)
+      debug("Starting duplicate instance for #{self.class}: #{self.inspect} - existing: #{started.inspect}")
     else
-      Kernel.warn("Starting initial instance for #{self.class}: #{self.inspect}",
-                  uplevel: 1)
+      debug("Starting initial instance for #{self.class}: #{self.inspect}")
     end
 
     ## bind C-q to an 'app.quit' action,
@@ -843,8 +847,7 @@ class VtyApp < Gtk::Application
 
   ## handler for the app 'activate' signal
   def handle_activate()
-      Kernel.warn("Handling activate for #{self.class}: #{self.inspect}",
-                  uplevel: 1)
+      debug("Handling activate for #{self.class}: #{self.inspect}")
       window = create_app_window
       window.present
   end
@@ -882,8 +885,7 @@ class VtyApp < Gtk::Application
     self.windows.each do |wdw|
       wdw.close
     end
-    Kernel.warn("Calling Gtk.main_quit in Thread 0x%06x" % [Thread.current.__id__],
-                uplevel: 0)
+    debug("Calling Gtk.main_quit in Thread 0x%06x" % [Thread.current.__id__])
     Gtk.main_quit
   end
 
@@ -897,34 +899,32 @@ class VtyApp < Gtk::Application
     end
   end
 
-  ## run this application
   def run()
     if self.registered?
-      Kernel.warn("Already registered: #{self}", uplevel: 0)
+      debug("Already registered: #{self}")
       ## if self.remote?
       ##  ... self is not the primary application instance ...
       ## end
     else
-      Kernel.warn("Registering #{self}", uplevel: 0)
+      debug("Registering #{self}")
       ## may err - see devhelp
       ## the register call will result in the 'startup' signal
       ## activating for the application
       self.register
     end
-    Kernel.warn("Start for #{self}", uplevel: 0)
-    self.start
-    super
+    debug("Start for #{self}")
+    self.start ## FIXME circuitous
+    super ## maybe quite not, but it's entirely useless without that?
   end
 
   def start(args = nil)
     ## originally called from #main, via inclusion of PebblApp::GtkAppMixin,
     ## after Gtk framework init
     if args && (! args.empty?)
-      Kernel.warn("Discarding args: #{args.inspect}", uplevel: 0)
+      debug("Discarding args: #{args.inspect}")
     end
 
-    Kernel.warn("Starting #{self} with default shell #{self.default_shell}",
-                uplevel: 0)
+    debug("Starting #{self} with default shell #{self.default_shell}")
 
 
     ## FIXME first map a handler for the "startup" signal
