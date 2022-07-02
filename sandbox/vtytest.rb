@@ -683,28 +683,8 @@ end
 ##
 ## VtyApp
 ##
-class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
-#class VtyApp < Gtk::Application
-  ## FIXME GtkFramework integration - see start of source file
-  # include PebblApp::GtkAppMixin
-
-  include PebblApp::LoggerMixin
-
-  class << self
-    ## internal instance tracking for VtyApp
-    ## - not yet integrated with dbus
-    def started
-      if class_variable_defined?(:@@started)
-        @@started
-      else
-        false
-      end
-    end
-
-    def started=(inst) # ...
-      @@started = inst
-    end
-  end ## class << self
+class VtyApp < Gtk::Application
+  include PebblApp::AppMixin
 
   ## ad hoc place holders for app conf @ shell
   def default_shell=(cmd)
@@ -831,13 +811,6 @@ class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
 
   ## handler for the app's 'startup' signal,
   def handle_startup()
-
-    if ((started = self.class.started) && !started.eql?(self))
-      debug("Starting duplicate instance for #{self.class}: #{self.inspect} - existing: #{started.inspect}")
-    else
-      debug("Starting initial instance for #{self.class}: #{self.inspect}")
-    end
-
     ## bind C-q to an 'app.quit' action,
     ## also defining a handler for that action
     self.map_simple_action("app.quit", accel: "<Ctrl>Q") do
@@ -899,47 +872,24 @@ class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
     end
   end
 
-  def run()
-    if self.registered?
-      debug("Already registered: #{self}")
-      ## if self.remote?
-      ##  ... self is not the primary application instance ...
-      ## end
+  def main(argv: ARGV)
+    PebblApp::AppLog.app_log ||= PebblApp::AppLog.new
+    configure(argv: argv)
+
+    timeout = self.conf.gtk_init_timeout
+    framework = PebblApp::GtkFramework.new(timeout: timeout)
+
+    app_args = self.conf.gtk_args.dup
+    open_args = framework.init(argv: app_args)
+
+    info("Activate")
+    register() ## at most once (FIXME)
+    if open_args.empty?
+      activate()
     else
-      debug("Registering #{self}")
-      ## may err - see devhelp
-      ## the register call will result in the 'startup' signal
-      ## activating for the application
-      self.register
+      open(open_args, "".freeze)
     end
-    debug("Start for #{self}")
-    self.start ## FIXME circuitous
-    super ## maybe quite not, but it's entirely useless without that?
+    Gtk.main
   end
 
-  def start(args = nil)
-    ## originally called from #main, via inclusion of PebblApp::GtkAppMixin,
-    ## after Gtk framework init
-    if args && (! args.empty?)
-      debug("Discarding args: #{args.inspect}")
-    end
-
-    debug("Starting #{self} with default shell #{self.default_shell}")
-
-
-    ## FIXME first map a handler for the "startup" signal
-    ## in this application, before self.register
-    begin
-      self.class.started = self
-      ## calling this class' own #register directly
-      ##
-      ## in a superclass method, this may activate the application's
-      ## 'startup' signal by side effect
-      self.register
-    rescue Gio::IOError::Exists => e
-      raise e
-    end
-
-    ## TBD dispatching for run <...> start here
-  end
 end
