@@ -109,20 +109,24 @@ module GObjectExtension
         else
           class_variable_get(:@@builder)
         end
-      end
-    end
+      end ## composite_builder
 
-    ## register the class, at most once
-    if ! whence.class_variable_defined?(:@@registered)
-      ## FIXME does not detect duplcate registrations
-      ## of differing implmentation classes
-      ##
-      ## TBD detecting errors in the Gtk framework layer,
-      ## during type_register -> should be handled as error here
-      whence.type_register
-      whence.class_variable_set(:@@registered, true)
-    end
-  end
+      ## register the class, at most once
+      def register_type
+        if class_variable_defined?(:@@registered)
+          @@registered
+        else
+          ## FIXME does not detect duplcate registrations
+          ## of differing implmentation classes
+          ##
+          ## TBD detecting errors in the Gtk framework layer,
+          ## during type_register -> should be handled as error here
+          type_register
+          class_variable_set(:@@registered, self)
+        end
+      end ## register_type
+    end ## class << whence
+  end ## self.extended
 end
 
 class UIError < RuntimeError
@@ -285,7 +289,7 @@ module FileCompositeWidget
     ## initialize a file-based template for this class, using the class
     ## constant TEMPLATE to determine the template file's pathname
     def use_template(filename, children = false)
-
+      register_type
       if File.exists?(filename)
         ## NB Gio::File @ gem gio2 lib/gio2/file.rb
         ## File, GFileInputStream topics under GNOME devhelp
