@@ -112,14 +112,24 @@ module GObjectExtension
         end
       end ## composite_builder
 
+      ## set a composite_builder for this class, if not already bound
+      ##
+      ## If already bound, a warning will be emitted with Kernel.warn.
+      ## The original builder will be returned, unmodified.
+      ##
+      ## @param builder [Gtk::Builder] the builder to bind for this
+      ##  composite widget class, if not already bound
+      ##
+      ## @return [Gtk::Builder] the bound builder
       def composite_builder=(builder)
         if class_variable_defined?(:@@builder) && (@@builder != builder)
-          Kernel.warn "Ignoring duplicate builder for #{self}: #{builder}"
+          Kernel.warn("Ignoring duplicate builder for #{self}: #{builder}",
+                      uplevel: 1)
+          @@builder
         else
           @@builder = Gtk::Builder.new
         end
       end ## composite_builder
-
 
       ## register the class, at most once
       def register_type
