@@ -57,6 +57,7 @@ require 'shellwords'
 require 'stringio'
 
 module Const
+  UNKNOWN = "(unknown)".freeze
   EOF = "\u0004".freeze
   ## subtitle strings for pty state (TBD gettext)
   RUNNING = "running"
@@ -105,11 +106,20 @@ module GObjectExtension
       ##
       def composite_builder
         if ! class_variable_defined?(:@@builder)
-          class_variable_set(:@@builder,Gtk::Builder.new)
+          @@builder = Gtk::Builder.new
         else
-          class_variable_get(:@@builder)
+          @@builder
         end
       end ## composite_builder
+
+      def composite_builder=(builder)
+        if class_variable_defined?(:@@builder) && (@@builder != builder)
+          Kernel.warn "Ignoring duplicate builder for #{self}: #{builder}"
+        else
+          @@builder = Gtk::Builder.new
+        end
+      end ## composite_builder
+
 
       ## register the class, at most once
       def register_type
@@ -122,7 +132,7 @@ module GObjectExtension
           ## TBD detecting errors in the Gtk framework layer,
           ## during type_register -> should be handled as error here
           type_register
-          class_variable_set(:@@registered, self)
+          @@registered = self
         end
       end ## register_type
     end ## class << whence
@@ -229,7 +239,8 @@ module CompositeWidget
       ##  method will dispatch to initialize_template_children after
       ##  setting the template definition for the extending class.
       ##
-      def initialize_template_children(children, path)
+      def initialize_template_children(children, path: Const::UNKNOWN,
+                                       builder: self.composite_builder)
         children.each do |id|
           PebblApp::AppLog.debug("Binding template child #{id} for #{self}")
 
@@ -247,7 +258,7 @@ module CompositeWidget
 
           ## define the accessor method here, with added checks
           lmb = lambda {
-            if (obj = get_internal_child(self.class.composite_builder, id))
+            if (obj = get_internal_child(builder, id))
               return obj
             else
               raise UIError.new("No template child found for id #{id} \
@@ -295,9 +306,9 @@ module FileCompositeWidget
         ## File, GFileInputStream topics under GNOME devhelp
         gfile = false
         fio = false
-        abs = File.expand_path(filename)
+        path = File.expand_path(filename)
         begin
-          gfile = Gio::File.open(path: abs)
+          gfile = Gio::File.open(path: path)
           fio = gfile.read
           nbytes = File.size(filename)
           bytes = fio.read_bytes(nbytes)
@@ -310,8 +321,11 @@ module FileCompositeWidget
       else
         raise "Template file does not exist: #{filename}"
       end
-      self.initialize_template_children(children, abs) if children
-      return abs
+      if children
+        bld = (self.composite_builder ||= Gtk::Builder.new)
+        self.initialize_template_children(children, path: path, builder: bld)
+      end
+      return path
     end ## whence.use_template
   end
 end
