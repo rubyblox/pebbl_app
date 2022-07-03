@@ -2,9 +2,12 @@
 
 ## startup script for vtytest.rb (sandbox)
 
-$DEBUG = true
+require 'pebbl_app'
+PebblApp::AppLog.app_log ||= PebblApp::AppLog.new
 
 require_relative(%<../sandbox/vtytest.rb>)
+
+$DEBUG = true
 
 $APP = VtyApp.new
 $APP.main(argv: ARGV)
