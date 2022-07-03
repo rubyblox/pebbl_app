@@ -93,22 +93,31 @@ module GObjectExtension
 
     class << whence
 
-      ## a Gtk::Builder that can be used for class-scoped UI
-      ## definitions.
+      ## return true if a composite_builder has been initialized for
+      ## this class, else return false
       ##
-      ## It would not be recommended to reuse this Gtk::Builder
-      ## for UI definitions local to an instance scope
+      ## @return [boolean]
+      def composite_builder?
+        class_variable_defined?(:@@builder)
+      end
+
+      ## return a Gtk::Builder for UI definition in a class scope.
       ##
-      ## This builder is used for faciliating access to internal
-      ## template child objects, for method definitions in the
-      ## initialize_template_children class method. That class method
-      ## will be defined in classes extending CompositeWidget
+      ## It may not be recommended to reuse this Gtk::Builder
+      ## for UI definitions local to an instance scope.
       ##
+      ## If no composite_builder has been bound, this method will
+      ## initialize a new composite_builder as `Gtk::Builder.new`,
+      ## then storing the new instance before return.
+      ##
+      ## @return [Gtk::Builder] the composite_builder
+      ## @see composite_builder=
+      ## @see composite_builder?
       def composite_builder
-        if ! class_variable_defined?(:@@builder)
-          @@builder = Gtk::Builder.new
-        else
+        if composite_builder?
           @@builder
+        else
+          @@builder = Gtk::Builder.new
         end
       end ## composite_builder
 
@@ -122,7 +131,7 @@ module GObjectExtension
       ##
       ## @return [Gtk::Builder] the bound builder
       def composite_builder=(builder)
-        if class_variable_defined?(:@@builder) && (@@builder != builder)
+        if composite_builder? && (@@builder != builder)
           Kernel.warn("Ignoring duplicate builder for #{self}: #{builder}",
                       uplevel: 1)
           @@builder
