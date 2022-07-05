@@ -88,6 +88,7 @@ begin
     end
   end
 
+  ## activator
   traversal.traverse_spec do |rb_obj, code_obj|
     ## debugging data for output
     extra = nil
