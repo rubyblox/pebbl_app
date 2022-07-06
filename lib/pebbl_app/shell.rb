@@ -1,9 +1,15 @@
 
 require 'pebbl_app'
+require 'stringio'
 
 module PebblApp
 
   module Shell
+
+    module Const
+      EOF ||= "\u0004".freeze
+      PLATFORM_NL ||= StringIO.new.tap { |io| io.puts }.string
+    end
 
     class << self
 

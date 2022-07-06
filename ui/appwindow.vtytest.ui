@@ -79,11 +79,12 @@
       </object>
     </child>
     <child>
-      <object class="GtkMenuItem" id="vtapp_exit">
+      <object class="GtkMenuItem" id="vtapp_exit_entry">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
         <property name="action-name">app.quit</property>
         <property name="label" translatable="yes">Exit VtyTest</property>
+        <signal name="activate" handler="vtwin_quit" object="VtyAppWindow" swapped="no"/>
       </object>
     </child>
   </object>
@@ -196,6 +197,8 @@
           <object class="VteTerminal" id="vty">
             <property name="visible">True</property>
             <property name="can-focus">True</property>
+            <property name="is-focus">True</property>
+            <property name="hexpand">True</property>
             <property name="vexpand">True</property>
             <property name="hscroll-policy">natural</property>
             <property name="vscroll-policy">natural</property>
@@ -299,7 +302,7 @@
             <property name="visible">True</property>
             <property name="can-focus">False</property>
             <property name="hexpand">True</property>
-            <property name="label" translatable="yes">Input Buffer</property>
+            <property name="label" translatable="yes">Input</property>
             <property name="single-line-mode">True</property>
           </object>
           <packing>

@@ -16,53 +16,20 @@
 ## ./ui/prefs.vtytest.ui
 ##
 
-#require 'pebbl_app/gtk_app_mixin'
 require 'pebbl_app/gtk_app'
-
-## FIXME integrate with GtkApp
-# framework = PebblApp::GtkFramework.new(timeout: 10)
-# begin
-#   framework.init
-# rescue PebblApp::FrameworkErrror => e
-#   this = File.basename($0)
-#   STDERR.puts "[DEBUG] #{this}: Failed in Gtk.init"
-#   STDERR.puts e.full_message
-#   ## FIXME could initialize either pry or irb here, if found
-#   begin
-#     irb = Gem::Specification.find_by_name("irb")
-#   rescue
-#     STDERR.puts "irb not found"
-#     exit(-1)
-#   end
-#   ## drop into irb and disable $DEBUG
-#   ## - Some $DEBUG output may interfere with tty i/o under IRB
-#   irb.activate
-#   $DEBUG = false
-#   $INIT_ERROR = e
-#   require %q(bundler/setup)
-#   require %q(irb)
-#   require %q(irb/completion)
-#   STDERR.puts "[DEBUG] #{this}: Gtk::InitError stored as $INIT_ERROR"
-#   IRB.start(__FILE__)
-# end
+require 'pebbl_app/shell'
 
 require 'vte3'
 require 'shellwords'
 
-## prototyping a popover + sourceview for extended input editing
-#require 'gtksourceview3'
-## ^ DNW with glade, API needs refactoring @ Gtk::Source::View
-
-## StringIO used for portably computing a default newline
-require 'stringio'
-
 module Const
   UNKNOWN = "(unknown)".freeze
-  EOF = "\u0004".freeze
   ## subtitle strings for pty state (TBD gettext)
-  RUNNING = "running"
-  FAILED = "failed"
-  EXITED = "exited"
+  RUNNING = "running".freeze
+  FAILED = "failed".freeze
+  EXITED = "exited".freeze
+  ## ...
+  INSTANCE_PREFIX = "@".freeze
 end
 
 module Util
@@ -82,17 +49,39 @@ module Util
   end
 end
 
-
 ## Prototype for GLib type extension support in PebblApp
 ##
-## @fixme redundant to PebblApp::GtkFramework::GObjType
-module GObjectExtension
-
+## @fixme PebblApp::GtkFramework::GObjType is redundant to here
+module GUserObject
   def self.extended(whence)
-    whence.include PebblApp::AppLoggerMixin ## instance methods for logging
+    class << whence
+      ## register the class, at most once
+      def register_type
+        if class_variable_defined?(:@@registered)
+          @@registered
+        else
+          ## FIXME does not detect duplcate registrations
+          ## of differing implmentation classes
+          ##
+          ## TBD detecting errors in the Gtk framework layer,
+          ## during type_register -> should be handled as error here
+          type_register
+          @@registered = self
+        end
+      end ## register_type
+    end ## class << whence
+  end ## extended
+end
+
+class UIError < RuntimeError
+end
+
+## Base module for template support with Gtk Widget clases
+module CompositeWidget
+  def self.extended(whence)
+    whence.extend GUserObject
 
     class << whence
-
       ## return true if a composite_builder has been initialized for
       ## this class, else return false
       ##
@@ -140,33 +129,6 @@ module GObjectExtension
         end
       end ## composite_builder
 
-      ## register the class, at most once
-      def register_type
-        if class_variable_defined?(:@@registered)
-          @@registered
-        else
-          ## FIXME does not detect duplcate registrations
-          ## of differing implmentation classes
-          ##
-          ## TBD detecting errors in the Gtk framework layer,
-          ## during type_register -> should be handled as error here
-          type_register
-          @@registered = self
-        end
-      end ## register_type
-    end ## class << whence
-  end ## self.extended
-end
-
-class UIError < RuntimeError
-end
-
-## Base module for template support in this prototype
-module CompositeWidget
-  def self.extended(whence)
-    whence.extend GObjectExtension
-    class << whence
-
       ## bind signal handlers to instance methods in this class
       ##
       ## The connect func defined internal to this method will bind
@@ -197,27 +159,46 @@ module CompositeWidget
         ## for an instance method in the composite class, as corresponding
         ## to each signal handler name.
         ##
-        ## This generally corresponds to the API usage after example 7
-        ## and subsequent in the sample tutorial: Getting started with
-        ## GTK+ with the ruby-gnome2 Gtk3 module
+        ## This corresponds to the API usage after example 7 and
+        ## subsequent in the sample tutorial: Getting started with GTK+
+        ## with the ruby-gnome2 Gtk3 module, available at the GitHub
+        ## repository for the Ruby-GNOME project
         ## https://github.com/ruby-gnome/ruby-gnome/tree/master/gtk3/sample/tutorial
         ##
-        ## Not directly documented, this corresponds to a convention of
-        ## configuring a signal handler as a method name, typically
-        ## with a UI template child object selected as the user data
-        ## object, using a composite widget's UI definition in Glade.
+        ## Generally, this corresponds to a convention of configuring a
+        ## signal handler as a method name, typically with a UI object
+        ## selected as the user data object for a signal, using a
+        ## widget's UI definition in Glade. This may be applicable at
+        ## least for composite widgets defined in Glade.
         ##
-        ## In Glade, the signal handlers for a widget may be configured
-        ## under the "Signals" tab in the widget's configuration data.
+        ## As an approximate overview:
         ##
-        ## The actual syntax for each named method may vary by the
-        ## nature of the signal to which the method is mapped as a
-        ## signal handler. Documentation about each signal handler is
-        ## available in GNOME Devhelp, and may be accessed via the Glade
-        ## UI designer.
+        ## In the Glade UI designer, the signal handlers for a widget
+        ## may be configured under the "Signals" sidebar for each
+        ## widget. With the Ruby-GNOME bindings for GTK, a Ruby method
+        ## name may be entered as the handler for any signal in that
+        ## "Signals" sidebar. If an object in the UI design is selected
+        ## as the "User Data" object in the "Signals" sidebar, that UI
+        ## object will become the recipient of the named method, mainly
+        ## as when the corresponding signal is activated on the
+        ## corresponding widget in the UI.
         ##
-        ## FIXME this needs normal documentation, external to the source
-        ## comments here.
+        ## Locally, this has been applied for mapping signals for
+        ## widgets within a window, to be received by methods on the
+        ## window definition itself. This is in using Ruby methods in
+        ## the implementation of some composite window class defined in
+        ## Ruby, with a template bound to some corresponding UI file
+        ## for that composite window class.
+        ##
+        ## For args that will be received by each named method, the args
+        ## syntax  may vary by the nature of the signal to which the
+        ## method is mapped as a signal handler. Documentation about
+        ## each signal handler is available in GNOME Devhelp, and may be
+        ## accessed via the Glade UI designer.
+        ##
+        ## FIXME this needs normal framework documentation, external to
+        ## the source comments here. Contrast to how actions are
+        ## implemented, in "Newer GTK".
         ##
         set_connect_func_raw do |builder, object, signal_name,
                                  handler_name, connect_object, flags|
@@ -236,6 +217,27 @@ module CompositeWidget
           end
         end
         return self
+      end
+
+      ## method defined for compatibility with Ruby-GNOME
+      ## Gtk::Widget.bind_template_child and
+      ## Gtk::Widget.template_children
+      def template_children
+        if class_variable_defined?(:@@template_children)
+          @@template_children
+        else
+          @@template_children = Array.new
+        end
+      end
+
+      ## return true if the id represents a bound template child for
+      ## this class, else return false
+      ##
+      ## @param id [String, Symbol] the id for the template child. If
+      ##  provided as a string, then this method will use a  symbol
+      ##  representation of the string, internally.
+      def template_child?(id)
+        template_children.include?(id.to_sym)
       end
 
       ## a common method for template initialization in composite widget
@@ -261,33 +263,59 @@ module CompositeWidget
       def initialize_template_children(children, path: Const::UNKNOWN,
                                        builder: self.composite_builder)
         children.each do |id|
-          PebblApp::AppLog.debug("Binding template child #{id} for #{self}")
+          name = id.to_sym
+          if template_child?(name)
+            PebblApp::AppLog.warn(
+              "Template child already bound for #{id} in #{self}"
+            )
+          else
+            PebblApp::AppLog.debug("Binding template child #{id} for #{self}")
+            ## about the second arg for bind_template_child_full
+            ## >> true => internal, Template child is available with a
+            ##            builder object, via get_internal_child
+            ## >> false => not internal; Template child is available with
+            ##             type via get_template_child
+            ##
+            ## This is an alterantive to using bind_template_child(id)
+            ## in Ruby-GNOME, such that resuilts in an attr_reader method
+            ## being defined with the same name as the template child
+            ## ID. That method may silently return nil, when
+            ## bind_template_child(id) is called for an id that does not
+            ## exist in the template.
+            ##
+            ## Similar to Ruby-GNOME Gtk::Widget.bind_template_child,
+            ## this method will cache the child in an instance varaible
+            ## once the template child object is initialized in the Ruby
+            ## environment
+            ##
+            ## FIXME while this provides some tests, but any error
+            ## reported from a template child method from here may not
+            ## be actually accurate to any errors in the
+            ## instance/template binding.
+            ##
+            ## TBD when Debug, cache an XML stream for the template and
+            ## a table of id to some-object mappings derived from that
+            ## XML stream. err if no matching id is found in the XML
+            bind_template_child_full(id, true, 0)
 
-          ## an alternate approach after bind_template_child(id)
-          ## 1) bind the template child as an internal template child
-          ## 2) define a method here that will check to ensure that
-          ##    a template child object is found for each id, when
-          ##    called, rather than quietly returning nil.
+            var = (Const::INSTANCE_PREFIX + id.to_s).to_sym
 
-          ## about the second arg in the following call:
-          ## >> if 'true' => internal, no method is defined for each
-          ## >> if 'false' => a method is defined for each, albeit
-          ##    such that the method may quietly return nil
-          bind_template_child_full(id, true, 0)
-
-          ## define the accessor method here, with added checks
-          lmb = lambda {
-            if (obj = get_internal_child(builder, id))
-              return obj
-            else
-              raise UIError.new("No template child found for id #{id} \
+            ## define the accessor method here, with added checks
+            lmb = lambda {
+              if instance_variable_defined?(var)
+                instance_variable_get(var)
+              elsif (obj = get_internal_child(builder, id))
+                instance_variable_set(var, obj)
+              else
+                raise UIError.new("No template child found for id #{id} \
 in template for #{self.class} at #{path}")
-            end
-          }
-          define_method(id, &lmb)
-        end
-
-        ## bind signal handlers for this class, conditinally
+              end
+            }
+            define_method(id, &lmb)
+            template_children.push(name)
+          end ## template_child?
+        end ## each
+        ## bind signal handlers for this class, conditionally
         ##
         ## This will err within the class' connect func e.g if a signal
         ## handler is defined in the UI file without a corresponding
@@ -296,16 +324,14 @@ in template for #{self.class} at #{path}")
         ## The block defined in set_composite_connect_func may be
         ## evaluated during UI initialization
         set_composite_connect_func()
-
         return true
-
-      end
+      end ## initialize_template_children
     end ## class <<
   end ## self.extended
 end
 
-## prototype module for classes using a template definition with
-## GTK Builder, when the template is initialized directly from a
+## prototype module for classes using a template definition for
+## GTK Widget classes , when the template is initialized directly from a
 ## UI file source
 ##
 ## FIXME should be accompanied with a module for classes deriving a Gtk
@@ -321,17 +347,20 @@ module FileCompositeWidget
     def use_template(filename, children = false)
       register_type
       if File.exists?(filename)
-        ## NB Gio::File @ gem gio2 lib/gio2/file.rb
-        ## File, GFileInputStream topics under GNOME devhelp
+        ## See also
+        ## - Gio::File @ gem gio2 lib/gio2/file.rb
+        ## - File, GInputStream, GFileInputStream topics under GNOME devhelp
         gfile = false
         fio = false
         path = File.expand_path(filename)
         begin
-          gfile = Gio::File.open(path: path)
+          gfile = Gio::File.new_for_path(path)
           fio = gfile.read
           nbytes = File.size(filename)
           bytes = fio.read_bytes(nbytes)
-          PebblApp::AppLog.debug("Setting template data for #{self} @ #{filename}")
+          PebblApp::AppLog.debug(
+            "Setting template data for #{self} @ #{filename}"
+          )
           self.set_template(data: bytes)
         ensure
           fio.unref() if fio
@@ -349,17 +378,21 @@ module FileCompositeWidget
   end
 end
 
-
 ## configuration support for VtyApp
 ##
 ## an instance of this class is returned from VtyApp#conf
 class VtyConf < PebblApp::GtkConf
 
-  ## command line options parsing vor VtyApp
+  ## command line options parsing for VtyApp
   def configure_option_parser(parser)
+    PebblApp::AppLog.debug("Configuring opts parser #{parser}")
     super(parser)
-    parser.on("-c", "--command COMMAND", "Command to use for shell") do |cmd|
-      self.options.shell = cmd
+    self.map_default(:shell) do
+      VtyApp.app.shell
+    end
+    parser.on("-c", "--command COMMAND", "Shell command") do |cmd|
+      PebblApp::AppLog.debug("Configuring for shell #{cmd.inspect}") ## reached
+      self.options.shell = ( Array === cmd ? cmd : Shellwords.split(cmd) )
     end
   end
 
@@ -379,13 +412,8 @@ class VtyPrefsWindow < Gtk::Dialog
   ## FIXME integrate with the Conf API
 
   def initialize(**args)
+    ## note signal bindings under ensure_prefs_window (app class)
     super(**args)
-  end
-
-  ## unmap and recycle the window
-  def close
-    self.unmap
-    self.destroy
   end
 
   ##
@@ -398,7 +426,7 @@ class VtyPrefsWindow < Gtk::Dialog
     ## method mapped to the 'changed' signal in the io_model_combo widget
   end
 
-  def vty_default_shell_changed
+  def vty_shell_changed
     ## method mapped to the 'changed' signal in the shell_cmd_entry widget
   end
 
@@ -406,7 +434,7 @@ class VtyPrefsWindow < Gtk::Dialog
   ## close the prefs window without updating configuration changes
   def prefs_cancel(obj)
     ## mapped to the "clicked" signal for a button in the dialog window
-    debug("cancel @ #{obj} => #{self}")
+    PebblApp::AppLog.debug("cancel @ #{obj} => #{self}")
     self.close
   end
 
@@ -442,6 +470,31 @@ class VtyAppWindow < Gtk::ApplicationWindow
                   vtwin_header
                  ))
 
+  ## FIXME add this to_s definition to an AppWindowMixin
+  def to_s()
+    ## FIXME operations on GTK properties of the window may be problematic,
+    ## while the window is still being initialized
+    begin
+      app_id = false
+      window_id = false
+      if (app = self.application)
+        ## FIXME still retrieving an uninitialized object here
+        app_id = app.application_id
+      else
+        app_id = "(no application)".freeze
+      end
+      window_id = self.id
+    rescue TypeError
+      app_id ||= "(_)".freeze
+      window_id = "(_)".freeze
+    end
+
+    "#<%s %s %s 0x%06x>" % [
+      self.class, app_id, window_id, __id__
+    ]
+  end
+
+
   ## FIXME args parsing, app conf, app packaging, ...
 
   def shell=(sh)
@@ -449,14 +502,11 @@ class VtyAppWindow < Gtk::ApplicationWindow
   end
 
   def shell
+    ## TBD @ setting shell here
     if instance_variable_defined?(:@shell)
        instance_variable_get(:@shell)
-    elsif self.application
-      self.shell = self.application.default_shell
-    elsif (sh = ENV['SHELL'])
-      self.shell = sh
     else
-      Vte.user_shell
+      self.shell = self.application.shell
     end
   end
 
@@ -487,65 +537,63 @@ class VtyAppWindow < Gtk::ApplicationWindow
 
 
   def initialize(app)
-    PebblApp::AppLog.debug("Initializing #{self}")
     super(application: app)
+    ## debug after the super call, to ensure the Gtk object is initialized
+    PebblApp::AppLog.debug("Initializing #{self}")
+
     ##
     ## local conf
     ##
 
     # prefixes = self.action_prefixes
-    # debug("Action prefixes (#{prefixes.length})")
+    # PebblApp::AppLog.debug("Action prefixes (#{prefixes.length})")
     # prefixes.each do |pfx|
     #   ## >> win, app
     #   debug pfx
     # end
 
-    ## hack in a default newline for the Vte::Pty in the Vte::Terminal
-    ## in this app window
-    nlio = StringIO.new
-    nlio.puts
-    @newline = nlio.string
+    ## hack a default newline
+    @newline = PebblApp::Shell::Const::PLATFORM_NL
 
     ## bind actions, signals ...
-
 
     ## coordination for the input text entry
     ## and popover text view
     popover = self.editpop_popover
-    self.vty_entry.signal_connect("icon-press") do
+    self.vty_entry.signal_connect("icon-press") do |obj|
       if popover.visible?
         popover.hide
       else
         popover.show
       end
     end
-    popover.signal_connect("hide") do
+    popover.signal_connect("hide") do |obj|
+      ## TBD not every "hide"  for the popover should result in swapping
+      ## the text into the entry buffer
       self.vty_entry_buffer.text =
         self.editpop_textbuffer.text
     end
-    popover.signal_connect("show") do
+    popover.signal_connect("show") do |obj|
       self.editpop_textbuffer.text =
         self.vty_entry_buffer.text
     end
 
-    ## TBD conf options (framework, app conf and framework, app, window conf)
-    self.vty.enable_sixel = true if self.vty.respond_to?(:enable_sixel=)
+    self.vty.enable_sixel = true if VtyApp::FEATURE_FLAGS.include?(:FLAG_SIXEL)
 
     ## TBD configuring PWD, ENV, shell ...
     ## for a pty I/O mode, though the Vte::Pty is not accessible here (FIXME)
     sh = self.shell
     vty_env = ENV.map { |elt| "%s=%s" % elt }
-    debug("Using shell #{sh.inspect}")
+    PebblApp::AppLog.info("Using shell #{sh.inspect}")
     # it = self.vty.spawn_async(Vte::PtyFlags::DEFAULT, Dir.pwd,
     #                           sh, vty_env, GLib::Spawn::SEARCH_PATH, -1)
     ## ^ can add an additional arg of type Gio::Cancellable
-    ##   - FIXME no other callbacks here
     ## ^ returns a Vte::Terminal, the same value as self.vty here
     ## ^ should accept a block, translated to a setup function for the
     ##   subprocess pre-exec environment
     ## ^ should return the PID, returning in the parent process
 
-    #debug("Using vty: #{self.vty.inspect}")
+    # PebblApp::AppLog.debug("Using vty: #{self.vty.inspect}")
 
     ## before starting any shell ... binding a signal on pty activation
     self.vty.signal_connect_after("notify::pty") do |obj, prop|
@@ -555,7 +603,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
       ## update the subprocess_pty for this app window
       was_pty = self.subprocess_pty
       self.subprocess_pty = obj.pty
-      debug(
+      PebblApp::AppLog.debug(
         "PTY updated for %s : %p => %p" % [
           self, was_pty, obj.pty
         ])
@@ -575,15 +623,15 @@ class VtyAppWindow < Gtk::ApplicationWindow
       ## PTY, as well as for any full-string send
       ##
       ## of course, this is not activated on direct send to the PTY FD
-      debug("Commit: #{text.inspect}")
-    end
+      PebblApp::AppLog.debug("Commit: #{text.inspect}")
+    end if $DEBUG
 
     ## TBD move this to a ManagedPty adapter
     success, pid  = self.vty.spawn_sync(Vte::PtyFlags::DEFAULT, Dir.pwd,
                                         sh, vty_env, GLib::Spawn::SEARCH_PATH)
 
     if success
-      debug("Initializing #{pid} for #{self}")
+      PebblApp::AppLog.debug("Initializing process #{pid} for #{self}")
       sh_shortname = File.basename(self.shell.first)
       self.title = sh_shortname
       self.vtwin_header.title = sh_shortname
@@ -592,7 +640,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
     else
       self.vtwin_header.subtitle = Const::FAILED
       ## FIXME needs a more graceful handler
-      debug("Failed. closing window")
+      PebblApp::AppLog.debug("Failed. closing window")
       self.close
     end
 
@@ -608,33 +656,38 @@ class VtyAppWindow < Gtk::ApplicationWindow
   ##   typically including at least one arg representing
   ##   the active widget when the signal is sent
 
-  def vtwin_close
+  def vtwin_close(obj)
     ## signal handler on vtwin_close_entry, a menu entry
     self.close
   end
 
-  def vty_eof
-    ## TBD UI (submenu) for sending invidual signals to the subprocess,
-    ## using portable signal names onto some standard naming scheme
-    self.vty.feed_child(Const::EOF)
+  def vtwin_quit(obj)
+    vtwin_close(obj)
+    self.application.quit
   end
 
-  def vty_reset
+  def vty_eof(obj)
+    ## TBD UI (submenu) for sending invidual signals to the subprocess,
+    ## using portable signal names onto some standard naming scheme
+    self.vty.feed_child(PebblApp::Shell::Const::EOF)
+  end
+
+  def vty_reset(obj)
     self.vty.reset(false, false)
   end
 
   ## present an application preferences window, creating a new
   ## preferences window if not already initialized for the VtyApp
-  def vtwin_show_prefs
+  def vtwin_show_prefs(obj)
     app = self.application
     app.ensure_prefs_window(app.active_window || self).present
   end
 
-  def vtwin_show_about
+  def vtwin_show_about(obj)
     ## needs another UI definition, and a project concept
   end
 
-  def vtwin_new
+  def vtwin_new(obj)
     win = self.class.new(self.application)
     win.show
   end
@@ -646,13 +699,15 @@ class VtyAppWindow < Gtk::ApplicationWindow
 
   def vtwin_save_text
     ## TBD filtering escape sequences out of the the output history text
-    ## such that vtwin_save_data would use
+    ## such that vtwin_save_data would use - see also, Pastel (??)
     ##
-    ## Vte::Terminal#text would access only the visible region of text?
+    ## TBD PTY output buffering with Vte
+    ## - would Vte::Terminal#text access only the visible region of text?
     ##
-    ## self.class.save_vte_text(...)
+    ## TBD using other forms of I/O in lieu of a shell pty
+    ## - interaction buffers as a widget concept, not in many ways like Emacs
+    ## - Gtk Stack switching & the UI
   end
-
 
   def vtwin_send
     ## FIXME further requirements for this method
@@ -688,13 +743,13 @@ class VtyAppWindow < Gtk::ApplicationWindow
     ## using feed_child_raw (if defined)
     ## or feed_child (if local sources / updated)
     text = vty_entry_buffer.text + self.newline
-    debug("Sending text: #{text.inspect}")
+    PebblApp::AppLog.debug("Sending text: #{text.inspect}")
     if vty.respond_to?(:feed_child_raw)
-      # debug("using feed_child_raw")
+      # PebblApp::AppLog.debug("using feed_child_raw")
       vty.feed_child_raw(text)
     else
       ## patch
-      # debug("using feed_child")
+      # PebblApp::AppLog.debug("using feed_child")
       vty.feed_child(text)
     end
   end
@@ -721,32 +776,55 @@ end
 ## VtyApp
 ##
 class VtyApp < Gtk::Application
+
+  FEATURE_FLAGS = Vte::FeatureFlags.constants.dup.tap { |flags|
+    flags.delete(:FLAGS_MASK) }.select { |name|
+    (Vte::FeatureFlags.const_get(name) & Vte::feature_flags).eql?(0) }
+
+  class << self
+    ## singleton accessor
+    def app
+     if class_variable_defined?(:@app)
+       @@app
+     else
+       false
+     end
+    end
+  end ## class << VtyApp
+
+  ## TBD/FIXME testing for other AppMixin here
   include PebblApp::AppMixin
 
-  ## ad hoc place holders for app conf @ shell
-  def default_shell=(cmd)
-    @default_shell = cmd
+  def to_s()
+    "#<%s %s (%s) 0x%06x>" % [
+      self.class, application_id,
+      (registered? ? "registered".freeze : "not registered".freeze),
+      __id__
+    ]
   end
-  def default_shell
+
+  ## ad hoc place holders for app conf @ shell
+  def shell=(cmd)
+    ## TBD this may not return the actual tokenized cmd ?
+    @shell = (String === cmd) ? Shellwords.split(cmd) : cmd
+  end
+  def shell
     ## TBD - should be implemented as a configurable property
     ## of the app and/or window
-    if instance_variable_defined?(:@default_shell)
-      return @default_shell
-    elsif self.conf.option?(:shell)
-      return self.conf.options[:shell]
+    ## TBD @ setting shell here
+    if instance_variable_defined?(:@shell)
+      return @shell
+    elsif (option = self.config.option(:shell))
+      self.shell = option
+      self.shell ## return the tokenized value
     else
-      return Vte.user_shell
+      self.shell = Vte.user_shell
+      self.shell ## return the tokenized value
     end
   end
 
-
   def action_prefix(widget)
-    ## a hack for map_simple_action
-    ##
-    ## this hard-codes the name of an action prefix for the application,
-    ## assuming this matches an action group created somewhere in GTK
-    ## for the application
-    ##
+    ## a hack for map_simple_action. FIXME should be a class method
     case widget
     when Gtk::Application
       ## no action_prefixes method for this class of object
@@ -767,45 +845,47 @@ class VtyApp < Gtk::Application
   ##
   ## used for binding a callback to app.quit
   def map_simple_action(name, prefix: nil,
-                        accel: nil, widget: self,
-                        &handler)
-    if (! prefix)
-      if (name.include?("."))
-        elts = name.split(".")
-        prefix = elts[0]
-        if elts.length > 1
-          name = elts[1..].join(".")
+                 accel: nil, widget: self,
+                 &handler)
+    if !prefix
+      if name.include?(PebblApp::Const::DOT)
+        elts = name.split(PebblApp::Const::DOT)
+        prefix = elts.first
+        if elts.length > 1 && ! prefix.empty?
+          name = elts[1..].join(PebblApp::Const::DOT)
         else
-          raise "Unable to parse action name #{name.inspect}"
+          raise ArgumentError.new("Unable to parse action name: #{name.inspect}")
         end
       else
         prefix = action_prefix(widget)
       end
     end
 
-    debug("Binding action #{prefix}.#{name} for #{self}")
-
-    act = Gio::SimpleAction.new(name)
     if block_given?
+      PebblApp::AppLog.debug("Binding action #{prefix}.#{name} for #{self}")
+      act = Gio::SimpleAction.new(name)
       act.signal_connect("activate") do |action, param|
         handler.yield(action, param)
       end
-      self.add_action(act)
+      widget.add_action(act)
     else
-      raise "No block provided"
+      raise ArgumentError.new("No block provided")
     end
 
     if accel
       with_accels = (Array === accel) ? accel : [accel]
-      self.set_accels_for_action(('%s.%s' % [prefix, name]), with_accels)
+      widget.set_accels_for_action((prefix +  PebblApp::Const::DOT + name),
+                                   with_accels)
     end
+
+    return act
   end
 
   def register()
     ## may not be reached in the underlying API when this method is
-    ## overridden, unless this method is called directly as from this
+    ## overridden, unless this method is called directly from this
     ## class or a subclass
-    debug("Registering #{self.inspect}")
+    PebblApp::AppLog.debug("Registering #{self}")
     super()
   end
 
@@ -821,6 +901,10 @@ class VtyApp < Gtk::Application
     ## TBD managing multiple app instances in or outside of a single
     ## process, and side effects w/ dbus - alternately, connecting
     ## to some existing app instance, if already initialized
+
+    if ! self.class.class_variable_defined?(:@@app)
+      self.class.class_variable_set(:@@app, self)
+    end
 
     ## map a handler for the app 'startup' signal,
     ## reached e.g via self.register
@@ -839,7 +923,7 @@ class VtyApp < Gtk::Application
     #   app.handle_open
     # end
 
-    self.signal_connect_after("window-removed") do
+    self.signal_connect_after("window-removed") do |obj|
       if self.windows.empty?
         self.quit
       end
@@ -850,15 +934,16 @@ class VtyApp < Gtk::Application
   def handle_startup()
     ## bind C-q to an 'app.quit' action,
     ## also defining a handler for that action
-    self.map_simple_action("app.quit", accel: "<Ctrl>Q") do
+    self.map_simple_action("app.quit", accel: "<Ctrl>Q") do |obj|
       self.quit
     end
   end
 
   ## handler for the app 'activate' signal
   def handle_activate()
-      debug("Handling activate for #{self.class}: #{self.inspect}")
+      PebblApp::AppLog.debug("Handling activate for #{self.class}: #{self}")
       window = create_app_window
+      add_window(window)
       window.present
   end
 
@@ -871,12 +956,22 @@ class VtyApp < Gtk::Application
   ## at most one preferences window should be visible for a single
   ## appliction instance
   def ensure_prefs_window(transient_for = self.active_window)
+    ## FIXME generalize this beyond the single application,
+    ## FIXME implement similar for an 'about' window,
+    ## - using information from the containing gemspec
+    ##   formatted for presentation in fields of the 'about' dialogue
+    ##   - spec.description => about comments
+    ##   - spec.licenses => about license
+    ##   - ... copyright
+    ##   - ... authors
+    ## - this much would not require an application-specific UI design
     if ! (wdw = self.prefs_window)
       wdw = VtyPrefsWindow.new(transient_for: transient_for)
-      wdw.signal_connect_after("destroy") do
+      wdw.signal_connect_after("destroy") do |obj|
         self.prefs_window = nil
       end
       self.prefs_window = wdw
+      add_window(wdw) if !transient_for
     end
     return wdw
   end
@@ -885,48 +980,64 @@ class VtyApp < Gtk::Application
   def create_app_window()
     ## initialize and configure a main window for this application
     appwdw = VtyAppWindow.new(self)
-    appwdw.shell = self.default_shell
     return appwdw
   end
 
-
   def quit()
-    super()
     self.windows.each do |wdw|
+      PebblApp::AppLog.debug("Closing #{wdw}")
       wdw.close
     end
-    debug("Calling Gtk.main_quit in Thread 0x%06x" % [Thread.current.__id__])
+    super() ## may result in #shutdown being called for the main loop?
+
+    ## tbd the call to Gtk.main_quit could be handled externally,
+    ## from some thread independent to the #main thread
+    PebblApp::AppLog.debug(
+      "Calling Gtk.main_quit in Thread 0x%06x" % [Thread.current.__id__]
+    )
+    ## FIXME not always a clean exit. Gtk does not provide much
+    ## support for accessing the actual Gtk main loop
     Gtk.main_quit
   end
 
   ## return the VtyConf instance for this application
-  def conf
-    #self.default_shell = %w(bash -i)
-    self.default_shell = %w(ruby -r irb -r irb/completion -e IRB.start)
-    @conf || VtyConf.new(self) do
+  def config
+    @config ||= VtyConf.new(self) do
       ## callback for the conf object's 'name' param
+      ##
+      ## FIXME this feature of the Conf API needs refactoring
       self.app_cmd_name
     end
   end
 
   def main(argv: ARGV)
-    PebblApp::AppLog.app_log ||= PebblApp::AppLog.new
+    PebblApp::AppLog.app_log ||= PebblApp::AppLog.new(domain: "vtytest")
+    PebblApp::AppLog.debug("#main ARGV: #{ARGV}")
     configure(argv: argv)
 
-    timeout = self.conf.gtk_init_timeout
+    PebblApp::AppLog.info("Using shell: #{self.shell}")
+
+    timeout = self.config.gtk_init_timeout
+    ## FIXME do not re-init the framework if e.g initialized in a run script
     framework = PebblApp::GtkFramework.new(timeout: timeout)
 
-    app_args = self.conf.gtk_args.dup
-    open_args = framework.init(argv: app_args)
+    app_args = self.config.gtk_args ## FIXME will have to parse out --display separately
+    PebblApp::AppLog.debug("#main app_args: #{app_args}")
+    open_args = framework.init(argv: app_args) ## FIXME it does not parse out --display
+    PebblApp::AppLog.debug("#main open_args: #{open_args}")
 
-    info("Activate")
+    PebblApp::AppLog.info("Register for #{self.class}##{__method__}") if $DEBUG
     register() ## at most once (FIXME)
+    PebblApp::AppLog.info("Activate for #{self.class}##{__method__}") if $DEBUG
     if open_args.empty?
       activate()
     else
-      open(open_args, "".freeze)
+      # open(open_args, "".freeze) ## Another API Bug @ "TODO"
+      ## ^^ "TODO: in Ruby -> GIArgument(array/C)[interface(interface)](GFile)"
+      activate()
     end
+    ## TBD alternate context ...
     Gtk.main
   end
 
-end
+end ## VtyApp
