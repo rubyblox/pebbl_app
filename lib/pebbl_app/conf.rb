@@ -28,20 +28,20 @@ class PebblApp::Conf
 
   ## initialize a new Conf object
   ##
-  ## At least one of a cmd_name or cmd_name_block should be provided.
+  ## At least one of a command_name or command_name_block should be provided.
   ##
-  ## If a cmd_name_block is provided, then the storage for the #cmd_name
+  ## If a command_name_block is provided, then the storage for the #command_name
   ## method will be be deferred until first access, at which time the
-  ## cmd_name_block will be called to set and return the cmd_name for
+  ## command_name_block will be called to set and return the command_name for
   ## this Conf object.
   ##
-  ## Else, if a cmd_name is provided, the string representation of the
+  ## Else, if a command_name is provided, the string representation of the
   ## provided value will be used to provide the shell command name.
   ##
-  ## Further details about the #cmd_name implementation are available in
+  ## Further details about the #command_name implementation are available in
   ## the documentation for that method.
   ##
-  ## If neither a cmd_name_block nor cmd_name is provided, no cmd_name
+  ## If neither a command_name_block nor command_name is provided, no command_name
   ## will be available for the Conf object.
   ##
   ## If an options value is provided, the value will be used when
@@ -49,44 +49,75 @@ class PebblApp::Conf
   ## object. Else, the internal options struct will be initialized with
   ## an empty options set.
   ##
-  def initialize(cmd_name = nil, options = nil, &cmd_name_block)
+  def initialize(command_name = nil, options = nil, &command_name_block)
     if block_given?
-      @cmd_name_block = cmd_name_block
-      if ! cmd_name.nil?
-        Kernel.warn("Ignoring non-nil cmd_name (block provided)", uplevel: 0)
-      end
-    elsif cmd_name
-      @cmd_name = cmd_name.to_s
-      ## else: @cmd_name will not be initialized here
+      @command_name_block = command_name_block
+      # if ! command_name.nil?
+      #   Kernel.warn("Ignoring non-nil command_name (block provided)", uplevel: 0)
+      # end
+    elsif command_name
+      @command_name = command_name.to_s
+      ## else: @command_name will not be initialized here
     end
     @options = options ? OpenStruct.new(options) : OpenStruct.new
   end
 
+  def default_blocks()
+    @default_blocks ||= Hash.new
+  end
 
-  ## Return any cmd_name initialized to this Conf object
+  def map_default(name, &block)
+    opt = name.to_sym
+    if block_given?
+      default_blocks[opt] = block
+    else
+      raise ArgumentError.new("No block provided")
+    end
+  end
+
+  def mapped_default?(name)
+    opt = name.to_sym
+    default_blocks.key?(opt)
+  end
+
+  def unmap_default(name)
+    opt = name.to_sym
+    default_blocks.delete(opt)
+  end
+
+  def option_default(name)
+    opt = name.to_sym
+    if mapped_default?(name)
+      default_blocks[opt].call
+    else
+      false
+    end
+  end
+
+  ## Return any command_name initialized to this Conf object
   ##
-  ## If the @cmd_name instance variable has been initialized for the
+  ## If the @command_name instance variable has been initialized for the
   ## instance, that instance variable's value will be returned.
   ##
-  ## Else, if the Conf object was initialized with a cmd_name_block
-  ## and the  @cmd_name instance variable is uninitialized for the
+  ## Else, if the Conf object was initialized with a command_name_block
+  ## and the  @command_name instance variable is uninitialized for the
   ## instance, this Conf object will be yielded to the
-  ## cmd_name_block,. The string representation of the block's return
-  ## value will be stored and returned as the cmd_name for this Conf
+  ## command_name_block,. The string representation of the block's return
+  ## value will be stored and returned as the command_name for this Conf
   ## object.
   ##
-  ## If no cmd_name has been stored and no cmd_name_block was provided,
+  ## If no command_name has been stored and no command_name_block was provided,
   ## this method will return an empty string.
   ##
   ## This method's return value will be used in the default
   ## implementation of the #configure_option_parser method, mainly for
   ## producing a help banner.
   ##
-  def cmd_name
-    if self.instance_variable_defined?(:@cmd_name)
-      return @cmd_name
-    elsif self.instance_variable_defined?(:@cmd_name_block)
-      return @cmd_name = @cmd_name_block.yield(self).to_s
+  def command_name
+    if self.instance_variable_defined?(:@command_name)
+      return @command_name
+    elsif self.instance_variable_defined?(:@command_name_block)
+      return @command_name = @command_name_block.yield(self).to_s
     else
       return "".freeze
     end
@@ -172,7 +203,7 @@ class PebblApp::Conf
   ## @return [OptionParser] the configured option parser
   def make_option_parser()
     OptionParser.new do |parser|
-      self.configure_option_parser(parser)
+      configure_option_parser(parser)
     end
   end
 
@@ -184,14 +215,14 @@ class PebblApp::Conf
   ##
   ## @param parser [OptionParser] the parser to configure
   def configure_option_parser(parser)
-    cmd = self.cmd_name
+    cmd = self.command_name
     parser.program_name = cmd
     parser.banner = "Usage: #{cmd} [options]"
     parser.separator "".freeze
     parser.separator "Options:"
     parser.on_head("-h", "--help", "Show this help") do
       puts parser
-      exit unless self.option[:persist]
+      exit unless self.option(:persist)
     end
   end
 

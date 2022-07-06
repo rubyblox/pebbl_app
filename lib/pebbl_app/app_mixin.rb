@@ -105,6 +105,7 @@ module PebblApp
     ##
     ## The provided argv may be destructively modified by this method
     def configure(argv: ARGV)
+      # AppLog.info("configure for AppMixin")
       config.configure(argv: argv)
     end
 

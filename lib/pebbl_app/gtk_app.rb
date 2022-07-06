@@ -25,79 +25,127 @@ require 'timeout'
 ## - provide support for issue tracking for applications
 module PebblApp
 
+  ## A GMain implementation for GtkApp
   class GtkMain < GMain
+
+    attr_accessor :app
+
+    def initialize(app)
+      super()
+      @app = app
+    end
+
     def context_dispatch(context)
       super(context)
-      Gtk.main_iteration_do(true)
+      if ! Gtk.main_iteration_do(false)  # Gtk.main_iteration_do(true)
+        ## FIXME not reached, afer a call to Gtk.main_quit
+        ## from some other thread ...
+        AppLog.debug("Exiting Gtk context dispatch")
+        throw :main_iterate
+      end
+    end
+
+    def context_acquired(context)
+      AppLog.debug("Context acquired")
+    end
+
+    def map_sources(context)
+      ## map a run-once idle source into the event loop,
+      ## to register and activate the app for this GtkMain
+      ##
+      ## This may typically result in an app window being displayed
+      GMain.map_idle_source(context.context, remove_on_nil: true) do |context|
+        AppLog.info("Starting application")
+        app.start
+        nil ## remove callback after run
+      end
     end
   end
 
 
+  ## Gtk Application class for PebblApp
+  ##
+  ## This class provides GtkMain integration for Gtk::Application classes
+  ##
   class GtkApp < Gtk::Application
-    include GAppMixin ## TBD this && GtkAppMixin
+    include GAppMixin
 
-    def conf
-      @conf ||= PebblApp::GtkConf.new() do
-        ## FIXME store this deferred app_cmd_name block as a proc
+    attr_accessor :framework, :open_args
+    attr_reader :gmain
+
+    def initialize(name, flags = Gio::ApplicationFlags::FLAGS_NONE)
+      super(name, flags)
+    end
+
+    def config
+      @config ||= PebblApp::GtkConf.new() do
+        ## FIXME store this deferred app_command_name block as a proc
         ## in an AppMixin const, use; by default with some config_class
         ## method on the class in AppMixin
-        self.app_cmd_name
+        self.app_command_name
       end
     end
 
-
     def main_new()
-      GtkMain.new(logger: AppLog.app_log)
+      GtkMain.new(self)
     end
 
     def context_default()
-      ## a while there is no API onto g_main_context_push_thread_default
-      ## in Ruby-GNOME, a workaround: always using the default context,
-      ## across all threads in the process environment (needs further testing)
-      ##
-      ## may not be interoperable with Gtk.main, like anything except Gtk.main
+      ## while there is no API onto g_main_context_push_thread_default
+      ## here, a workaround: always using the default context, across
+      ## all threads in the process environment (needs further testing)
       ##
       if GtkApp.class_variable_defined?(:@@default_context)
         GtkApp.class_variable_get(:@@default_context)
       else
-        default = DefaultContext.new(logger: logger)
+        default = DefaultContext.new()
         GtkApp.class_variable_set(:@@default_context, default)
       end
     end
 
-    ## [needs docs, subsq. of the next iteration in API refactoring]
+
     def main(argv: ARGV, &block)
       AppLog.app_log ||= AppLog.new
       configure(argv: argv)
 
-      timeout = self.conf.gtk_init_timeout
+      timeout = self.config.gtk_init_timeout
       ## TBD instance storage for the framework obj
-      framework = PebblApp::GtkFramework.new(timeout: timeout)
+      @framework ||= PebblApp::GtkFramework.new(timeout: timeout)
 
       gmain = (@gmain ||= main_new)
-      gmain.debug("framework.init in #{self}#{__method__}")
-      app_args = self.conf.gtk_args
-      open_args = framework.init(argv: app_args)
+      AppLog.debug("framework.init in #{self.class}#{__method__}")
 
-      def gmain.context_acquired(context)
-        ## FIXME ...
-        context.debug("Context acquired")
-      end
+      app_args = self.config.gtk_args
+      self.open_args ||= @framework.init(argv: app_args) ## FIXME args mess
+
+      context = context_default
 
       if block_given?
         cb = block
       else
-        cb = proc do |thr|
-          info("Activate")
-          register()
-          if open_args.empty?
-            activate()
-          else
-          end
-        end ## proc
+        ## join the main_context thread
+        cb = proc { |thr| thr.join }
       end
 
-      gmain.main(context_default, &cb)
+      self.signal_connect_after "shutdown" do
+        ## never reached here - this app is providing its own main loop.
+        ## The shutdown signal is unused, by side effect
+        AppLog.debug("Cancelling (app shutdown)")
+        context.cancellation.cancel
+        # context.main_loop.quit ## not used here
+      end
+
+      gmain.main(context, &cb)
     end
+
+    ## Register and activate this application
+    ##
+    ## This method provides an approximate analogy to Gio::Application#run
+    ##
+    def start()
+      self.register
+      self.activate
+    end
+
   end
 end

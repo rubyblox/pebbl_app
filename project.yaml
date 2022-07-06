@@ -91,8 +91,12 @@ gems:
           versions: ">=3.5.2"
       - [pebbl_app-support, ">=1.0"]
     source_files:
+      - lib/pebbl_app/gapp_mixin.rb
+      - lib/pebbl_app/gapp.rb
       - lib/pebbl_app/gmain.rb
+      - lib/pebbl_app/gobj_type.rb
       - lib/pebbl_app/gtk_app.rb
+      - lib/pebbl_app/gtk_builders.rb
       - lib/pebbl_app/gtk_conf.rb
       - lib/pebbl_app/gtk_framework.rb
       ## merged with upwards module
@@ -101,8 +105,6 @@ gems:
       - lib/pebbl_app/gtk_framework/logging.rb
       - lib/pebbl_app/gtk_framework/threads.rb
       - lib/pebbl_app/gtk_framework/sysexit.rb
-      - lib/pebbl_app/gtk_framework/gobj_type.rb
-      - lib/pebbl_app/gtk_framework/builders.rb
       - lib/pebbl_app/gtk_framework/gbuilder_app.rb
       ## sandbox
       #- lib/pebbl_app/gtk_framework/basedir.rb

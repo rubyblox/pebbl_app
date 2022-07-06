@@ -98,11 +98,10 @@ module PebblApp
     end
   end
 
-  ## see GMain
-  module ContextProxy # < GLib::MainContext
+  ## Proxy mixin for GMain context impelementations
+  module ContextProxy
 
     def self.included(whence)
-      whence.include LoggerMixin
       whence.extend Forwardable
       whence.def_delegators(:@cancellation, :cancel, :cancelled?, :reset)
     end
@@ -122,7 +121,7 @@ module PebblApp
     ## should block for source availability during main loop iteration
     attr_reader :blocking
 
-    def initialize(blocking: true, logger: AppLog.new)
+    def initialize(blocking: true)
       super()
       @configured = false
 
@@ -138,15 +137,23 @@ module PebblApp
       @cancellation = GMainCancellation.new
       ## used in GMain#context_dispatch
       @blocking = blocking
-      @logger = logger
     end
 
+
+    def cancel(reason)
+      @cancellation.cancel(reason)
+    end
   end
 
   class GMainContext < GLib::MainContext
     include ContextProxy
+    def main_loop
+      @main_loop ||= GLib::MainLoop.new(self, false)
+    end
+    def context()
+      return self
+    end
   end
-
 
   class DefaultContext
     include ContextProxy
@@ -157,9 +164,18 @@ module PebblApp
       def_delegator(:@context, mtd)
     end
 
-    def initialize(blocking: true, logger: AppLog.new)
-      super(blocking: blocking, logger: logger)
+    def initialize(blocking: true)
+      super(blocking: blocking) ## FIXME blocking param unused, needs test
+      ## NB the value returned by GLib::MainContext.default
+      ## may not be consistent with a single process session
+      ##
+      ## This is part of a workaround, absent of an API onto
+      ##  g_main_context_push_thread_default
       @context = GLib::MainContext.default
+    end
+
+    def main_loop
+      @main_loop ||= GLib::MainLoop.new(self.context, false)
     end
 
   end
@@ -256,8 +272,6 @@ module PebblApp
   ##
 
   class GMain
-
-    include PebblApp::LoggerMixin
 
     module Constants
       GIO_COND_READ ||= (GLib::IOCondition::IN |
@@ -372,11 +386,11 @@ module PebblApp
       ##
       ## This method is used by the following methods, for initializing each
       ## correponding kind of GLib::Source object
-      ## - map_idle_source
-      ## - map_fd_source
-      ## - map_timeout_source
-      ## - map_seconds_timeout_source
-      ## - map_child_watch_source
+      ## - GMain.map_idle_source
+      ## - GMain.map_fd_source
+      ## - GMain.map_timeout_source
+      ## - GMain.map_seconds_timeout_source
+      ## - GMain.map_child_watch_source
       ##
       ## @param context [GMainContext] the context for the new source object
       ##
@@ -444,8 +458,9 @@ module PebblApp
       ##
       def map_idle_source(context, priority: :default_idle,
                           remove_on_nil: false, &callback)
-        context.debug "adding idle source for context #{context}" if context.respond_to?(:debug)
-        context.debug_event(__method__) if context.respond_to?(:debug_event)
+        AppLog.debug "adding idle source for context #{context}" if $DEBUG
+        # context.debug_event(__method__) if context.respond_to?(:debug_event)
+
 
         src = GLib::Idle.source_new
         configure_source(context, src, priority, remove_on_nil, callback)
@@ -472,8 +487,8 @@ module PebblApp
                         poll: Const::GIO_COND_READ, ret: poll,
                         priority: :default,
                         &callback)
-        context.debug "adding fd source for context"
-        context.debug_event(__method__)
+        AppLog.debug "adding fd source for context" if $DEBUG
+        # context.debug_event(__method__) if context.respond_to?(:debug_event)
 
         filedes = (IO === fd) ? fd.fileno : fd
         src = GLib::PollFD.new(filedes, poll, ret)
@@ -501,8 +516,8 @@ module PebblApp
       def map_timeout_source(context, ms,
                              priority: :default,
                              &callback)
-        context.debug "adding timeout (miliseconds) source for context"
-        context.debug_event(__method__)
+        AppLog.debug "adding timeout (miliseconds) source for context" if $DEBUG
+        # context.debug_event(__method__) if context.respond_to?(:debug_event)
         ## TBD non-blocking, async timer => action actuation,
         ## independent of the main event loop
         src = GLib::Timeout.source_new(ms)
@@ -529,8 +544,8 @@ module PebblApp
       def map_seconds_timeout_source(context, seconds,
                                      priority: :default,
                                      &callback)
-        context.debug "adding timeout (seconds) source for context"
-        context.debug_event(__method__)
+        AppLog.debug "adding timeout (seconds) source for context" if $DEBUG
+        # context.debug_event(__method__) if context.respond_to?(:debug_event)
 
         src = GLib::Timeout.source_new_seconds(seconds)
         configure_source(context, src, priority, callback)
@@ -548,8 +563,8 @@ module PebblApp
       def map_child_watch_source(context, pid,
                                  priority: :default,
                                  &callback)
-        context.debug "adding child watch source for context"
-        context.debug_event(__method__)
+        AppLog.debug "adding child watch source for context" if $DEBUG
+        # context.debug_event(__method__) if context.respond_to?(:debug_event)
         src = GLib::ChildWatch.source_new(pid)
         configure_source(context, src, priority, callback)
         return src
@@ -559,7 +574,10 @@ module PebblApp
 
     include LoggerMixin
 
-    def initialize(logger: PebblApp::AppLog.new(domain: AppLog.iname(self)))
+    ## main context for this GMain, or nil/false if not running
+    attr_accessor :running
+
+    def initialize(logger: PebblApp::AppLog.app_log)
 
       ## NB this class does not provide  any #configure method
       ## for application config or any #gapp initialization
@@ -576,16 +594,21 @@ module PebblApp
       GMainContext.new(logger: logger)
     end
 
-    def main_loop_new(context)
-      GLib::MainLoop.new(context, false) ## false => not run
-    end
-
     ## an adaptation after `main` in
     ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
     def main(context = context_new, &block)
-      debug "main"
 
-      debug "Init locals"
+      if @running
+        critical("#{self.class}##{__method__} already running: #{@running}")
+        return -1
+      end
+
+      debug "main" if $DEBUG
+
+      ## FIXME define a #quit method, in some way setting the
+      ## cancellation on context to 'cancelled'
+
+      debug "Init locals" if $DEBUG
       ## Initialize and hold a mutex during configuration and application runtime
       main_mtx = context.main_mtx
       ## condition variable for synchronization after map_sources
@@ -594,21 +617,27 @@ module PebblApp
 
       main_mtx.synchronize do
         begin
-          debug "Configure sources"
+          debug "Configure sources" if $DEBUG
           ## configure event sources for this instance of the implementing class
           self.map_sources(context)
           context.configured = true
-          main_thr = context_main(context)
+          # main_thr = context_main(context)
         rescue
           debug_event(context, $!)
           context.cancel($!)
           main_thr.exit if main_thr
           return false
         ensure
-          debug "cv broadcast"
+          debug "cv broadcast" if $DEBUG
           main_cv.broadcast
         end
       end ## main sync for initial conf
+
+      @running = context
+
+      ## start this outside of the main mtx - at which point, the sync
+      ## becomes irrelevant really (FIXME)
+      main_thr = context_main(context)
 
       ## yield to the provided block
       ##
@@ -616,19 +645,20 @@ module PebblApp
       ## parallel to this section
       begin
         catch(:main) do
-          debug "yielding to block in main thread"
+          debug "yielding to block in main thread" if $DEBUG
           block.yield(main_thr) if block_given?
         end
       ensure
         ## cleanup after the main loop
         main_mtx.synchronize do
-          ## reached far too soon
-          debug "post-loop in main thread"
+          ## ^ TBD this will not run while the main loop
+          ## is still running
+          debug "post-loop in main thread" if $DEBUG
           main_thr.join
         end
       end
 
-      debug "returning in main thread"
+      debug "returning in main thread" if $DEBUG
       return true
     end
 
@@ -652,11 +682,11 @@ module PebblApp
     ## Soures added to the context will be applied in each iteration of
     ## the main loop.
     ##
-    ## @see #map_idle_source
-    ## @see #map_fd_source
-    ## @see #map_timeout_source
-    ## @see #map_seconds_timeout_source
-    ## @see #map_child_watch_source
+    ## @see map_idle_source
+    ## @see map_fd_source
+    ## @see map_timeout_source
+    ## @see map_seconds_timeout_source
+    ## @see map_child_watch_source
     def map_sources(context)
       Kernel.warn("prototype #{__method__} method reached for %p in %s" %
                   [context, self], uplevel: 0) if $DEBUG
@@ -729,12 +759,10 @@ module PebblApp
       main_cv = context.main_cv
 
       Thread.new do
-        debug "main context thread begins"
+        debug "main context thread begins" if $DEBUG
         debug_event(context, :main_run)
 
         if ! context.acquire
-          ## TBD probably not compatible with g_application_run, which
-          ## acquires a main context internally, from some unspecified source
           Kernel.warn("Unable to acquire context #{context} \
 in #{self} thread #{Thread.current}", uplevel: 0)
           debug_event(context, :main_acquire_failed)
@@ -742,27 +770,29 @@ in #{self} thread #{Thread.current}", uplevel: 0)
           Thread.exit
         end
 
+        ## callback as a method ...
         context_acquired(context)
 
-        # main = main_loop_new(context) ## only used for main.quit subsq? (FIXME)
-
         main_mtx.synchronize do
-          debug "main loop pre-cv wait"
+          debug "main loop pre-cv wait" if $DEBUG
           cv_reached = false
           if ! context.configured
             ## block for configuration section if not configured
             cv_reached = main_cv.wait(main_mtx)
-            debug "reached cv #{cv_reached.inspect}"
+            debug "reached cv #{cv_reached.inspect}" if $DEBUG
           end
 
-          debug "main loop post-cv wait"
+          cancellation = context.cancellation
+
+          debug "main loop post-cv wait" if $DEBUG
+          ## run until cancelled
           begin
             ## iterating in the event loop until the cancellation
             ## object for this context is cancelled.
             debug_event(context, :main_iterate)
             catch(:main_iterate) do |tag|
-              while true
-                if context.cancelled?
+              while self.running
+                if cancellation.cancelled?
                   throw tag
                 else
                   ## dispatch for this iteration of the main loop
@@ -772,14 +802,25 @@ in #{self} thread #{Thread.current}", uplevel: 0)
             end
           ensure
             debug_event(context, :main_context_end)
-            debug "end of main context"
+            debug "end of main context" if $DEBUG
             ## cleanups
             context.release
-            # main.quit ## 'main' object unused here, otherwise ...
             main_cv.broadcast if cv_reached
           end
         end ## conf_mtx
       end ## thread
+    end ## context_main
+
+    def quit(reason = :quit)
+      if (context = @running)
+        ## the context would typically be of a type ContextProxy.
+        ## Such an object would respond to the method 'cancel' with a
+        ## parameter for recording a cancellation reason
+        @running.cancel(reason) if context.respond_to?(:cancel)
+        super()
+      else
+        false
+      end
     end
 
   end ## GMain

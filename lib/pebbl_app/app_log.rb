@@ -568,9 +568,25 @@ module PebblApp
         end
       end
 
+      def include_mixin(whence)
+        ## but does it access the same class variables now ???
+        whence.include PebblApp::AppLoggerMixin if
+          ! whence.ancestors.include?(PebblApp::AppLoggerMixin)
+      end
+
+      alias_method :ensure_mixin, :include_mixin
+
+      def extend_mixin(whence)
+        ## but does it access the same class variables now ???
+        whence.extend PebblApp::AppLoggerMixin if
+          ! whence.singleton_class.ancestors.include?(PebblApp::AppLoggerMixin)
+      end
+
     end ## class << AppLog
 
-    extend AppLoggerMixin
+    ## ensure that the AppLoggerMixin is available via class methods
+    ## onto AppLog
+    self.extend AppLoggerMixin
 
     ## Initialize a new AppLog
     ##
@@ -608,7 +624,7 @@ module PebblApp
     ## @param rest_args [Hash] Additional arguments to be provided to
     ##  Logger#initialize
     ##
-    def initialize(logdev = ConsoleLogDev.new(STDERR),
+    def initialize(logdev: ConsoleLogDev.new(STDERR),
                    level: $DEBUG ? :debug : :info,
                    formatter: AppLogFormatter.new(pastel: AppLog.tty_logdev?(logdev)),
                    domain: AppLog.iname(self),

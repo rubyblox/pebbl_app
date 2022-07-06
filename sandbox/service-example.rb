@@ -62,6 +62,12 @@ require 'pebbl_app/gmain'
 require 'forwardable'
 
 ## FIXME move signal trap support into GMain
+require 'pebbl_app/app_log'
+
+PebblApp::AppLog.app_log ||= PebblApp::AppLog.new()
+
+PebblApp::AppLog.app_log.level = "DEBUG"
+
 require 'pebbl_app/signals'
 
 ## Data object class for the DispatchTest example
@@ -96,8 +102,8 @@ end
 class TestContext < PebblApp::GMainContext
   attr_reader :data
 
-  def initialize(data, logger)
-    super(blocking: true, logger: logger)
+  def initialize(data)
+    super(blocking: true)
     @data = data
   end
 
@@ -120,7 +126,6 @@ class DispatchTest < PebblApp::GMain
   ## log initialized for a debug level of information.
   def initialize()
     super()
-    self.logger.level = "DEBUG" ## for purpose of tests
     @handlers = PebblApp::SignalMap.new
     @data = TestData.new
   end
@@ -134,7 +139,7 @@ class DispatchTest < PebblApp::GMain
   ## called under a callback initialized in #configure
   ##
   def do_work(data)
-    debug("do_work continuing")
+    PebblApp::AppLog.debug("do_work continuing")
     data.log_event(:loop_cont)
     ## pause a second, for purpose of tests
     sleep 1
@@ -146,22 +151,26 @@ class DispatchTest < PebblApp::GMain
       ## in each main loop iteration
       if context.cancelled?
         ## not yet reached under tests
-        debug("In callback (cancelled)")
+        PebblApp::AppLog.debug("In callback (cancelled)")
       else
         ## Similar to the original example in the GLib documentaiton,
         ## this modular API will dispatch to a method outside of this
         ## callback/context model, mainly #do_work
-        debug("In callback => do_work")
+        PebblApp::AppLog.debug("In callback => do_work")
         data.log_event(:callback)
         do_work(data)
-        # debug("Testing error handling") if $DEBUG_ERROR_HANDLING
+        # PebblApp::AppLog.debug("Testing error handling") if $DEBUG_ERROR_HANDLING
         # raise "Test" if $DEBUG_ERROR_HANDLING
       end
     end
   end
 
   def context_new(data)
-    TestContext.new(data, self.logger)
+    TestContext.new(data)
+  end
+
+  def context_acquired(context)
+    ## protocol method (nop)
   end
 
   ## a partial adaptation after `main` in
@@ -172,7 +181,7 @@ class DispatchTest < PebblApp::GMain
     initial_debug = $DEBUG
     $DEBUG = true
 
-    debug("in #main(#{wait})")
+    PebblApp::AppLog.debug("in #main(#{wait})")
 
     begin ## debug block
       data = self.data
@@ -226,11 +235,11 @@ class DispatchTest < PebblApp::GMain
       }
       usr1_hdlr = proc { |sname, perv|
         ## log the state of the event log, to the service log
-        info("Handling signal #{sname}")
+        PebblApp::AppLog.info("Handling signal #{sname}")
         hdlr_base.yield(sname)
-        info("Running")
+        PebblApp::AppLog.info("Running")
         self.data.work_log.each do |data|
-          info("[event] %s : %s" % data)
+          PebblApp::AppLog.info("[event] %s : %s" % data)
         end
       }
 
@@ -269,7 +278,7 @@ class DispatchTest < PebblApp::GMain
       cancellation = context.cancellation
       cancellation.reset
       cancellation.signal_connect_after("cancelled") do
-        debug("Cancellation reached")
+        PebblApp::AppLog.debug("Cancellation reached")
         context.log_event(:cancellation)
       end
 
@@ -285,7 +294,7 @@ class DispatchTest < PebblApp::GMain
             ## logging before return
             sleep wait
             context.cancellation.cancel(:end)
-            debug("Done")
+            PebblApp::AppLog.debug("Done")
             context.log_event(:ext_return)
           end
         end ## with_handlers

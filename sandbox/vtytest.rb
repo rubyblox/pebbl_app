@@ -775,7 +775,7 @@ end
 ##
 ## VtyApp
 ##
-class VtyApp < Gtk::Application
+class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
 
   FEATURE_FLAGS = Vte::FeatureFlags.constants.dup.tap { |flags|
     flags.delete(:FLAGS_MASK) }.select { |name|
@@ -791,9 +791,6 @@ class VtyApp < Gtk::Application
      end
     end
   end ## class << VtyApp
-
-  ## TBD/FIXME testing for other AppMixin here
-  include PebblApp::AppMixin
 
   def to_s()
     "#<%s %s (%s) 0x%06x>" % [
@@ -979,25 +976,29 @@ class VtyApp < Gtk::Application
   ## create a new application window
   def create_app_window()
     ## initialize and configure a main window for this application
-    appwdw = VtyAppWindow.new(self)
-    return appwdw
+    wdw = VtyAppWindow.new(self)
+    wdw.shell = self.shell ## TBD @ profiles, config, modular design ...
+
+    ## TBD actions & menus here - this would not be used, presently
+    # map_simple_action("win.quit", accel: "<Ctrl>Q", widget: wdw) do
+    #   self.quit
+    # end
+
+    return wdw
   end
+
 
   def quit()
     self.windows.each do |wdw|
       PebblApp::AppLog.debug("Closing #{wdw}")
       wdw.close
     end
-    super() ## may result in #shutdown being called for the main loop?
-
-    ## tbd the call to Gtk.main_quit could be handled externally,
-    ## from some thread independent to the #main thread
-    PebblApp::AppLog.debug(
-      "Calling Gtk.main_quit in Thread 0x%06x" % [Thread.current.__id__]
-    )
-    ## FIXME not always a clean exit. Gtk does not provide much
-    ## support for accessing the actual Gtk main loop
-    Gtk.main_quit
+    if (context = @gmain.running)
+      @gmain.running = false
+    end
+    ## super() would not necessarily be needed here.
+    ## this is not using a Gtk Main loop
+    # super()
   end
 
   ## return the VtyConf instance for this application
@@ -1010,34 +1011,6 @@ class VtyApp < Gtk::Application
     end
   end
 
-  def main(argv: ARGV)
-    PebblApp::AppLog.app_log ||= PebblApp::AppLog.new(domain: "vtytest")
-    PebblApp::AppLog.debug("#main ARGV: #{ARGV}")
-    configure(argv: argv)
+  ## see GtkApp#main, GtkMain#map_sources
 
-    PebblApp::AppLog.info("Using shell: #{self.shell}")
-
-    timeout = self.config.gtk_init_timeout
-    ## FIXME do not re-init the framework if e.g initialized in a run script
-    framework = PebblApp::GtkFramework.new(timeout: timeout)
-
-    app_args = self.config.gtk_args ## FIXME will have to parse out --display separately
-    PebblApp::AppLog.debug("#main app_args: #{app_args}")
-    open_args = framework.init(argv: app_args) ## FIXME it does not parse out --display
-    PebblApp::AppLog.debug("#main open_args: #{open_args}")
-
-    PebblApp::AppLog.info("Register for #{self.class}##{__method__}") if $DEBUG
-    register() ## at most once (FIXME)
-    PebblApp::AppLog.info("Activate for #{self.class}##{__method__}") if $DEBUG
-    if open_args.empty?
-      activate()
-    else
-      # open(open_args, "".freeze) ## Another API Bug @ "TODO"
-      ## ^^ "TODO: in Ruby -> GIArgument(array/C)[interface(interface)](GFile)"
-      activate()
-    end
-    ## TBD alternate context ...
-    Gtk.main
-  end
-
-end ## VtyApp
+end

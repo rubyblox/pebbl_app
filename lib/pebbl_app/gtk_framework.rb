@@ -27,16 +27,14 @@ module PebblApp
         %w(GtkConf),
       "gir_proxy" =>
         %w(InvokerP FuncInfo),
-      "gtk_framework/logging" =>
-      %w(LoggerDelegate LogManager LogModule),
       "gtk_framework/threads" => ## FIXME remove, refactor legacy to use "anonymous threads"
         %w(NamedThread),
-      "gtk_framework/gobj_type" =>
+      "gobj_type" =>
         %w(GObjType),
-      "gtk_framework/builders" =>
+      "gtk_builders" =>
         %w(UIBuilder TemplateBuilder
            ResourceTemplateBuilder FileTemplateBuilder),
-      "gtk_framework/gbuilder_app" =>
+      "gbuilder_app" =>
         %w(GBuilderApp),
       "gtk_framework/sysexit" =>
         %w(SysExit)
@@ -55,14 +53,14 @@ module PebblApp
 
     def init(argv: ARGV)
       ## not reached. why not, now?
-      Kernel.warn("In #{self}#{__method__}", uplevel: 0) if $DEBUG
+      AppLog.debug("In #{self.class}#{__method__}")
 
       error = false
       if ! ENV['DISPLAY']
         ## FIXME Gdk.init may also fail if there's no xauthority
         ## information available in the environment while the X server
         ## requires xauth - not checked here
-        Kernel.warn("No DISPLAY found in environment", uplevel: 0)
+        AppLog.warn("No DISPLAY found in environment")
       end
       error = false
       continue = false
@@ -82,7 +80,7 @@ module PebblApp
             ##
             ## this may block separately, e.g if Gtk.init was called earlier
             ## with a different DISPLAY enviornment
-            continue, next_args = Gtk.init_check(argv)
+            continue, next_args = Gdk.init_check(argv) # or Gtk.init_check(argv)
           rescue Gtk::InitError => err
             error = err
           end
@@ -90,7 +88,7 @@ module PebblApp
       if continue
         return next_args
       else
-        error ||= "Gtk.init_check failed"
+        error ||= "Gdk.init_check failed"
         raise FrameworkError.new(error)
       end
     end ## init

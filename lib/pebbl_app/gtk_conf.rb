@@ -13,11 +13,10 @@ class PebblApp::GtkConf < PebblApp::Conf
   end
 
 
-  def initialize(cmd_name = nil, options = nil, &cmd_name_block)
-    super(cmd_name, options, &cmd_name_block)
-    if ! options
-      ## set default options
-      self.options[:gtk_init_timeout] = Const::GTK_INIT_TIMEOUT_DEFAULT
+  def initialize(command_name = nil, options = nil, &command_name_block)
+    super(command_name, options, &command_name_block)
+    map_default(:gtk_init_timeout) do
+      Const::GTK_INIT_TIMEOUT_DEFAULT
     end
   end
 

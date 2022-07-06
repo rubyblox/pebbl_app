@@ -57,29 +57,29 @@ describe PebblApp::Conf do
     expect(usage_lines).to include("-h")
   end
 
-  it "accepts a cmd_name" do
+  it "accepts a command_name" do
     name = Random.uuid
     inst = described_class.new(name)
-    expect(inst.cmd_name).to be == name
+    expect(inst.command_name).to be == name
   end
 
-  it "applies a block for deferred cmd_name access" do
+  it "applies a block for deferred command_name access" do
     time = nil
     inst = described_class.new() do
       time = Time.new
     end
-    expect(inst.instance_variable_defined?(:@cmd_name)).to be false
-    expect(inst.instance_variable_defined?(:@cmd_name_block)).to_not be false
-    expect(inst.cmd_name).to_not be false
-    expect(inst.instance_variable_defined?(:@cmd_name)).to be true
+    expect(inst.instance_variable_defined?(:@command_name)).to be false
+    expect(inst.instance_variable_defined?(:@command_name_block)).to_not be false
+    expect(inst.command_name).to_not be false
+    expect(inst.instance_variable_defined?(:@command_name)).to be true
     expect(time).to_not be nil
-    expect(inst.cmd_name).to be == time.to_s
+    expect(inst.command_name).to be == time.to_s
   end
 
 
-  it "sets the cmd_name as the option parser's program name" do
+  it "sets the command_name as the option parser's program name" do
     parser = subject.make_option_parser
-    expect(parser.program_name).to be == subject.cmd_name
+    expect(parser.program_name).to be == subject.command_name
   end
 
 
