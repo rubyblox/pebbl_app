@@ -32,6 +32,9 @@ module ApiDb
     attr_accessor :table_prefix
 
 
+    ## Initialize a new DbMgr for persistent storage under some data
+    ## directory.
+    ##
     ## @param name [String] name of this database, used mainly for
     ## database files
     ##
@@ -59,6 +62,10 @@ module ApiDb
       @table_prefix = table_prefix
     end
 
+    ## Return an abbreviated string representation for this DbMgr
+    ##
+    ## The string will indicate the class, object id, database name,
+    ## database directory, and db open state for this DbMgr
     def to_s
       case self.opened?
       when TrueClass
@@ -75,7 +82,7 @@ module ApiDb
       ]
     end
 
-    ## create or open the db instance for this DbMgr
+    ## Create or open the db instance for this DbMgr
     ##
     ## @return [Groonga::Database] the db instance
     ##
@@ -91,7 +98,7 @@ module ApiDb
       if (inst = self.db)
         return inst
       elsif File.file?(self.path)
-        @db = Groonga::Database.open(self.path context: self.context)
+        @db = Groonga::Database.open(self.path, context: self.context)
       else
         datadir = self.dir
         FileUtils.mkdir_p(datadir) if !File.directory?(datadir)
@@ -116,42 +123,91 @@ module ApiDb
       end
     end
 
-    ## close the datbase for this DbMgr and remove all files for the
-    ## database
+    ## A utility method, yielding the database for this DbMgr to the
+    ## provided block
     ##
-    ## @return [Array<String>, false] an array of the filenames removed,
-    ##  or false if no files were found for this DbMgr
-    def destroy()
-      self.close
-      files = Dir.glob(self.path + "*")
-      if files.empty?
-        Kernel.warn("#{self.class}#{__method__}: \
-Found no files for database #{self}", uplevel: 0)
-        return false
+    ## @raise [DbError] if the database is not opened
+    def assert_opened(&block)
+      if (inst = self.db) && !inst.closed?
+        yield inst
       else
-        FileUtils.rm(files, force: true)
-        return files
+        raise DbError.new("Database not open for #{self}")
       end
     end
 
-    ## if the db instance for this DbMgr is initialized, closes the db
-    ## instance
+    ## Return an array of files used by the database for this DbMgr
+    ##
+    ## FIXME this does not return a complete list of files,
+    ## but only the files that would be shown under #report
+    ##
+    # def db_files
+    #   assert_opened do |db|
+    #     files = Array.new
+    #     files << db.path
+    #     db.tables.each do |tbl|
+    #       files << tbl.path
+    #       tbl.columns.each do |col|
+    #         files << col.path
+    #       end
+    #     end
+    #     return files
+    #   end
+    # end
+
+    ## Close the datbase for this DbMgr and remove all files for the
+    ## database
+    ##
+    ## @return [Array<String>, false] an array of filenames for removed
+    ##  files, or false if no files were found for this DbMgr
+    def destroy()
+      self.close
+      ## this approach does not require that the database is open.
+      ##
+      ## While it may inadvertently remove files not in use by the
+      ## database, this may seem relatively unlikely for the pathname
+      ## conventious used here. It may generally be averted by using a
+      ## base ## data dir not accessed by other applications
+      ##
+      ## FIXME the Dir.glob call may not be needed if #db_files was
+      ## implemented as to return a complete list of files for the
+      ## database
+      dbf = Self.path
+      if File.file?(dbf)
+        files = [dbf, * Dir.glob(dbf + ".*".freeze)]
+        FileUtils.rm(files, force: true)
+        return files
+      else
+        Kernel.warn("#{self.class}#{__method__}: \
+Found no files for database #{self}", uplevel: 0)
+        return false
+      end
+    end
+
+    ## If the db instance for this DbMgr is initialized, close the db
     def close()
       if (inst = self.db)
         inst.close
         @db = false
       end
+      ## if (ctxt = self.context)
+      ##   # ctxt.close # FIXME on finalization
+      ## end
     end
 
+    ## Retrieve the schema for the database of this DbMgr. The schema
+    ## will be configured with the provied schema options.
+    ##
+    ## In Rroonga, schema options may be used to provide default options
+    ## for each call to Schema#create_table
+    ##
+    ## See also: Groonga::Schema#create_table and the Rroonga tutorial
+    ## * (ja) http://ranguba.org/rroonga/ja/file.tutorial.html
+    ## * (en) http://ranguba.org/rroonga/en/file.tutorial.html
+    ##
+    ## @see #schema_define
     def schema(**options)
-      ## schema options will be used as default options (args)
-      ## for each call to schema.create_table
       ##
       ## e.g options
-      ##  type: <trie_type_symbol>
-      ##  default_tokenizer: "TokenBigram"
-      ## equivalent to the options args for schema.create_table
-      ## http://ranguba.org/rroonga/en/file.tutorial.html
       opts = options.dup
       opts[:context] ||= self.context
       if (inst = @schema)
@@ -165,20 +221,25 @@ Found no files for database #{self}", uplevel: 0)
       end
     end
 
-    ## Define an instance variable and a reader method for accessing the
-    ##  table described in the table definition
+    ## Define a reader method for accessing the table described
+    ## in the table definition.
     ##
-    ## **Known Limitation:** This release of the DbMgr API has not included
-    ##  extensive testing for the behaviors of this method with relation
-    ##  to individual tables, as subsequent of any schema redefinition.
-    ##  Absent of further testing for this feature of the API, it
-    ##  may be recommended to define the schema exactly once within
-    ##  each process environment, using #schema_define
+    ## The name of the reader method will be interpolated as the
+    ## table_prefix for this DbMgr suffixed with a downcased
+    ## representation of the table name.
+    ##
+    ## This will redefine any existing instance method for the
+    ## interpolated method name.
     ##
     ## @param definition [Groonga::Schema::TableDefinition]
     ##
     ## @see #schema_define
     def definition_connect(definition)
+      ## TBD this could be defined and evaluated at a class scope,
+      ## but requires instance variable access for the database
+      ##
+      ## See also: Active Record
+      ##
       name = definition.name
       s_name = name.downcase
       if (pfx = self.table_prefix)
@@ -186,112 +247,108 @@ Found no files for database #{self}", uplevel: 0)
       else
         pfx = "".freeze
       end
-      ivar = ("@".freeze + pfx + s_name).to_sym
 
-      if self.instance_variable_defined?(ivar)
-        false
+      ## determine what context to use for retrieving the table
+      ##
+      ## this will prefer any context provided in the schema definition
+      ## for the table
+      if ! ( (def_opts = definition.instance_variable_get(:@options)) &&
+             (tbl_ctx = def_opts[:context]) )
+        ## else use the context for this DbMgr
+        tbl_ctx = self.context
+      end
+
+      ## retrieve the table and bind a method that will return that
+      ## table, or raise a DbError if the table is not found
+      if (tbl = tbl_ctx[name])
+        mtd = (pfx + s_name).to_sym
+        lmb = lambda { tbl }
+        self.class.define_method(mtd, &lmb)
       else
-        ## prefer any context defined for the table itself,
-        ## using options from the table definition
-        if ! ( (def_opts = definition.instance_variable_get(:@options)) &&
-              (tbl_ctx = def_opts[:context]))
-          ## else use the context for this DbMgr
-          tbl_ctx = self.context
-        end
-        ## retrieve the table and bind a method, or raise DbError
-        if (tbl = tbl_ctx[name])
-          self.instance_variable_set(ivar, tbl)
-          mtd = (pfx + s_name).to_sym
-          lmb = lambda { tbl }
-          self.class.define_method(mtd, &lmb)
-        else
-          raise DbError.new("Table from schema not found in context: %p @ %s" %
-                            [name, tbl_ctx])
-        end
+        raise DbError.new("Table from schema not found in context: %p @ %s" %
+                          [name, tbl_ctx])
       end
     end
 
     ## define or update the schema for this instance
     ##
-    ## The active schema for this instance will be yielded to the
-    ## provided block.
+    ## The schema for this instance will be yielded to the provided block.
     ##
-    ## Subsequently, Groonga::Schema#define will be called for the schema
-    ## object
+    ## After the block, Groonga::Schema#define will be called for the
+    ## schema.
     ##
     ## After the call to Groonga::Schema#define, each table definition
-    ## in the schema will be passed to #definition_connect
-    ##
-    ## The DbMgr#definition_connect method will define an instance
-    ## method for each table. Classes may override this method as
-    ## needed.
+    ## in the schema will be passed to the method #definition_connect
     ##
     ## **Known Limitation:** This release of the DbMgr API has not
-    ## included support for persistent schema storage. There is an API
-    ## available for this feature, in Groonga
+    ## included support for persistent schema storage with Groonga.
     ##
+    ## @raise [DbError] if the database for this DbMgr is not opened
     def schema_define(&block)
-      inst = self.schema
-      yield inst
-      ## important to call Schema#define after defining the schema,
-      ## This would ensure that tables described in the schema will be
-      ## available under the context for each table.
-      inst.define
-      inst.instance_variable_get(:@definitions).each do |defined|
-        self.definition_connect(defined)
+      assert_opened do
+        sch = self.schema
+        yield sch
+        ## important to call Schema#define after defining the schema,
+        ## This would ensure that tables described in the schema will be
+        ## available under the context for each table.
+        ##
+        ## TBD (should) fail if calling this after #close on the db
+        ##
+        sch.define
+        sch.instance_variable_get(:@definitions).each do |defn|
+          self.definition_connect(defn)
+        end
+        return sch
       end
-      return inst
     end
 
-    ## a forwarding method, returning the tables of the database
-    ## instance for this datbase manager
+    ## a forwarding method, returning the array of tables for the
+    ## database instance of this datbase manager
     ##
-    ## raises DbError if the database #db is not open
+    ## @raise [DbError] if the database for this DbMgr is not opened
     def tables()
-      if (inst = self.db)
-        inst.tables
-      else
-        ## avoiding an invalid API call => segfault ...
-        raise DbError.new("Database not open: #{self}")
+      assert_opened do |db|
+        db.tables
       end
     end
 
     ## return a named table for the #context of this DbMgr
     ##
-    ## raises DbError if the database #db is not open
-    ##
     ## @param name [String] a table name
     ##
     ## @see #schema_define
     ##
+    ## @raise [DbError] if the database for this DbMgr is not opened
     def [](name)
-      ## table accessor @ Groonga context scope
-      if self.opened?
-        self.context[name]
-      else
-        raise DbError.new("Database not open: #{self}")
+      assert_opened do |db|
+        db.context[name]
+      end
+    end
+
+    ## forwarding to Groonga::DatabaseInspector, produce a report for
+    ## the database of this DbMgr
+    ##
+    ## @param output [IO] output stream for the report
+    ##
+    ## @param tables [boolean] true if database tables should be
+    ##  inspected for the report
+    ##
+    ## @param colunmns [boolean] true if table columns should be
+    ##  inspected for the report
+    ##
+    ## @raise [DbError] if the database for this DbMgr is not opened
+    def report(output: STDOUT, tables: true, columns: true)
+      assert_opened do |db|
+        opts = Groonga::DatabaseInspector::Options.new
+        opts.show_tables = tables
+        opts.show_columns = columns
+        ictor = Groonga::DatabaseInspector.new(db, opts)
+        ictor.report(output)
+        return ictor
       end
     end
 
     ## Add or update the field data for a record in a named table.
-    ##
-    ## This method will raise a DbError if the db for this DbMgr is not
-    ## open.
-    ##
-    ## Supported field options:
-    ##
-    ## - If the column name `:_key` is provided, this method will raise
-    ##   an ArgumentError. The calling method should provide the key
-    ##   object for each record via the _key_ parameter on this method.
-    ##
-    ## - If the column name `:_id` is provided, this method will raise
-    ##   an ArgumentError. The `:_id` value may be used internally in
-    ##   Groonga, such as for identifying individual table rows. The
-    ##   record `_id` should not be provied during record update.
-    ##
-    ## - For other fields, each provided field value should match the
-    ##   syntax specified when defining the corresponding column for
-    ##   this table in the schema.
     ##
     ## @param table [String] a table name, under the active schema
     ##
@@ -301,21 +358,34 @@ Found no files for database #{self}", uplevel: 0)
     ##  value matches an existing key in the table, the record for the
     ##  existing key will be updated with the field values as provided.
     ##
-    ## @param fields [Hash] A mapping of column names (symbols) with
-    ##  field values for the record. The syntax for each field value
-    ##  may be determined when defining the schema.
+    ## @param fields [Hash] An options map providing column names
+    ##  (symbols) with field values for the data record. The syntax for
+    ##  each field value may be determined when defining the schema.
     ##
     ## @see #schema_define
     ##
+    ## @raise [DbError] if the database for this DbMgr is not opened, or
+    ##  if no table is found for the provided table name
+    ##
+    ## @raise [ArgumentError] if the column name `:_key` is provided.
+    ##  The calling method should provide the key for the record via the
+    ##  _key_ parameter on this method.
+    ##
+    ## @raise [ArgumentError] if the column name `:_id` is provided. The
+    ##  `:_id` column may be used internally in Groonga and should not be
+    ##  provied during record update.
     def update(table, key, **fields)
-      if fields[:_key]
-        raise ArgumentError.new("Invalid field name :_key")
-      elsif fields [:_id]
-        raise ArgumentError.new("Invalid field name :_id")
-      elsif (tbl = self[table])
+      assert_opened do
+        ## TBD testing for thread-safe update in some subclass
+        if fields[:_key]
+          raise ArgumentError.new("Invalid field name :_key")
+        elsif fields [:_id]
+          raise ArgumentError.new("Invalid field name :_id")
+        elsif (tbl = self[table])
           tbl.add(key, **fields)
-      else
-        raise DbError.new("Table not found: #{table}")
+        else
+          raise DbError.new("Table not found: #{table}")
+        end
       end
     end
 

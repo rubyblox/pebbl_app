@@ -92,7 +92,8 @@ begin
   require_relative 'api-db'
   basedir=File.dirname(ENV['BUNDLE_GEMFILE'])
   dbcontext= Groonga::Context.new()
-  $STORAGE = storage = ApiDb::DbMgr.new("api-00", File.join(basedir, "tmp"),
+  $STORAGE = storage = ApiDb::DbMgr.new("api-00",
+                                        File.join(basedir, "tmp", "api-db"),
                                         context: dbcontext)
 
   storage.destroy
