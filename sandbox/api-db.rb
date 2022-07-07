@@ -60,6 +60,7 @@ module ApiDb
       @context = context
       @db = false
       @table_prefix = table_prefix
+      @mtx = Mutex.new
     end
 
     ## Return an abbreviated string representation for this DbMgr
@@ -77,14 +78,25 @@ module ApiDb
       else
         state = "??".freeze
       end
-      "#<%s 0x%06x %s @ %s (%s) >".freeze % [
-        self.class, __id__, self.name, self.dir, state
+      "#<%s %s @ %s (%s) 0x%06x>".freeze % [
+        self.class, self.name, self.dir, state, __id__
       ]
     end
 
+    def with_mgr_lock(&block)
+      ## not quite a recursive mutex
+      ##
+      ## FIXME this uses no timeout
+      mtx = @mtx
+      begin
+        new_lk = (mtx.lock if !mtx.owned?)
+        yield
+      ensure
+        mtx.unlock if new_lk
+      end
+    end
+
     ## Create or open the db instance for this DbMgr
-    ##
-    ## @return [Groonga::Database] the db instance
     ##
     ## @see #db
     ## @see #close
@@ -95,15 +107,25 @@ module ApiDb
       ##
       ## NB past here:
       ##  self.context == self.db.context
-      if (inst = self.db)
-        return inst
-      elsif File.file?(self.path)
-        @db = Groonga::Database.open(self.path, context: self.context)
-      else
-        datadir = self.dir
-        FileUtils.mkdir_p(datadir) if !File.directory?(datadir)
-        @db = Groonga::Database.create(path: self.path, context: self.context)
-      end
+      with_mgr_lock do
+        if (inst = self.db)
+          if inst.closed?
+            @db = nil
+            open()
+          else
+            return inst
+          end
+        elsif File.file?(self.path)
+          @db = Groonga::Database.open(self.path, context: self.context)
+        else
+          ## if some files exist at time of database create, Groonga may
+          ## emit an error suggesting no memory is available, e.g given a
+          ## file with a suffix ".0000000" on the db path for the database
+          datadir = self.dir
+          FileUtils.mkdir_p(datadir) if !File.directory?(datadir)
+          @db = Groonga::Database.create(path: self.path, context: self.context)
+        end
+      end ## mtx.synchronize
     end
 
     ## When the db instance for this DbMgr is initialized, returns true if
@@ -127,59 +149,88 @@ module ApiDb
     ## provided block
     ##
     ## @raise [DbError] if the database is not opened
-    def assert_opened(&block)
-      if (inst = self.db) && !inst.closed?
-        yield inst
-      else
-        raise DbError.new("Database not open for #{self}")
+    def with_db(&block)
+      with_mgr_lock do
+        if (inst = self.db) && !inst.closed?
+          yield inst
+        else
+          raise DbError.new("Database not open for #{self}")
+        end
       end
     end
 
-    ## Return an array of files used by the database for this DbMgr
+    ## return an array of filenames used by the database for this DbMgr
     ##
-    ## FIXME this does not return a complete list of files,
-    ## but only the files that would be shown under #report
+    ## @raise [DbError] if the database is not opened
     ##
-    # def db_files
-    #   assert_opened do |db|
-    #     files = Array.new
-    #     files << db.path
-    #     db.tables.each do |tbl|
-    #       files << tbl.path
-    #       tbl.columns.each do |col|
-    #         files << col.path
-    #       end
-    #     end
-    #     return files
-    #   end
-    # end
+    ## @see #db_glob_files
+    def db_files
+      with_db do |db|
+        base = db.path
+        conf = base + ".conf".freeze
+        options = base + ".options".freeze
+        specs = base + ".0000000".freeze
+        files = [base, conf, options, specs]
+        db.tables.each do |tbl|
+          files << tbl.path
+          tbl.columns.each do |col|
+            colbase = col.path
+            files << colbase
+            colbase_idx = colbase + ".c".freeze
+            files << colbase_idx
+          end
+        end
+        files.filter! { |f| File.exist? f }
+        return files
+      end
+    end
+
+    ## Return an array of filenames estimated to be used by the database
+    ## for this DbMgr
+    ##
+    ## This method uses a filename globs pattern such that does not
+    ## require that the database is opened. This may match files not in
+    ## use by the database.
+    def db_globs
+      dbf = db.path
+      if File.exist?(dbf)
+        return [dbf, * Dir.glob(dbf + ".*".freeze)]
+      else
+        return []
+      end
+    end
 
     ## Close the datbase for this DbMgr and remove all files for the
-    ## database
+    ## database.
+    ##
+    ## For purpose of constructing a list of files for the database, this
+    ## method requires that the database would be opened. The database
+    ## will be closed before removing files.
+    ##
+    ## If the database cannot be opened, the files list returned by
+    ## #db_globs can be reviewed before removing any files indicated
+    ## with that method.
     ##
     ## @return [Array<String>, false] an array of filenames for removed
     ##  files, or false if no files were found for this DbMgr
+    ##
+    ## @raise [DbError] if the database cannot be opened
     def destroy()
-      self.close
-      ## this approach does not require that the database is open.
-      ##
-      ## While it may inadvertently remove files not in use by the
-      ## database, this may seem relatively unlikely for the pathname
-      ## conventious used here. It may generally be averted by using a
-      ## base ## data dir not accessed by other applications
-      ##
-      ## FIXME the Dir.glob call may not be needed if #db_files was
-      ## implemented as to return a complete list of files for the
-      ## database
-      dbf = Self.path
-      if File.file?(dbf)
-        files = [dbf, * Dir.glob(dbf + ".*".freeze)]
-        FileUtils.rm(files, force: true)
-        return files
-      else
+      files = []
+      begin
+        self.open
+        files = self.db_files
+      ensure
+        self.close
+      end
+      files.filter! { |f| File.exist?(f) }
+      if files.empty?
         Kernel.warn("#{self.class}#{__method__}: \
 Found no files for database #{self}", uplevel: 0)
         return false
+      else
+        FileUtils.rm(files, force: true)
+        return files
       end
     end
 
@@ -285,7 +336,7 @@ Found no files for database #{self}", uplevel: 0)
     ##
     ## @raise [DbError] if the database for this DbMgr is not opened
     def schema_define(&block)
-      assert_opened do
+      with_db do
         sch = self.schema
         yield sch
         ## important to call Schema#define after defining the schema,
@@ -307,7 +358,7 @@ Found no files for database #{self}", uplevel: 0)
     ##
     ## @raise [DbError] if the database for this DbMgr is not opened
     def tables()
-      assert_opened do |db|
+      with_db do |db|
         db.tables
       end
     end
@@ -320,7 +371,7 @@ Found no files for database #{self}", uplevel: 0)
     ##
     ## @raise [DbError] if the database for this DbMgr is not opened
     def [](name)
-      assert_opened do |db|
+      with_db do |db|
         db.context[name]
       end
     end
@@ -338,7 +389,7 @@ Found no files for database #{self}", uplevel: 0)
     ##
     ## @raise [DbError] if the database for this DbMgr is not opened
     def report(output: STDOUT, tables: true, columns: true)
-      assert_opened do |db|
+      with_db do |db|
         opts = Groonga::DatabaseInspector::Options.new
         opts.show_tables = tables
         opts.show_columns = columns
@@ -375,7 +426,7 @@ Found no files for database #{self}", uplevel: 0)
     ##  `:_id` column may be used internally in Groonga and should not be
     ##  provied during record update.
     def update(table, key, **fields)
-      assert_opened do
+      with_db do
         ## TBD testing for thread-safe update in some subclass
         if fields[:_key]
           raise ArgumentError.new("Invalid field name :_key")
