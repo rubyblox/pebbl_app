@@ -163,14 +163,15 @@ module ApiDb
     ##
     ## @raise [DbError] if the database is not opened
     ##
-    ## @see #db_glob_files
+    ## @see #db_files_glob
     def db_files
       with_db do |db|
         base = db.path
         conf = base + ".conf".freeze
         options = base + ".options".freeze
+        f001 = base + ".001".freeze
         specs = base + ".0000000".freeze
-        files = [base, conf, options, specs]
+        files = [base, conf, options, f001, specs]
         db.tables.each do |tbl|
           files << tbl.path
           tbl.columns.each do |col|
@@ -180,8 +181,7 @@ module ApiDb
             files << colbase_idx
           end
         end
-        files.filter! { |f| File.exist? f }
-        return files
+        return Dir.glob(files)
       end
     end
 
@@ -191,8 +191,8 @@ module ApiDb
     ## This method uses a filename globs pattern such that does not
     ## require that the database is opened. This may match files not in
     ## use by the database.
-    def db_globs
-      dbf = db.path
+    def db_files_glob
+      dbf = self.path
       if File.exist?(dbf)
         return [dbf, * Dir.glob(dbf + ".*".freeze)]
       else
@@ -205,11 +205,9 @@ module ApiDb
     ##
     ## For purpose of constructing a list of files for the database, this
     ## method requires that the database would be opened. The database
-    ## will be closed before removing files.
-    ##
-    ## If the database cannot be opened, the files list returned by
-    ## #db_globs can be reviewed before removing any files indicated
-    ## with that method.
+    ## will be closed before removing files. If the database cannot be
+    ## opened, the files list returned by #db_files_glob can be reviewed
+    ## separately, before removing any files indicated with that method.
     ##
     ## @return [Array<String>, false] an array of filenames for removed
     ##  files, or false if no files were found for this DbMgr
