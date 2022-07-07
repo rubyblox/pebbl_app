@@ -88,6 +88,59 @@ begin
     end
   end
 
+
+  require_relative 'api-db'
+  basedir=File.dirname(ENV['BUNDLE_GEMFILE'])
+  dbcontext= Groonga::Context.new()
+  $STORAGE = storage = ApiDb::DbMgr.new("api-00", File.join(basedir, "tmp"),
+                                        context: dbcontext)
+
+  storage.destroy
+  storage.open
+
+  storage.schema(type: :double_array_trie,
+                 default_tokenizer: "TokenBigram")
+  storage.schema_define do |sch|
+    sch.create_table("Yardoc") do |table|
+      table.text("context") ## e.g a gem name, or (TBD) a ruby dir
+      table.text("filename") ## pathname of the context's yardoc file
+      table.time("modified") ## last modified time for the yardoc file
+    end
+
+    sch.create_table("Base") do |table|
+      ## YARD base objects
+      ##
+      ## this table can also be used as a fallback for
+      ## Yard code object types without a class-specific table
+      ##
+      table.index("Yardoc.context") ## or table.reference here (??)
+      table.text("kind") ## eg "NS", "Mtd" or "" (FIXME use a static int-based enumeration)
+      table.text("path")
+      table.text("tooltip") ## name && signature
+    end
+
+    sch.create_table("NS") do |table|
+      ## namespace objects
+      table.index("Base.path")
+    end
+
+    sch.create_table("Mtd") do |table|
+      ## methods (yard encoding)
+      table.index("Base.path")
+    end
+
+    sch.create_table("Const") do |table|
+      ## constants
+      table.index("Base.path")
+    end
+
+    sch.create_table("Cvar") do |table|
+      ## class variables
+      table.index("Base.path")
+    end
+  end ## schema_define
+
+
   ## activator
   traversal.traverse_spec do |rb_obj, code_obj|
     ## debugging data for output
