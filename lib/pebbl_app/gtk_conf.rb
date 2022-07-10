@@ -12,9 +12,7 @@ class PebblApp::GtkConf < PebblApp::Conf
     GTK_INIT_TIMEOUT_DEFAULT ||= 15
   end
 
-
-  def initialize(command_name = nil, options = nil, &command_name_block)
-    super(command_name, options, &command_name_block)
+  def initialize(command_name = false)
     map_default(:gtk_init_timeout) do
       Const::GTK_INIT_TIMEOUT_DEFAULT
     end

@@ -14,12 +14,12 @@ gem 'pebbl_app-gtk_support'
 ## about the default source path determined for PebblApp::GtkFramework
 require 'pebbl_app'
 require 'pebbl_app/gtk_framework'
+require 'pebbl_app/app_log'
 
 require 'rikit'
 require 'gtk3'
 
 require 'timeout'
-
 
 success = false
 Timeout::timeout(5) {
@@ -55,16 +55,11 @@ end
 
 class AppWindow < Gtk::ApplicationWindow
 
-  extend(PebblApp::GtkFramework::LoggerDelegate)
-  def_logger_delegate(:@logger)
-  attr_reader :logger
-  LOG_LEVEL_DEFAULT ||= Logger::DEBUG
-
-  extend(PebblApp::GtkFramework::FileTemplateBuilder)
+  extend(PebblApp::FileTemplateBuilder)
   self.use_template(File.join(RESOURCE_ROOT, "ui/appwindow.riview.ui"))
 
   def set_window_action(name, &block)
-    application.log_debug("Adding action '#{name}' in #{self} (#{Thread.current})")
+    application.debug("Adding action '#{name}' in #{self} (#{Thread.current})")
     act = Gio::SimpleAction.new(name)
     act.signal_connect("activate", &block)
     if @win_actions
@@ -91,7 +86,7 @@ class AppWindow < Gtk::ApplicationWindow
   def initialize(application)
     super(application: application)
 
-    @logger = application.logger
+    @logger = (PebblApp::AppLog.app_log ||= PebblApp::AppLog.new)
 
     ## NB init_template will be called under Gtk::Widget#initialize_post
 
@@ -219,7 +214,7 @@ end
 
 
 class RIDocView < Gtk::TextView
-  extend(PebblApp::GtkFramework::FileTemplateBuilder)
+  extend(PebblApp::FileTemplateBuilder)
   ## FIXME only one template-based class per UI file...?
   self.use_template(File.join(RESOURCE_ROOT,"ui/docview.riview.ui"))
 
@@ -256,15 +251,11 @@ end
 
 
 class PrefsWindow < Gtk::Dialog
-  extend(PebblApp::GtkFramework::LoggerDelegate)
-  def_logger_delegate(:@logger)
-  attr_reader :logger
-  LOG_LEVEL_DEFAULT = Logger::DEBUG
 
   ## TBD GLib::Log usage in e.g
   ## ~/.local/share/gem/ruby/3.0.0/gems/glib2-3.4.9/lib/glib2.rb
 
-  extend(PebblApp::GtkFramework::FileTemplateBuilder)
+  extend(PebblApp::FileTemplateBuilder)
   self.use_template(File.join(RESOURCE_ROOT, "ui/prefs.riview.ui"))
 
   ## ensure that some objects from the template will be accessible
@@ -282,8 +273,8 @@ class PrefsWindow < Gtk::Dialog
   def initialize(application)
     self.class.builder ||= application.class.builder
     @application = application
-    @logger = application.logger
     super()
+    @logger = (PebblApp::AppLog.app_log ||= PebblApp::AppLog.new)
 
     entry = ui_internal("SystemStorePath")
     entry.set_text(application.system_store.path)
@@ -316,7 +307,9 @@ class PrefsWindow < Gtk::Dialog
 end
 
 
-class RIViewApp < PebblApp::GtkFramework::GBuilderApp
+class RIViewApp < PebblApp::GBuilderApp
+
+  include PebblApp::LoggerMixin
 
   attr_reader :system_store, :site_store, :home_store, :gem_stores
 
@@ -372,9 +365,9 @@ class RIViewApp < PebblApp::GtkFramework::GBuilderApp
 
   def map_app_window_new()
     w = AppWindow.new(self)
-    log_debug("Adding window #{w} in #{Thread.current}")
+    debug("Adding window #{w} in #{Thread.current}")
     self.add_window(w)
-    log_debug("Presenting window #{w} in #{Thread.current}")
+    debug("Presenting window #{w} in #{Thread.current}")
     w.present
   end
 end

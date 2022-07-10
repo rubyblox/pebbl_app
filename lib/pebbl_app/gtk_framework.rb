@@ -17,14 +17,22 @@ module PebblApp
 
   defautoloads(
     __dir__, {
-      "gapp_mixin.rb" =>
+      "gactionable" =>
+        %(ActionableMixin),
+      "gapp_mixin" =>
         %w(GAppMixin),
+      "gcomposite" =>
+        %w(UIError CompositeWidget FileCompositeWidget),
+      "gdialog" =>
+        %w(DialogMixin),
       "gmain" =>
         %w(GMainCancellation GMainContext GMain),
       "gtk_app" =>
         %w(GtkMain GtkApp),
       "gtk_conf" =>
         %w(GtkConf),
+      "guser_object" =>
+        %w(GUserObject),
       "gir_proxy" =>
         %w(InvokerP FuncInfo),
       "gtk_framework/threads" => ## FIXME remove, refactor legacy to use "anonymous threads"
@@ -52,8 +60,7 @@ module PebblApp
     end
 
     def init(argv: ARGV)
-      ## not reached. why not, now?
-      AppLog.debug("In #{self.class}#{__method__}")
+      AppLog.debug("In #{self.class}##{__method__}")
 
       error = false
       if ! ENV['DISPLAY']
@@ -75,12 +82,21 @@ module PebblApp
             ## if unable to connect to an X11 display, thus the timeout
             if Gtk.respond_to?(:init)
               Gtk.init(*argv)
+              ## not reached (Gtk.init already called ???)
+              AppLog.debug("argv post Gtk.init: #{argv}")
             end
-            ## ensure the args are parsed by Gtk
+            ## ensure the args are parsed by Gdk
+            ## - albeit not of much use here, presently, except for
+            ##   validating any provided args that Gdk might operate on
             ##
-            ## this may block separately, e.g if Gtk.init was called earlier
+            ## FIXME need a separate way to parse out any known GTK/GDK args
+            ##
+            ## TBD this may block separately, e.g if Gtk.init was called earlier
             ## with a different DISPLAY enviornment
             continue, next_args = Gdk.init_check(argv) # or Gtk.init_check(argv)
+            ## ^ if it's modifying any of the args internally, this is
+            ## being lost in the API transform. Or maybe it's just not
+            ## parsing out any --display option?
           rescue Gtk::InitError => err
             error = err
           end

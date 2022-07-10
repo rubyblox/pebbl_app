@@ -9,6 +9,7 @@ require 'forwardable'
 class PebblApp::ConfigurationError < RuntimeError
 end
 
+
 class PebblApp::Conf
 
   module Scope
@@ -49,27 +50,21 @@ class PebblApp::Conf
   ## object. Else, the internal options struct will be initialized with
   ## an empty options set.
   ##
-  def initialize(command_name = nil, options = nil, &command_name_block)
-    if block_given?
-      @command_name_block = command_name_block
-      # if ! command_name.nil?
-      #   Kernel.warn("Ignoring non-nil command_name (block provided)", uplevel: 0)
-      # end
-    elsif command_name
+  def initialize(command_name = false)
+    if command_name
       @command_name = command_name.to_s
-      ## else: @command_name will not be initialized here
     end
     @options = options ? OpenStruct.new(options) : OpenStruct.new
   end
 
-  def default_blocks()
-    @default_blocks ||= Hash.new
+  def default_callbacks()
+    @default_callbacks ||= Hash.new
   end
 
   def map_default(name, &block)
     opt = name.to_sym
     if block_given?
-      default_blocks[opt] = block
+      default_callbacks[opt] = block
     else
       raise ArgumentError.new("No block provided")
     end
@@ -77,18 +72,18 @@ class PebblApp::Conf
 
   def mapped_default?(name)
     opt = name.to_sym
-    default_blocks.key?(opt)
+    default_callbacks.key?(opt)
   end
 
   def unmap_default(name)
     opt = name.to_sym
-    default_blocks.delete(opt)
+    default_callbacks.delete(opt)
   end
 
   def option_default(name)
     opt = name.to_sym
     if mapped_default?(name)
-      default_blocks[opt].call
+      default_callbacks[opt].call
     else
       false
     end
@@ -96,28 +91,11 @@ class PebblApp::Conf
 
   ## Return any command_name initialized to this Conf object
   ##
-  ## If the @command_name instance variable has been initialized for the
-  ## instance, that instance variable's value will be returned.
-  ##
-  ## Else, if the Conf object was initialized with a command_name_block
-  ## and the  @command_name instance variable is uninitialized for the
-  ## instance, this Conf object will be yielded to the
-  ## command_name_block,. The string representation of the block's return
-  ## value will be stored and returned as the command_name for this Conf
-  ## object.
-  ##
-  ## If no command_name has been stored and no command_name_block was provided,
-  ## this method will return an empty string.
-  ##
-  ## This method's return value will be used in the default
-  ## implementation of the #configure_option_parser method, mainly for
-  ## producing a help banner.
-  ##
   def command_name
     if self.instance_variable_defined?(:@command_name)
       return @command_name
-    elsif self.instance_variable_defined?(:@command_name_block)
-      return @command_name = @command_name_block.yield(self).to_s
+    elsif mapped_default?(:command_name)
+      return @command_name = option_default(:command_name)
     else
       return "".freeze
     end
@@ -189,6 +167,8 @@ class PebblApp::Conf
       return self.options[opt]
     elsif block_given?
       fallback.yield(opt)
+    elsif mapped_default?(opt)
+      option_default(opt)
     else
       return default
     end

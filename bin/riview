@@ -8,7 +8,7 @@
 
 require %q(bundler/setup)
 
-require %q(pebbl_app/project/y_spec)
+require %q(pebbl_app/y_spec)
 
 gem 'riview'
 

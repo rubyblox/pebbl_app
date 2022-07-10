@@ -119,7 +119,7 @@ module PebblApp
 
     ## If true (the default) then the GMain#context_dispatch method
     ## should block for source availability during main loop iteration
-    attr_reader :blocking
+    attr_accessor :blocking
 
     def initialize(blocking: true)
       super()
@@ -145,20 +145,39 @@ module PebblApp
     end
   end
 
+  ## ContextProxy implementation that extends GLib::MainContext
+  ##
+  ## For applications using Gtk, see also: DefaultContext
   class GMainContext < GLib::MainContext
     include ContextProxy
-    def main_loop
-      @main_loop ||= GLib::MainLoop.new(self, false)
-    end
+
+    ## Return this context
+    ##
+    ## This method is generally compatibile with DefaultContext#context
     def context()
       return self
     end
   end
 
+  ## ContextProxy implementation forwarding to a
+  ## GLib::MainContext.default
+  ##
+  ## This will use the GLib::MainContext.default that was active at the
+  ## time of when the constructor method is called for this
+  ## DefaultContext. The behaviors are unspecified if an application
+  ## changes the default GLib::MainContext at any time after a
+  ## DefaultContext is initailized.
+  ##
+  ## This class has been implemented for a goal of compatibility with
+  ## the Gtk main event loop.
+  ##
+  ## @see GMainContext
   class DefaultContext
     include ContextProxy
 
+    ## Return the forwarded GLib::MainContext for this instance
     attr_reader :context
+
     self.extend Forwardable
     GLib::MainContext.instance_methods(false).each do |mtd|
       def_delegator(:@context, mtd)
@@ -174,11 +193,7 @@ module PebblApp
       @context = GLib::MainContext.default
     end
 
-    def main_loop
-      @main_loop ||= GLib::MainLoop.new(self.context, false)
-    end
-
-  end
+  end ## DefaultContext
 
   ## This class is an adaptation after [the Main Contexts tutorial]
   ## (https://developer.gnome.org/documentation/tutorials/main-contexts.html)
@@ -418,6 +433,11 @@ module PebblApp
                            priority = GLib::PRIORITY_DEFAULT,
                            remove_on_nil = false,
                            callback)
+        if DefaultContext === context
+          ## using the forwarded context, if it was not received here
+          context = context.context
+        end
+
         ## set the callback for the source, using a lambda proc.
         ##
         ## 'return' will be a valid call, within the callback proc
@@ -572,17 +592,9 @@ module PebblApp
 
     end ## class << self
 
-    include LoggerMixin
-
     ## main context for this GMain, or nil/false if not running
     attr_accessor :running
 
-    def initialize(logger: PebblApp::AppLog.app_log)
-
-      ## NB this class does not provide  any #configure method
-      ## for application config or any #gapp initialization
-      @logger = logger
-    end
 
     def debug_event(context, tag)
       if $DEBUG && context.respond_to?(:log_event)
@@ -594,6 +606,10 @@ module PebblApp
       GMainContext.new(logger: logger)
     end
 
+    def debug(*args)
+      AppLog.debug(*args) if $DEBUG
+    end
+
     ## an adaptation after `main` in
     ## https://developer.gnome.org/documentation/tutorials/main-contexts.html
     def main(context = context_new, &block)
@@ -603,12 +619,9 @@ module PebblApp
         return -1
       end
 
-      debug "main" if $DEBUG
+      debug "main"
 
-      ## FIXME define a #quit method, in some way setting the
-      ## cancellation on context to 'cancelled'
-
-      debug "Init locals" if $DEBUG
+      debug "Init locals"
       ## Initialize and hold a mutex during configuration and application runtime
       main_mtx = context.main_mtx
       ## condition variable for synchronization after map_sources
@@ -617,7 +630,7 @@ module PebblApp
 
       main_mtx.synchronize do
         begin
-          debug "Configure sources" if $DEBUG
+          debug "Configure sources"
           ## configure event sources for this instance of the implementing class
           self.map_sources(context)
           context.configured = true
@@ -628,15 +641,24 @@ module PebblApp
           main_thr.exit if main_thr
           return false
         ensure
-          debug "cv broadcast" if $DEBUG
+          debug "cv broadcast"
           main_cv.broadcast
         end
       end ## main sync for initial conf
 
       @running = context
 
-      ## start this outside of the main mtx - at which point, the sync
-      ## becomes irrelevant really (FIXME)
+      cancellation = context.cancellation
+      cancellation.signal_connect_after("cancelled") do
+        if (running = @running) && (running == context)
+          @running = false
+        end
+      end
+
+      ## start the main loop thread
+      ##
+      ## TBD starting the main thread here, this obviates any need for
+      ## the previous mutex.synchronize
       main_thr = context_main(context)
 
       ## yield to the provided block
@@ -645,20 +667,22 @@ module PebblApp
       ## parallel to this section
       begin
         catch(:main) do
-          debug "yielding to block in main thread" if $DEBUG
+          AppLog.debug "yielding to block in main thread"
           block.yield(main_thr) if block_given?
         end
       ensure
         ## cleanup after the main loop
         main_mtx.synchronize do
-          ## ^ TBD this will not run while the main loop
-          ## is still running
-          debug "post-loop in main thread" if $DEBUG
+          ## this will run only after the main loop has released main_mtx.
+          ##
+          ## if some callback has deadlocked any iteration in the main
+          ## loop, this will not run (not reeached during tests)
+          debug "post-loop in main thread"
           main_thr.join
         end
       end
 
-      debug "returning in main thread" if $DEBUG
+      debug "returning in main thread"
       return true
     end
 
@@ -812,12 +836,10 @@ in #{self} thread #{Thread.current}", uplevel: 0)
     end ## context_main
 
     def quit(reason = :quit)
-      if (context = @running)
-        ## the context would typically be of a type ContextProxy.
-        ## Such an object would respond to the method 'cancel' with a
-        ## parameter for recording a cancellation reason
-        @running.cancel(reason) if context.respond_to?(:cancel)
-        super()
+      if (running = @running)
+        ## the context should be of a type ContextProxy, or otherwise
+        ## responding to a cancel(reason) call
+        running.cancel(reason)
       else
         false
       end

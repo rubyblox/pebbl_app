@@ -182,8 +182,6 @@ module PebblApp
         end
       end
 
-      protected
-
       def envdir(envar, &fallback)
         if envdir = ENV[envar]
           return envdir
@@ -212,13 +210,16 @@ module PebblApp
 
 
     ## relative directory name for this FileManager
-    attr_reader :app_dirname
+    attr_reader :app_dirname, :app_env_name
 
     ## create a FileManager, using the provided value as the app_driname
     ##
     ## @param app_dirname [String] the pathname for the app_dirname attribute
-    def initialize(app_dirname)
+    def initialize(app_dirname,
+                   app_env_name = app_dirname.split(Const::DOT).last.upcase)
+      ## (last name element, upcase) ...
       @app_dirname = app_dirname.to_s
+      @app_env_name = app_env_name.to_s
     end
 
     ## for the set of subdirectories of the class' data_dirs that exists
@@ -228,13 +229,27 @@ module PebblApp
     ## @return [Array<String>] The list of app subdirs of data_dirs, if
     ##         existing
     def app_data_dirs()
-      dirs = self.class.flatten_dirs(self.class.data_dirs)
+      dirs = FileManager.flatten_dirs(FileManager.data_dirs)
       ## FIXME this assumes that any of the dirs would be created
       ## during install, if the dir was to exist and contain any files
       ## for the app
-      self.class.flatten_dirs(self.class.map_join(self.app_dirname, dirs))
+      FileManager.flatten_dirs(FileManager.map_join(self.app_dirname, dirs))
     end
 
+    def app_data_home()
+      @app_data_home ||=
+        FileManager.envdir(app_env_name + "_DATA_HOME") do
+          Files.join(FileManager.data_home, app_dirname)
+        end
+    end
+
+    def app_data_home!()
+      dir = app_data_home
+      Files.mkdir_p(dir) do |subdir|
+        File.chmod(0o0700, subdir)
+      end
+      return dir
+    end
 
     ## for the set of subdirectories of the class' config_dirs that exists
     ## for the configured app_dirname, return that list of directories
@@ -243,52 +258,67 @@ module PebblApp
     ## @return [Array<String>] The list of app subdirs of config_dirs, if
     ##         existing
     def app_config_dirs()
-      dirs = self.class.flatten_dirs(self.class.config_dirs)
+      dirs = FileManager.flatten_dirs(FileManager.config_dirs)
       ## FIXME this assumes that any of the dirs would be created
       ## during install, if the dir was to exist and contain any files
       ## for the app - siimlar to the data_dirs instance
-      self.class.flatten_dirs(self.class.map_join(self.app_dirname, dirs))
+      FileManager.flatten_dirs(FileManager.map_join(self.app_dirname, dirs))
     end
 
     ## return a pathname for the class' config_home with the app_dirname
-    ## appended to the path, as a string.
+    ## appended to the path, as a string or .. <app_env_name>_CONFIG_HOME
     def app_config_home()
-      Files.join(self.class.config_home, app_dirname)
+      @app_config_home ||=
+        FileManager.envdir(app_env_name + "_CONFIG_HOME") do
+          Files.join(FileManager.config_home, app_dirname)
+        end
     end
 
     ## return the value of #app_config_home,
     ## ensuring the directory exists
     def app_config_home!()
       dir = app_config_home
-      Files.mkdir_p(dir)
+      Files.mkdir_p(dir) do |subdir|
+        File.chmod(0o0700, subdir)
+      end
       return dir
     end
 
     ## return a pathname for the class' state_home with the app_dirname
     ## appended to the path, as a string.
     def app_state_home()
-      Files.join(self.class.state_home, app_dirname)
+      @app_state_home ||=
+        FileManager.envdir(app_env_name + "_STATE_HOME") do
+          Files.join(FileManager.state_home, app_dirname)
+        end
     end
 
     ## return the value of #app_state_home,
     ## ensuring the directory exists
     def app_state_home!()
       dir = app_state_home
-      Files.mkdir_p(dir)
+      Files.mkdir_p(dir) do |subdir|
+        File.chmod(0o0700, subdir)
+      end
       return dir
     end
 
     ## return a pathname for the class' cache_home with the app_dirname
     ## appended to the path, as a string.
     def app_cache_home()
-      Files.join(self.class.cache_home, app_dirname)
+      @app_cache_home ||=
+        FileManager.envdir(app_env_name + "_CACHE_HOME") do
+          Files.join(FileManager.cache_home, app_dirname)
+        end
     end
 
     ## return the value of #app_cache_home,
     ## ensuring the directory exists
     def app_cache_home!()
       dir = app_cache_home
-      Files.mkdir_p(dir)
+      Files.mkdir_p(dir) do |subdir|
+        File.chmod(0o0700, subdir)
+      end
       return dir
     end
 
@@ -296,15 +326,14 @@ module PebblApp
     ## the app_dirname appended to the path, as a string.
     ##
     ## If the directory does not exist, it will be created, then configured
-    ## with a permissions mask (octal) 0700
+    ## with a permissions mask (octal) 0o0700
     ##
     ## @return [String] an app subdir onto the class' runtime_dir
     def app_runtime_dir!()
-      basedir = self.class.runtime_dir!
+      basedir = FileManager.runtime_dir!
       dir = Files.join(basedir, app_dirname)
-      if !Files.exists?(rundir)
-        Files.mkdir_p(dir)
-        Files.chmod(0o0700, dir)
+      File.mkdir_p(dir) do |subdir|
+        Files.chmod(0o0700, subdir)
       end
       return dir
     end

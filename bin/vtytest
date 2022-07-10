@@ -10,16 +10,12 @@ PebblApp::AppLog.app_log.level = "DEBUG"
 ## apparently the syntax GDK expects for the X11 backend here
 ENV['GDK_BACKEND'] = "x11"
 
-require 'pebbl_app/gtk_framework'
-framework = PebblApp::GtkFramework.new(timeout: 5)
-next_args = framework.init
-
 require_relative(%<../sandbox/vtytest.rb>)
 
 $DEBUG = true
 
 $APP = VtyApp.new
-if ! ( next_args.include?('--command') || next_args.include?('-c') )
+if ! ( ARGV.include?('--command') || ARGV.include?('-c') )
   ## FIXME only if IRB is enabled in bundler conf:
   # $APP.default_shell = %w(ruby -r irb -r irb/completion -e IRB.start -- --multiline)
   ## ^ --multiline not applied here
@@ -27,7 +23,7 @@ if ! ( next_args.include?('--command') || next_args.include?('-c') )
 
 end
 
-$APP.main(argv: next_args)
+$APP.main(argv: ARGV)
 
 # Local Variables:
 # mode: enh-ruby

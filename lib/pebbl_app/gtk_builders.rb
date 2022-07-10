@@ -10,11 +10,11 @@ BEGIN {
 ## require the exact gtk version elsewhere
 # require 'gtk3'
 
-## encapsulation for Gtk::Builkder
-module PebblApp::GtkFramework::UIBuilder
+## Gtk::Builder proxy
+module PebblApp::UIBuilder
   def self.extended(extclass)
 
-    ## FIXME the following should be defined as instance methods
+    ## FIXME also define onto instance variables in self.included
     class << extclass
 
       ## return a Gtk::Builder initialized for the class scope
@@ -22,7 +22,7 @@ module PebblApp::GtkFramework::UIBuilder
         ## FIXME originally a utility for the template support,
         ## but not actually used for template support
         if class_variable_defined?(:@@builder)
-          return class_variable_get(:@@builder)
+          class_variable_get(:@@builder)
         else
           bld = Gtk::Builder.new()
           class_variable_set(:@@builder, bld)
@@ -33,11 +33,10 @@ module PebblApp::GtkFramework::UIBuilder
       ##
       ## @param builder [Gtk::Builder] the initial UI builder
       def builder=(builder)
-        if (self.builder != builder)
-          ## FIXME logging
-          Kernel.warn("in #{self}: :builder is already bound to #{@builder}. Ignoring builder #{builder}", uplevel: 1)
+        if class_variable_defined?(:@@builder)
+          Kernel.warn("in #{self}: :builder is already bound to #{@@builder}. Ignoring builder #{builder}", uplevel: 1)
         else
-          @builder = builder
+          class_variable_set(:@@builder, builder)
         end
       end
 
@@ -51,7 +50,7 @@ module PebblApp::GtkFramework::UIBuilder
         ## i.e each object initialized from the file
         ## will be initialized at most once
         ## for this class
-        @builder.add_from_file(file)
+        @@builder.add_from_file(file)
       end
 
       def add_ui_resource(path)
@@ -63,12 +62,12 @@ module PebblApp::GtkFramework::UIBuilder
         ## for this class
         ##
         ## FIXME add calls to validate this when running under bundler
-        @builder.add_from_resource(path)
+        @@builder.add_from_resource(path)
       end
 
       def ui_object(id)
         ## NB may return nil (FIXME/NEEDSTEST)
-        @builder.get_object(id)
+        @@builder.get_object(id)
       end
 
     end ## class <<
@@ -79,10 +78,10 @@ end
 ##
 ## @see ResourceTemplateBuilder
 ## @see FileTemplateBuilder
-module PebblApp::GtkFramework::TemplateBuilder
+module PebblApp::TemplateBuilder
   def self.included(extclass)
-    extclass.extend PebblApp::GtkFramework::GObjType
-    extclass.extend PebblApp::GtkFramework::UIBuilder
+    extclass.extend PebblApp::GUserObject
+    extclass.extend PebblApp::UIBuilder
 
     ## set the template path to be used for this class
     ##
@@ -170,9 +169,9 @@ module PebblApp::GtkFramework::TemplateBuilder
 end
 
 
-module PebblApp::GtkFramework::ResourceTemplateBuilder
+module PebblApp::ResourceTemplateBuilder
   def self.extended(extclass)
-    extclass.include PebblApp::GtkFramework::TemplateBuilder
+    extclass.include PebblApp::TemplateBuilder
 
     ## ensure that a resource bundle at the provided +path+ is
     ## registered at most once, for this class
@@ -247,9 +246,9 @@ module PebblApp::GtkFramework::ResourceTemplateBuilder
   end
 end
 
-module PebblApp::GtkFramework::FileTemplateBuilder
+module PebblApp::FileTemplateBuilder
   def self.extended(extclass)
-    extclass.include PebblApp::GtkFramework::TemplateBuilder
+    extclass.include PebblApp::TemplateBuilder
 
     ## load this class' template as a file
     ##

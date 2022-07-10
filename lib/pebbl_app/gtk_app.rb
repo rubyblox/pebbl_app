@@ -37,12 +37,7 @@ module PebblApp
 
     def context_dispatch(context)
       super(context)
-      if ! Gtk.main_iteration_do(false)  # Gtk.main_iteration_do(true)
-        ## FIXME not reached, afer a call to Gtk.main_quit
-        ## from some other thread ...
-        AppLog.debug("Exiting Gtk context dispatch")
-        throw :main_iterate
-      end
+      Gtk.main_iteration_do(context.blocking)
     end
 
     def context_acquired(context)
@@ -57,7 +52,7 @@ module PebblApp
       GMain.map_idle_source(context.context, remove_on_nil: true) do |context|
         AppLog.info("Starting application")
         app.start
-        nil ## remove callback after run
+        nil ## returning nil => remove this callback after call
       end
     end
   end
@@ -67,14 +62,41 @@ module PebblApp
   ##
   ## This class provides GtkMain integration for Gtk::Application classes
   ##
+  ## @see GtkApplication (How Do I...? GNOME Developer Center) https://developer-old.gnome.org/GtkApplication/
   class GtkApp < Gtk::Application
     include GAppMixin
 
     attr_accessor :framework, :open_args
-    attr_reader :gmain
 
-    def initialize(name, flags = Gio::ApplicationFlags::FLAGS_NONE)
+
+    def initialize(name, flags = Gio::ApplicationFlags::FLAGS_NONE, **opts)
+      ## subsq. of type_register, the opts will not be passed to any
+      ## #initialize methods defined in mixins
+      ##
+      ## The following is anemulation of the options parsing for the
+      ## #initialize method defined when inculding AppMixin
+      ##
+      @app_name = AppMixin.pop_opt(:app_name, opts) do
+        PebblApp::ProjectModule.s_to_filename(self.class, Const::DOT).freeze
+      end
+      @app_dirname = AppMixin.pop_opt(:app_dirname, opts) do
+        (@app_name && @app_name.downcase)
+      end
+      @app_env_name = AppMixin.pop_opt(:app_env_name, opts) do
+        (@app_dirname && @app_dirname.split(Const::DOT).last.upcase)
+      end
+      if !opts.empty?
+        AppLog.warn("Unused args in #{self.class}##{__method__}: #{opts}")
+      end
       super(name, flags)
+
+      ##
+      ## additional configuration
+      ##
+      self.signal_connect("handle-local-options") do
+        ## 0 : success, no further option processing needed for this application
+        return 0
+      end
     end
 
     def config
@@ -96,13 +118,28 @@ module PebblApp
       ## all threads in the process environment (needs further testing)
       ##
       if GtkApp.class_variable_defined?(:@@default_context)
-        GtkApp.class_variable_get(:@@default_context)
+        ctx = GtkApp.class_variable_get(:@@default_context)
+        return ctx
       else
-        default = DefaultContext.new()
+        default = DefaultContext.new(blocking: true)
         GtkApp.class_variable_set(:@@default_context, default)
       end
     end
 
+    alias_method :context_new, :context_default
+
+
+    def quit
+      ## This may generally emulate Gio::Application#quit
+      ## without trying to call to the Gtk main loop,
+      ## such that will be unused in this application
+      main_quit
+      self.windows.each do |wdw|
+        PebblApp::AppLog.debug("Closing #{wdw}")
+        wdw.close
+      end
+      self.signal_emit("shutdown")
+    end
 
     def main(argv: ARGV, &block)
       AppLog.app_log ||= AppLog.new
@@ -120,19 +157,14 @@ module PebblApp
 
       context = context_default
 
+      ## rebind signal traps after @framework.init => Gtk.init
+      bind_sys_trap
+
       if block_given?
         cb = block
       else
         ## join the main_context thread
         cb = proc { |thr| thr.join }
-      end
-
-      self.signal_connect_after "shutdown" do
-        ## never reached here - this app is providing its own main loop.
-        ## The shutdown signal is unused, by side effect
-        AppLog.debug("Cancelling (app shutdown)")
-        context.cancellation.cancel
-        # context.main_loop.quit ## not used here
       end
 
       gmain.main(context, &cb)

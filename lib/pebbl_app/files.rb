@@ -129,7 +129,8 @@ module PebblApp::Files
     ## If a block is provided, the temporary directory will be yielded
     ## to the block as a string, and the directory will be unlinked
     ## after exit from the block. The return value from the block will
-    ## then provide the return value from this method.
+    ## then provide the return value from this method. (FIXME needs
+    ## test for a non-empty temporary directory)
     ##
     ## If a block is not provided, a new directory name will be returned
     ## for the temporary directory.

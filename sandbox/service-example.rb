@@ -61,13 +61,13 @@
 require 'pebbl_app/gmain'
 require 'forwardable'
 
-## FIXME move signal trap support into GMain
 require 'pebbl_app/app_log'
 
 PebblApp::AppLog.app_log ||= PebblApp::AppLog.new()
 
 PebblApp::AppLog.app_log.level = "DEBUG"
 
+## NB signal trap support in GtkApp
 require 'pebbl_app/signals'
 
 ## Data object class for the DispatchTest example
@@ -203,6 +203,7 @@ class DispatchTest < PebblApp::GMain
         ## Cancel the main event loop, then join the main thread.
         ## The main thread should return after the cancellation
         hdlr_base.yield(sname)
+        self.running = false
         context.cancellation.cancel
         ## joining the main thread in any throw/exit handler should help
         ## to ensure a clean exit for the main thread.

@@ -10,24 +10,15 @@ BEGIN {
 require 'logger'
 require 'gtk3'
 
-module PebblApp::GtkFramework
+module PebblApp
 
 #class GLibApp < GLib::Application
 ## FIXME define in glib_app.rb
 #
 
-
-#class GBuilderApp
 class GBuilderApp < Gtk::Application
 
-  extend(LoggerDelegate)  ## FIXME move to GLibApp (glib_app.rb)
-  def_logger_delegate(:@logger)  ## FIXME move to GLibApp (glib_app.rb)
-  attr_reader :logger  ## FIXME move to GLibApp (glib_app.rb)
-  LOG_LEVEL_DEFAULT = Logger::DEBUG  ## FIXME move to GLibApp (glib_app.rb)
-
-  extend(UIBuilder)
-
-  extend(LogManager) ## FIXME move to GLibApp (glib_app.rb)
+  extend UIBuilder
 
   # attr_reader :gtk_loop # see ...
 
@@ -42,25 +33,25 @@ class GBuilderApp < Gtk::Application
   ##
   ## *Examples*
   ##
-  ##    GBuilderApp.get_app_flag_value('is_service') ==
+  ##    GBuilderApp.app_flag('is_service') ==
   ##       Gio::ApplicationFlags::IS_SERVICE.to_i => true
   ##
-  ##   GBuilderApp.get_app_flag_value(:handles_open) ==
+  ##   GBuilderApp.app_flag(:handles_open) ==
   ##       Gio::ApplicationFlags::HANDLES_OPEN.to_i => true
   ##
-  ##   GBuilderApp.get_app_flag_value([:is_service, :handles_open])
+  ##   GBuilderApp.app_flag([:is_service, :handles_open])
   ##       => <Integer>
 
-  def self.get_app_flag_value(datum)  ## FIXME move to GLibApp (glib_app.rb)
-    name, value = nil
+  def self.app_flag(datum)  ## FIXME move to GLibApp (glib_app.rb)
+    name, value = false
     case datum
     when Array
       value = 0
-      datum.each { |elt| value = (value | self.get_app_flag_value(elt)) }
+      datum.each { |elt| value = (value | self.app_flag(elt)) }
     when Integer
       value = datum
     when Gio::ApplicationFlags
-      value = datum.to_i
+      value = datum
     when String
       ## NB except for FLAGS_NONE, the constants defined under this Gio
       ## Ruby module do not use any special prefix
@@ -70,17 +61,16 @@ class GBuilderApp < Gtk::Application
       name = datum.upcase.to_sym
     when Symbol
       name = datum.upcase
-    when NilClass
-      value = Gio::ApplicationFlags::FLAGS_NONE.to_i
+    when NilClass, FalseClass
+      value = Gio::ApplicationFlags::FLAGS_NONE
     else
-      raise ArgumentError.new("Unkown Gio::ApplicationFlags specifier: #{datum.inspect}")
+      raise ArgumentError.new("Unknown Gio::ApplicationFlags name #{datum.inspect}")
     end
     if !value
-      fl = Gio::ApplicationFlags.const_get(name)
-      if fl
-        value = fl.to_i
+      if Gio::ApplicationFlags.const_defined?(name)
+        value = Gio::ApplicationFlags.const_get(name)
       else
-        raise ArgumentError.new("Unknown Gio::ApplicationFlags specifier: #{datum.inspect}")
+        raise ArgumentError.new("Unknown Gio::ApplicationFlags name #{datum.inspect}")
       end
     end
     return value
@@ -94,19 +84,17 @@ class GBuilderApp < Gtk::Application
   ##   program name equal to +name+
   ##
   ## @param flags [Integer | String | Symbol | Array<Integer | String | Symbol>]
-  ##  see ::get_app_flag_value for a description of the syntax and usage
+  ##  see ::app_flag for a description of the syntax and usage
   ##  of this parameter
   def initialize(name, logger: nil,
-                 flags: Gio::ApplicationFlags::FLAGS_NONE.to_i)
+                 flags: Gio::ApplicationFlags::FLAGS_NONE)
     # @state = :initialized
 
     ## NB @logger will be used for the LoggerDelegate extension,
     ## providing instance-level access to the logger with an API
     ## similar to Logger, as wrapper functions onto the @logger itself
     ##
-    @logger = logger ? logger :
-      self.class.logger ||= Logger.new(STDERR, level: LOG_LEVEL_DEFAULT,
-                                       progname: name)
+    @logger = (AppLog.app_log ||= AppLog.new())
 
     ## TBD
     # LogModule.logger ||= @logger
@@ -115,7 +103,7 @@ class GBuilderApp < Gtk::Application
     super(name)
 
     ## FIXME move to GLibApp (glib_app.rb)
-    fl_value = self.class.get_app_flag_value(flags)
+    fl_value = GBuilderApp.app_flag(flags)
     fl_obj = Gio::ApplicationFlags.new(fl_value)
     ## NB fl_obj would be a proxy object for an enum value,
     ## and should not need to be unref'd
@@ -227,60 +215,7 @@ class GBuilderApp < Gtk::Application
         end
         trace.enable
 
-
-        ## FIXME in review of the previous, it may be more effective
-        ## to define a tracepoint on 'warn' than to shadow the 'warn' method
-        ## to direct any warning output to a logger - assuming that this
-        ## will not in itself result in a warning in Ruby (e.g when
-        ## logging during a signal trap handler)
-        ##
-        ## as such, an extension could be defined on TracePoint that
-        ## would provide a mutex for locking the instance's "enabled'
-        ## field. That mutex could be held and the instance disabled,
-        ## e.g within any signal trap handler - such that the mutex-
-        ## sync'd form would return the 'enabled' state of the
-        ## TracePoint to its original value, via a final 'ensure' form
-        ##
-        ## FIXME this app needs a log viewer
-
-        ## FIXME this app needs a trace support module
-        ## => popup for tracepoint inspection (bindings, etc)
-        ## ... may be tricky to implement e.g for any tracepoint on 'raise'
-        ##
-        ## see ./tracetest.rb, ./tracetool.rb
-
-        Gtk.main() ## NB
-        ## TBD #main(args = nil)
-
-        ## NB Ruby-GNOME's Gtk.init acceps args (of some kind)
-        ## and also removes itself, such that Gtk.init becomes unavailable
-        ## after the method is called once - similar to Gdk.init
-        ## - they seem to be working around an interesting sort of
-        ##   segfault behavior related to the 'loader' framework in it
-
-        ## vis a vis args, note e.g '--gapplication-app-id' in GLib's GApplication
-        ## and other args avl with GtkApplication .. via (TBD...)
-        ##
-        ## ... for glib: g_application_run ...
-        ## + G_APPLICATION_HANDLES_COMMAND_LINE flag
-        ##
-        ## NB G_APPLICATION_IS_SERVICE flag :: GServiceApp
-        ##
-        ## NB --version arg
-        ##
-        ## NB args for file open && "open" handling
-
-        ## >> documentation (DocBook | YARD)
-        ## >> g.thinkum.space
-        ##
-        ## NB GRubyService < GConsoleService < GApp
-        ## TBD GShellService < GConsoleService
-
-        ## NB example of Glib::MainLoop application
-        ## ~/.local/share/gem/ruby/3.0.0/gems/vte3-3.4.9/test/test-terminal.rb
-        ## see also: "The Main Event Loop" in the GLib devhelp manual
-
-        #@main = GLib::MainLoop.new
+        Gtk.main() ## FIXME use GtkFramework
 
 
         ## FIXME in this source file, store every return value from
@@ -294,28 +229,9 @@ class GBuilderApp < Gtk::Application
         ## action
 
         warn "Exception #{exc.class}: #{exc}"
-        ## ?? Exception NoMethodError: undefined method `message' for 8:Integer
-        ## ... and no backtrace. Where is that error arriving from? (IRB ??)
-        ## ... when:
-        ##  1) app is ran via run_threaded (under IRB, in an Emacs environment)
-        ##  2) SIGTRAP is sent to the Ruby process, externally, via kill(1)
-        ##  3) prefs window is created in the app (TRAP trap not reached during run_threaded)
-        ## ! Same happens when SIGINT is sent, when app is run via run_threaded
-        ##
-        ## Is the NoMethodError being produced by something in the C code for Ruby-GNOME?
-        ## (no backtrace, and what a generic error message)
 
        exc.backtrace.each { |info| warn "[backtrace] " + info.to_s } if exc.backtrace
-        # @logger.error("%s caught %s under %s 0x%x : %s" %
-        #               [__method__, exc.class, Thread.current.class,
-        #                Thread.current.object_id, exc.message])
-        # if (bt = exc.backtrace)
-        #   n = 0
-        #   bt.each { |info|
-        #     @logger.error("[backtrace 0x%02x] %s" % [n, info])
-        #     n = n+1
-        #   }
-        # end
+
       end
     end
     @logger.debug("#{__method__} returning in #{Thread.current}")

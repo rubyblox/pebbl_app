@@ -8,6 +8,8 @@ module PebblApp::Const
   DOT ||= ".".freeze
   ## a frozen empty array
   NULL_ARRAY ||= [].freeze
+  ## instance variable prefix
+  INSTANCE_PREFIX = "@".freeze
   ## environment variable name
   HOME_ENV ||= "HOME".freeze
   ## environment variable name

@@ -63,7 +63,7 @@ BEGIN {
 ##   internal access to the +data+ value.
 ##
 class DataProxy < GLib::Object # < GLib::Boxed
-  extend PebblApp::GtkFramework::GObjType
+  extend PebblApp::GUserObject
   self.register_type ## register the type, exactly once
 
   ## NB - documentation

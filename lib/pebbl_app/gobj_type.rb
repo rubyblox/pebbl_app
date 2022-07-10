@@ -38,7 +38,7 @@ require 'glib2'
 ##
 ## It's assumed that this module will be extended from some direct or
 ## indirect subclass of *+GLib::Object+*
-module PebblApp::GtkFramework::GObjType
+module PebblApp::GObjType
   def self.extended(extclass)
 
     class << extclass
