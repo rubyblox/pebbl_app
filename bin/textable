@@ -1,0 +1,28 @@
+#!/usr/bin/env -S bundle exec ruby
+
+## startup script for textable dialog test (sandbox)
+
+require 'pebbl_app'
+module PebblApp
+
+  AppLog.app_log ||= AppLog.new(domain: "textable")
+  AppLog.app_log.level = "DEBUG"
+
+  ## FIXME add to Framework defs
+  ##
+  ## apparently the syntax GDK expects for the X11 backend here
+  ENV['GDK_BACKEND'] = "x11"
+
+  require_relative(%<../sandbox/textable.rb>)
+
+  $DEBUG = true
+
+  $APP = PebblApp::TextableTest.new
+
+  $APP.main
+
+end
+
+# Local Variables:
+# mode: enh-ruby
+# End:
