@@ -2,27 +2,10 @@
 <!-- Generated with glade 3.38.2 -->
 <interface>
   <requires lib="gtk+" version="3.24"/>
-  <object class="GtkListStore" id="alignment_store">
-    <columns>
-      <!-- column-name label -->
-      <column type="gchararray"/>
-      <!-- column-name value -->
-      <column type="PangoAlignment"/>
-    </columns>
-    <data>
-      <row>
-        <col id="0" translatable="yes">Left</col>
-        <col id="1">left</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Center</col>
-        <col id="1">center</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Right</col>
-        <col id="1">right</col>
-      </row>
-    </data>
+  <object class="GtkImage" id="add_img">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">add</property>
   </object>
   <object class="GtkImage" id="apply_img">
     <property name="visible">True</property>
@@ -34,190 +17,39 @@
     <property name="can-focus">False</property>
     <property name="icon-name">gtk-cancel</property>
   </object>
-  <object class="GtkImage" id="cancel_img1">
+  <object class="GtkImage" id="cancel_img_file">
     <property name="visible">True</property>
     <property name="can-focus">False</property>
     <property name="icon-name">gtk-cancel</property>
   </object>
-  <object class="GtkListStore" id="inherit_store">
-    <columns>
-      <!-- column-name label -->
-      <column type="gchararray"/>
-      <!-- column-name inherit -->
-      <column type="gboolean"/>
-      <!-- column-name tag -->
-      <column type="gchararray"/>
-    </columns>
-    <data>
-      <row>
-        <col id="0" translatable="yes">Default</col>
-        <col id="1">True</col>
-        <col id="2" translatable="yes">tag_default</col>
-      </row>
-    </data>
-  </object>
-  <object class="GtkImage" id="ok_img">
+  <object class="GtkImage" id="down_img">
     <property name="visible">True</property>
     <property name="can-focus">False</property>
-    <property name="icon-name">gtk-ok</property>
+    <property name="icon-name">go-down</property>
   </object>
-  <object class="GtkImage" id="ok_img2">
+  <object class="GtkMenu" id="fonts_menu">
     <property name="visible">True</property>
     <property name="can-focus">False</property>
-    <property name="icon-name">gtk-ok</property>
-  </object>
-  <object class="GtkDialog">
-    <property name="can-focus">False</property>
-    <property name="type-hint">dialog</property>
-    <child internal-child="vbox">
-      <object class="GtkBox" id="FileChooser">
+    <child>
+      <object class="GtkMenuItem" id="fonts_menu_new">
+        <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="orientation">vertical</property>
-        <property name="spacing">2</property>
-        <child internal-child="action_area">
-          <object class="GtkButtonBox">
-            <property name="can-focus">False</property>
-            <property name="layout-style">end</property>
-            <child>
-              <object class="GtkButton" id="file_ok">
-                <property name="label" translatable="yes">Ok</property>
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="receives-default">True</property>
-                <property name="tooltip-text" translatable="yes">Accept Configuration</property>
-                <property name="action-name">win.ok</property>
-                <property name="image">ok_img2</property>
-                <accelerator key="Return" signal="activate"/>
-              </object>
-              <packing>
-                <property name="expand">True</property>
-                <property name="fill">True</property>
-                <property name="position">0</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkButton" id="file_close">
-                <property name="label" translatable="yes">Cancel</property>
-                <property name="visible">True</property>
-                <property name="can-focus">True</property>
-                <property name="receives-default">True</property>
-                <property name="tooltip-text" translatable="yes">Cancel</property>
-                <property name="action-name">win.cancel</property>
-                <property name="image">cancel_img1</property>
-              </object>
-              <packing>
-                <property name="expand">True</property>
-                <property name="fill">True</property>
-                <property name="position">1</property>
-              </packing>
-            </child>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">False</property>
-            <property name="position">0</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkFileChooserWidget">
-            <property name="visible">True</property>
-            <property name="can-focus">False</property>
-            <property name="preview-widget-active">False</property>
-            <property name="use-preview-label">False</property>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">1</property>
-          </packing>
-        </child>
+        <property name="action-name">win.font-new</property>
+        <property name="label" translatable="yes">New Font</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="fonts_menu_delete">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">win.font-delete</property>
+        <property name="label" translatable="yes">Delete Font</property>
+        <property name="use-underline">True</property>
       </object>
     </child>
   </object>
-  <object class="GtkTextTagTable" id="preview_tags">
-    <child type="tag">
-      <object class="GtkTextTag" id="tag_font">
-        <property name="font">Normal</property>
-        <property name="wrap-mode">word-char</property>
-        <property name="strikethrough-rgba-set">True</property>
-        <property name="underline-rgba-set">True</property>
-        <property name="letter-spacing-set">True</property>
-      </object>
-    </child>
-  </object>
-  <object class="GtkTextBuffer" id="example_buffer">
-    <property name="tag-table">preview_tags</property>
-    <property name="text" translatable="yes">Preview Text</property>
-  </object>
-  <object class="GtkListStore" id="stretch_store">
-    <columns>
-      <!-- column-name label -->
-      <column type="gchararray"/>
-      <!-- column-name stretch -->
-      <column type="PangoStretch"/>
-    </columns>
-    <data>
-      <row>
-        <col id="0" translatable="yes">Ultra Condensed</col>
-        <col id="1">ultra-condensed</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Extra Condensed</col>
-        <col id="1">extra-condensed</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Condensed</col>
-        <col id="1">condensed</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Semi Condensed</col>
-        <col id="1">semi-condensed</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Normal</col>
-        <col id="1">normal</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Semi Expanded</col>
-        <col id="1">semi-expanded</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Expanded</col>
-        <col id="1">expanded</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Extra Expanded</col>
-        <col id="1">extra-expanded</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Ultra Expanded</col>
-        <col id="1">ultra-expanded</col>
-      </row>
-    </data>
-  </object>
-  <object class="GtkListStore" id="style_store">
-    <columns>
-      <!-- column-name label -->
-      <column type="gchararray"/>
-      <!-- column-name value -->
-      <column type="PangoStyle"/>
-    </columns>
-    <data>
-      <row>
-        <col id="0" translatable="yes">Normal</col>
-        <col id="1">normal</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Oblique</col>
-        <col id="1">oblique</col>
-      </row>
-      <row>
-        <col id="0" translatable="yes">Italic</col>
-        <col id="1">normal</col>
-      </row>
-    </data>
-  </object>
-  <object class="GtkListStore" id="tags_store">
+  <object class="GtkListStore" id="fonts_store">
     <columns>
       <!-- column-name label -->
       <column type="gchararray"/>
@@ -300,6 +132,234 @@
       </row>
     </data>
   </object>
+  <object class="GtkListStore" id="inherit_store">
+    <columns>
+      <!-- column-name label -->
+      <column type="gchararray"/>
+      <!-- column-name tag -->
+      <column type="gchararray"/>
+    </columns>
+  </object>
+  <object class="GtkListStore" id="justification_store">
+    <columns>
+      <!-- column-name label -->
+      <column type="gchararray"/>
+      <!-- column-name value -->
+      <column type="GtkJustification"/>
+    </columns>
+    <data>
+      <row>
+        <col id="0" translatable="yes">Left</col>
+        <col id="1">left</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Right</col>
+        <col id="1">right</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Center</col>
+        <col id="1">center</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Fill</col>
+        <col id="1">fill</col>
+      </row>
+    </data>
+  </object>
+  <object class="GtkImage" id="load_img">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">filesave</property>
+  </object>
+  <object class="GtkImage" id="ok_img">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">gtk-ok</property>
+  </object>
+  <object class="GtkImage" id="ok_img_file">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">gtk-ok</property>
+  </object>
+  <object class="GtkDialog">
+    <property name="can-focus">False</property>
+    <property name="type-hint">dialog</property>
+    <child internal-child="vbox">
+      <object class="GtkBox" id="FileChooser">
+        <property name="can-focus">False</property>
+        <property name="orientation">vertical</property>
+        <property name="spacing">2</property>
+        <child internal-child="action_area">
+          <object class="GtkButtonBox">
+            <property name="can-focus">False</property>
+            <property name="layout-style">end</property>
+            <child>
+              <object class="GtkButton" id="file_ok">
+                <property name="label" translatable="yes">Ok</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="tooltip-text" translatable="yes">Accept Configuration</property>
+                <property name="action-name">win.ok</property>
+                <property name="image">ok_img_file</property>
+                <accelerator key="Return" signal="activate"/>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="file_close">
+                <property name="label" translatable="yes">Cancel</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="tooltip-text" translatable="yes">Cancel</property>
+                <property name="action-name">win.cancel</property>
+                <property name="image">cancel_img_file</property>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkFileChooserWidget">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="preview-widget-active">False</property>
+            <property name="use-preview-label">False</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+  <object class="GtkTextTagTable" id="preview_tags">
+    <child type="tag">
+      <object class="GtkTextTag" id="tag_default">
+        <property name="font">Normal</property>
+        <property name="wrap-mode">word-char</property>
+        <property name="strikethrough-rgba-set">True</property>
+        <property name="underline-rgba-set">True</property>
+        <property name="letter-spacing-set">True</property>
+      </object>
+    </child>
+  </object>
+  <object class="GtkTextBuffer" id="example_buffer">
+    <property name="tag-table">preview_tags</property>
+    <property name="text" translatable="yes">Preview Text</property>
+  </object>
+  <object class="GtkImage" id="rem_img">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">remove</property>
+  </object>
+  <object class="GtkImage" id="save_img">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">fileopen</property>
+  </object>
+  <object class="GtkListStore" id="stretch_store">
+    <columns>
+      <!-- column-name label -->
+      <column type="gchararray"/>
+      <!-- column-name stretch -->
+      <column type="PangoStretch"/>
+    </columns>
+    <data>
+      <row>
+        <col id="0" translatable="yes">Ultra Condensed</col>
+        <col id="1">ultra-condensed</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Extra Condensed</col>
+        <col id="1">extra-condensed</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Condensed</col>
+        <col id="1">condensed</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Semi Condensed</col>
+        <col id="1">semi-condensed</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Normal</col>
+        <col id="1">normal</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Semi Expanded</col>
+        <col id="1">semi-expanded</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Expanded</col>
+        <col id="1">expanded</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Extra Expanded</col>
+        <col id="1">extra-expanded</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Ultra Expanded</col>
+        <col id="1">ultra-expanded</col>
+      </row>
+    </data>
+  </object>
+  <object class="GtkListStore" id="strikethrough_store">
+    <columns>
+      <!-- column-name label -->
+      <column type="gchararray"/>
+      <!-- column-name bool -->
+      <column type="gboolean"/>
+    </columns>
+    <data>
+      <row>
+        <col id="0" translatable="yes">Strikethrough</col>
+        <col id="1">True</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">No Strikethrough</col>
+        <col id="1">False</col>
+      </row>
+    </data>
+  </object>
+  <object class="GtkListStore" id="style_store">
+    <columns>
+      <!-- column-name label -->
+      <column type="gchararray"/>
+      <!-- column-name value -->
+      <column type="PangoStyle"/>
+    </columns>
+    <data>
+      <row>
+        <col id="0" translatable="yes">Normal</col>
+        <col id="1">normal</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Oblique</col>
+        <col id="1">oblique</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Italic</col>
+        <col id="1">normal</col>
+      </row>
+    </data>
+  </object>
   <object class="GtkListStore" id="ul_style_store">
     <columns>
       <!-- column-name label -->
@@ -308,6 +368,10 @@
       <column type="PangoUnderline"/>
     </columns>
     <data>
+      <row>
+        <col id="0" translatable="yes">None</col>
+        <col id="1">none</col>
+      </row>
       <row>
         <col id="0" translatable="yes">Single</col>
         <col id="1">single</col>
@@ -321,6 +385,11 @@
         <col id="1">low</col>
       </row>
     </data>
+  </object>
+  <object class="GtkImage" id="up_img">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <property name="icon-name">go-up</property>
   </object>
   <object class="GtkListStore" id="variant_store">
     <columns>
@@ -424,7 +493,33 @@
       </row>
     </data>
   </object>
-  <template class="PebblAppTextableTagPrefs" parent="GtkDialog">
+  <object class="GtkListStore" id="wrap_mode_store_new">
+    <columns>
+      <!-- column-name label -->
+      <column type="gchararray"/>
+      <!-- column-name value -->
+      <column type="GtkWrapMode"/>
+    </columns>
+    <data>
+      <row>
+        <col id="0" translatable="yes">None</col>
+        <col id="1">none</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Character</col>
+        <col id="1">char</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Word</col>
+        <col id="1">word</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">Word Character</col>
+        <col id="1">word-char</col>
+      </row>
+    </data>
+  </object>
+  <template class="PebblAppTextableFontPrefs" parent="GtkDialog">
     <property name="can-focus">False</property>
     <property name="type-hint">dialog</property>
     <child internal-child="vbox">
@@ -495,7 +590,8 @@
           </packing>
         </child>
         <child>
-          <object class="GtkHeaderBar">
+          <object class="GtkHeaderBar" id="dialog_header">
+            <property name="name">dialolg_header</property>
             <property name="visible">True</property>
             <property name="can-focus">False</property>
             <child>
@@ -513,16 +609,17 @@
           </packing>
         </child>
         <child>
-          <object class="GtkBox">
+          <object class="GtkBox" id="dialog_box">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
             <child>
               <object class="GtkBox" id="sidebar">
+                <property name="width-request">125</property>
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <property name="orientation">vertical</property>
                 <child>
-                  <object class="GtkTreeView" id="tag_tree">
+                  <object class="GtkTreeView" id="fonts_tree">
                     <property name="visible">True</property>
                     <property name="can-focus">True</property>
                     <property name="tooltip-text" translatable="yes">Font Tag Selection</property>
@@ -530,7 +627,7 @@
                     <property name="margin-end">4</property>
                     <property name="margin-top">4</property>
                     <property name="vexpand">True</property>
-                    <property name="model">tags_store</property>
+                    <property name="model">fonts_store</property>
                     <property name="search-column">0</property>
                     <property name="show-expanders">False</property>
                     <property name="tooltip-column">0</property>
@@ -538,10 +635,10 @@
                       <object class="GtkTreeSelection"/>
                     </child>
                     <child>
-                      <object class="GtkTreeViewColumn" id="tag_col">
+                      <object class="GtkTreeViewColumn" id="col_tag_font">
                         <property name="title" translatable="yes">Font</property>
                         <child>
-                          <object class="GtkCellRendererText" id="tag_col_text"/>
+                          <object class="GtkCellRendererText" id="col_tag_font_text"/>
                           <attributes>
                             <attribute name="alignment">8</attribute>
                             <attribute name="background">10</attribute>
@@ -567,67 +664,20 @@
                   </packing>
                 </child>
                 <child>
-                  <object class="GtkTreeView" id="inherit_tree">
-                    <property name="width-request">120</property>
-                    <property name="visible">True</property>
-                    <property name="can-focus">True</property>
-                    <property name="tooltip-text" translatable="yes">Inherit Fonts</property>
-                    <property name="margin-start">4</property>
-                    <property name="margin-end">4</property>
-                    <property name="margin-top">6</property>
-                    <property name="vexpand">True</property>
-                    <property name="model">inherit_store</property>
-                    <property name="reorderable">True</property>
-                    <property name="search-column">0</property>
-                    <property name="show-expanders">False</property>
-                    <property name="tooltip-column">0</property>
-                    <property name="activate-on-single-click">True</property>
-                    <child internal-child="selection">
-                      <object class="GtkTreeSelection"/>
-                    </child>
-                    <child>
-                      <object class="GtkTreeViewColumn" id="col_inherit">
-                        <child>
-                          <object class="GtkCellRendererToggle" id="col_inherit_p"/>
-                          <attributes>
-                            <attribute name="radio">1</attribute>
-                          </attributes>
-                        </child>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkTreeViewColumn" id="col_inherit_tag">
-                        <property name="title" translatable="yes">Inherit</property>
-                        <child>
-                          <object class="GtkCellRendererText" id="col_inherit_label"/>
-                          <attributes>
-                            <attribute name="text">0</attribute>
-                          </attributes>
-                        </child>
-                      </object>
-                    </child>
-                  </object>
-                  <packing>
-                    <property name="expand">False</property>
-                    <property name="fill">True</property>
-                    <property name="position">1</property>
-                  </packing>
-                </child>
-                <child>
                   <object class="GtkBox">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
                     <property name="halign">center</property>
-                    <property name="margin-start">4</property>
-                    <property name="margin-end">4</property>
-                    <property name="spacing">4</property>
+                    <property name="spacing">6</property>
                     <child>
                       <object class="GtkButton">
                         <property name="label" translatable="yes">Save</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
+                        <property name="tooltip-text" translatable="yes">Save font scheme</property>
                         <property name="margin-top">4</property>
+                        <property name="image">load_img</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -641,7 +691,9 @@
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
+                        <property name="tooltip-text" translatable="yes">Load font scheme</property>
                         <property name="margin-top">4</property>
+                        <property name="image">save_img</property>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -653,7 +705,131 @@
                   <packing>
                     <property name="expand">False</property>
                     <property name="fill">True</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkTreeView" id="inherit_tree">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="tooltip-text" translatable="yes">Inherit Attributes from Fonts</property>
+                    <property name="margin-start">4</property>
+                    <property name="margin-end">4</property>
+                    <property name="margin-top">4</property>
+                    <property name="vexpand">True</property>
+                    <property name="model">inherit_store</property>
+                    <property name="search-column">0</property>
+                    <property name="show-expanders">False</property>
+                    <property name="tooltip-column">0</property>
+                    <child internal-child="selection">
+                      <object class="GtkTreeSelection"/>
+                    </child>
+                    <child>
+                      <object class="GtkTreeViewColumn" id="col_inherit_font">
+                        <property name="title" translatable="yes">Inherit</property>
+                        <child>
+                          <object class="GtkCellRendererText" id="col_inherit_font_name"/>
+                          <attributes>
+                            <attribute name="alignment">8</attribute>
+                            <attribute name="background">10</attribute>
+                            <attribute name="family">2</attribute>
+                            <attribute name="foreground">11</attribute>
+                            <attribute name="rise">22</attribute>
+                            <attribute name="size">3</attribute>
+                            <attribute name="stretch">6</attribute>
+                            <attribute name="style">7</attribute>
+                            <attribute name="text">0</attribute>
+                            <attribute name="underline">9</attribute>
+                            <attribute name="variant">5</attribute>
+                            <attribute name="weight">4</attribute>
+                          </attributes>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
                     <property name="position">2</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkBox" id="button_box">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="halign">center</property>
+                    <property name="margin-start">4</property>
+                    <property name="margin-end">4</property>
+                    <property name="spacing">4</property>
+                    <child>
+                      <object class="GtkButton" id="buton_inherit_add">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">True</property>
+                        <property name="tooltip-text" translatable="yes">Inherit from font</property>
+                        <property name="margin-top">4</property>
+                        <property name="action-name">win.inherit-popover</property>
+                        <property name="image">add_img</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
+                        <property name="position">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="buton_inherit_remove">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">True</property>
+                        <property name="tooltip-text" translatable="yes">Do not inherit from font</property>
+                        <property name="margin-top">4</property>
+                        <property name="action-name">win.iherit-remove</property>
+                        <property name="image">rem_img</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">True</property>
+                        <property name="tooltip-text" translatable="yes">Raise precedence</property>
+                        <property name="margin-top">4</property>
+                        <property name="action-name">win.iherit-inc</property>
+                        <property name="image">up_img</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
+                        <property name="position">2</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkButton">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">True</property>
+                        <property name="tooltip-text" translatable="yes">Lower precedence</property>
+                        <property name="margin-top">4</property>
+                        <property name="action-name">win.iherit-dec</property>
+                        <property name="image">down_img</property>
+                      </object>
+                      <packing>
+                        <property name="expand">False</property>
+                        <property name="fill">True</property>
+                        <property name="position">3</property>
+                      </packing>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="fill">True</property>
+                    <property name="position">3</property>
                   </packing>
                 </child>
               </object>
@@ -665,7 +841,8 @@
             </child>
             <child>
               <!-- n-columns=1 n-rows=5 -->
-              <object class="GtkGrid">
+              <object class="GtkGrid" id="font_palette">
+                <property name="name">font_palette</property>
                 <property name="visible">True</property>
                 <property name="can-focus">False</property>
                 <property name="margin-start">4</property>
@@ -681,9 +858,9 @@
                     <property name="margin-end">24</property>
                     <property name="margin-top">8</property>
                     <property name="margin-bottom">12</property>
-                    <property name="pixels-above-lines">2</property>
-                    <property name="pixels-below-lines">2</property>
-                    <property name="left-margin">6</property>
+                    <property name="pixels-above-lines">12</property>
+                    <property name="pixels-below-lines">14</property>
+                    <property name="left-margin">14</property>
                     <property name="right-margin">6</property>
                     <property name="top-margin">4</property>
                     <property name="bottom-margin">4</property>
@@ -695,18 +872,45 @@
                   </packing>
                 </child>
                 <child>
-                  <!-- n-columns=6 n-rows=4 -->
+                  <!-- n-columns=9 n-rows=3 -->
                   <object class="GtkGrid" id="lines_grid">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
+                    <property name="margin-start">6</property>
+                    <property name="margin-top">6</property>
                     <property name="row-spacing">4</property>
                     <property name="column-spacing">2</property>
                     <child>
-                      <object class="GtkSpinButton" id="font_margin_left">
+                      <object class="GtkSpinButton" id="font_left_margin">
                         <property name="name">widget.left-margin</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="tooltip-text" translatable="yes">Left Margin</property>
+                        <property name="valign">center</property>
+                        <property name="max-length">3</property>
+                        <property name="width-chars">2</property>
+                        <property name="max-width-chars">3</property>
+                        <property name="text" translatable="yes">12</property>
+                        <property name="progress-fraction">0.16</property>
+                        <property name="primary-icon-activatable">False</property>
+                        <property name="secondary-icon-activatable">False</property>
+                        <property name="primary-icon-sensitive">False</property>
+                        <property name="secondary-icon-sensitive">False</property>
+                        <property name="input-purpose">digits</property>
+                        <property name="numeric">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">8</property>
+                        <property name="top-attach">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkSpinButton" id="font_pixels_inside_wrap">
+                        <property name="name">widget.pixels-inside-wrap</property>
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="tooltip-text" translatable="yes">Pixels Inside Wrap</property>
+                        <property name="valign">center</property>
                         <property name="max-length">3</property>
                         <property name="width-chars">2</property>
                         <property name="max-width-chars">3</property>
@@ -725,44 +929,39 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="font_pixels_in_wrap">
-                        <property name="name">widget.pixels-inside-wrap</property>
+                      <object class="GtkSpinButton" id="font_pixels_above_lines">
+                        <property name="name">widget.pixels-above-lines</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
-                        <property name="tooltip-text" translatable="yes">Pixels Inside Wrap</property>
+                        <property name="tooltip-text" translatable="yes">Pixels Above Lines</property>
+                        <property name="valign">center</property>
                         <property name="max-length">3</property>
                         <property name="width-chars">2</property>
                         <property name="max-width-chars">3</property>
                         <property name="text" translatable="yes">12</property>
                         <property name="progress-fraction">0.16</property>
                         <property name="primary-icon-activatable">False</property>
-                        <property name="secondary-icon-activatable">False</property>
                         <property name="primary-icon-sensitive">False</property>
                         <property name="secondary-icon-sensitive">False</property>
                         <property name="input-purpose">digits</property>
                         <property name="numeric">True</property>
                       </object>
                       <packing>
-                        <property name="left-attach">3</property>
+                        <property name="left-attach">2</property>
                         <property name="top-attach">0</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="font_pixels_above">
-                        <property name="name">widget.pixels-above-lines</property>
+                      <object class="GtkModelButton" id="map_pixels_above_lines">
+                        <property name="name">model.pixels-above-lines</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
-                        <property name="tooltip-text" translatable="yes">Pixels Above Lines</property>
-                        <property name="max-length">3</property>
-                        <property name="width-chars">2</property>
-                        <property name="max-width-chars">3</property>
-                        <property name="text" translatable="yes">12</property>
-                        <property name="progress-fraction">0.16</property>
-                        <property name="primary-icon-activatable">False</property>
-                        <property name="primary-icon-sensitive">False</property>
-                        <property name="secondary-icon-sensitive">False</property>
-                        <property name="input-purpose">digits</property>
-                        <property name="numeric">True</property>
+                        <property name="receives-default">True</property>
+                        <property name="halign">start</property>
+                        <property name="action-name">font.pixels-above-lines</property>
+                        <property name="text" translatable="yes">Above</property>
+                        <property name="inverted">True</property>
+                        <property name="centered">True</property>
                       </object>
                       <packing>
                         <property name="left-attach">1</property>
@@ -770,27 +969,12 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkModelButton" id="map_pixels_above">
-                        <property name="name">model.pixels-above-lines</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="action-name">font.pixels-above</property>
-                        <property name="text" translatable="yes">Above</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">0</property>
-                        <property name="top-attach">0</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkSpinButton" id="font_margin_right">
+                      <object class="GtkSpinButton" id="font_right_margin">
                         <property name="name">widget.right-margin</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="tooltip-text" translatable="yes">Right Margin</property>
+                        <property name="valign">center</property>
                         <property name="max-length">3</property>
                         <property name="width-chars">2</property>
                         <property name="max-width-chars">3</property>
@@ -804,23 +988,24 @@
                         <property name="numeric">True</property>
                       </object>
                       <packing>
-                        <property name="left-attach">5</property>
+                        <property name="left-attach">8</property>
                         <property name="top-attach">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkModelButton" id="map_margin_right">
+                      <object class="GtkModelButton" id="map_right_margin">
                         <property name="name">model.right-margin</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
-                        <property name="action-name">font.margin-right</property>
+                        <property name="halign">start</property>
+                        <property name="action-name">font.right-margin</property>
                         <property name="text" translatable="yes">Right Margin</property>
                         <property name="inverted">True</property>
                         <property name="centered">True</property>
                       </object>
                       <packing>
-                        <property name="left-attach">4</property>
+                        <property name="left-attach">7</property>
                         <property name="top-attach">1</property>
                       </packing>
                     </child>
@@ -830,6 +1015,7 @@
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="tooltip-text" translatable="yes">Indent</property>
+                        <property name="valign">center</property>
                         <property name="max-length">3</property>
                         <property name="width-chars">2</property>
                         <property name="max-width-chars">3</property>
@@ -843,16 +1029,17 @@
                         <property name="numeric">True</property>
                       </object>
                       <packing>
-                        <property name="left-attach">3</property>
+                        <property name="left-attach">5</property>
                         <property name="top-attach">1</property>
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkSpinButton" id="font_pixels_below">
+                      <object class="GtkSpinButton" id="font_pixels_below_lines">
                         <property name="name">widget.pixels-below-lines</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="tooltip-text" translatable="yes">Pixels Below Lines</property>
+                        <property name="valign">center</property>
                         <property name="max-length">3</property>
                         <property name="width-chars">2</property>
                         <property name="max-width-chars">3</property>
@@ -864,6 +1051,23 @@
                         <property name="secondary-icon-sensitive">False</property>
                         <property name="input-purpose">digits</property>
                         <property name="numeric">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">2</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkModelButton" id="map_pixels_below_lines">
+                        <property name="name">model.pixels-below-lines</property>
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">True</property>
+                        <property name="halign">start</property>
+                        <property name="action-name">font.pixels-below-lines</property>
+                        <property name="text" translatable="yes">Below</property>
+                        <property name="inverted">True</property>
+                        <property name="centered">True</property>
                       </object>
                       <packing>
                         <property name="left-attach">1</property>
@@ -871,45 +1075,14 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkModelButton" id="map_pixels_below">
-                        <property name="name">model.pixels-below-lines</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="action-name">font.pixels-below</property>
-                        <property name="text" translatable="yes">Below</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">0</property>
-                        <property name="top-attach">1</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkModelButton" id="map_pixels_in_wrap">
+                      <object class="GtkModelButton" id="map_pixels_inside_wrap">
                         <property name="name">model.pixels-inside-wrap</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
-                        <property name="action-name">font.pixels-in-wrap</property>
+                        <property name="halign">start</property>
+                        <property name="action-name">font.pixels-inside-wrap</property>
                         <property name="text" translatable="yes">In Wrap</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">2</property>
-                        <property name="top-attach">0</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkModelButton" id="map_margin_left">
-                        <property name="name">model.left-margin</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="action-name">font.margin-left</property>
-                        <property name="text" translatable="yes">Left Margin</property>
                         <property name="inverted">True</property>
                         <property name="centered">True</property>
                       </object>
@@ -919,39 +1092,37 @@
                       </packing>
                     </child>
                     <child>
+                      <object class="GtkModelButton" id="map_left_margin">
+                        <property name="name">model.left-margin</property>
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">True</property>
+                        <property name="halign">start</property>
+                        <property name="action-name">font.left-margin</property>
+                        <property name="text" translatable="yes">Left Margin</property>
+                        <property name="inverted">True</property>
+                        <property name="centered">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">7</property>
+                        <property name="top-attach">0</property>
+                      </packing>
+                    </child>
+                    <child>
                       <object class="GtkModelButton" id="map_indent">
                         <property name="name">model.indent</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
+                        <property name="halign">start</property>
                         <property name="action-name">font.indent</property>
                         <property name="text" translatable="yes">Indent</property>
                         <property name="inverted">True</property>
                         <property name="centered">True</property>
                       </object>
                       <packing>
-                        <property name="left-attach">2</property>
+                        <property name="left-attach">4</property>
                         <property name="top-attach">1</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkModelButton" id="map_bg_full">
-                        <property name="name">font.background-full-height</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="tooltip-text" translatable="yes">Background Full Height</property>
-                        <property name="halign">end</property>
-                        <property name="margin-start">10</property>
-                        <property name="margin-top">4</property>
-                        <property name="action-name">font.bg-full</property>
-                        <property name="text" translatable="yes">Background Full Height</property>
-                        <property name="inverted">True</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">2</property>
-                        <property name="top-attach">3</property>
-                        <property name="width">2</property>
                       </packing>
                     </child>
                     <child>
@@ -960,13 +1131,14 @@
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
+                        <property name="halign">start</property>
                         <property name="action-name">font.rise</property>
                         <property name="text" translatable="yes">Rise</property>
                         <property name="inverted">True</property>
                         <property name="centered">True</property>
                       </object>
                       <packing>
-                        <property name="left-attach">2</property>
+                        <property name="left-attach">4</property>
                         <property name="top-attach">2</property>
                       </packing>
                     </child>
@@ -990,71 +1162,8 @@
                         <property name="numeric">True</property>
                       </object>
                       <packing>
-                        <property name="left-attach">3</property>
+                        <property name="left-attach">5</property>
                         <property name="top-attach">2</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkModelButton" id="map_margin_accumulate">
-                        <property name="name">model.accumulative-margin</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="tooltip-text" translatable="yes">Accumulate Margin</property>
-                        <property name="halign">end</property>
-                        <property name="margin-start">10</property>
-                        <property name="margin-top">4</property>
-                        <property name="action-name">font.margin-accumulate</property>
-                        <property name="text" translatable="yes">Accumulate Margin</property>
-                        <property name="inverted">True</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">0</property>
-                        <property name="top-attach">3</property>
-                        <property name="width">2</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkModelButton" id="map_wrap_mode">
-                        <property name="name">model.ul-style</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="halign">center</property>
-                        <property name="action-name">font.wrap_mode</property>
-                        <property name="text" translatable="yes">Wrap Mode</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">4</property>
-                        <property name="top-attach">3</property>
-                        <property name="width">2</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkComboBox" id="font_wrap_mode">
-                        <property name="name">widget.stretch</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="tooltip-text" translatable="yes">Font Stretch</property>
-                        <property name="halign">center</property>
-                        <property name="margin-top">4</property>
-                        <property name="hexpand">True</property>
-                        <property name="model">wrap_mode_store</property>
-                        <property name="active">3</property>
-                        <property name="id-column">0</property>
-                        <child>
-                          <object class="GtkCellRendererText" id="variant_label_col6"/>
-                          <attributes>
-                            <attribute name="text">0</attribute>
-                          </attributes>
-                        </child>
-                      </object>
-                      <packing>
-                        <property name="left-attach">4</property>
-                        <property name="top-attach">2</property>
-                        <property name="width">2</property>
                       </packing>
                     </child>
                     <child>
@@ -1077,7 +1186,7 @@
                         <property name="numeric">True</property>
                       </object>
                       <packing>
-                        <property name="left-attach">1</property>
+                        <property name="left-attach">2</property>
                         <property name="top-attach">2</property>
                       </packing>
                     </child>
@@ -1087,13 +1196,165 @@
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
+                        <property name="halign">start</property>
                         <property name="action-name">font.letter-spacing</property>
                         <property name="text" translatable="yes">Letter</property>
                         <property name="inverted">True</property>
                         <property name="centered">True</property>
                       </object>
                       <packing>
+                        <property name="left-attach">1</property>
+                        <property name="top-attach">2</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="halign">center</property>
+                        <child>
+                          <object class="GtkMenuButton" id="menu_other">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="focus-on-click">False</property>
+                            <property name="receives-default">True</property>
+                            <property name="relief">half</property>
+                            <property name="popover">other_pop</property>
+                            <child>
+                              <object class="GtkLabel">
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="label" translatable="yes">Other Font Properties</property>
+                              </object>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="left-attach">6</property>
+                        <property name="top-attach">2</property>
+                        <property name="width">3</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="enabled_pixels_above_lines">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">False</property>
+                        <property name="halign">end</property>
+                        <property name="action-name">font.pixels-above-lines</property>
+                        <property name="draw-indicator">True</property>
+                      </object>
+                      <packing>
                         <property name="left-attach">0</property>
+                        <property name="top-attach">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="enabled_pixels_inside_wrap">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">False</property>
+                        <property name="halign">end</property>
+                        <property name="margin-start">6</property>
+                        <property name="action-name">font.pixels-inside-wrap</property>
+                        <property name="draw-indicator">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">3</property>
+                        <property name="top-attach">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="enabled_left_margin">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">False</property>
+                        <property name="halign">end</property>
+                        <property name="margin-start">4</property>
+                        <property name="action-name">font.left-margin</property>
+                        <property name="draw-indicator">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">6</property>
+                        <property name="top-attach">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="enabled_pixels_below_lines">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">False</property>
+                        <property name="halign">end</property>
+                        <property name="action-name">font.pixels-below-lines</property>
+                        <property name="draw-indicator">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">0</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="enabled_indent">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">False</property>
+                        <property name="halign">end</property>
+                        <property name="margin-start">4</property>
+                        <property name="action-name">font.indent</property>
+                        <property name="draw-indicator">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">3</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="enabled_right_margin">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">False</property>
+                        <property name="halign">end</property>
+                        <property name="margin-start">4</property>
+                        <property name="action-name">font.right-margin</property>
+                        <property name="draw-indicator">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">6</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="enabled_letter_spacing">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">False</property>
+                        <property name="halign">end</property>
+                        <property name="action-name">font.letter-spacing</property>
+                        <property name="draw-indicator">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">0</property>
+                        <property name="top-attach">2</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="enabled_rise">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">False</property>
+                        <property name="halign">end</property>
+                        <property name="margin-start">4</property>
+                        <property name="action-name">font.rise</property>
+                        <property name="draw-indicator">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">3</property>
                         <property name="top-attach">2</property>
                       </packing>
                     </child>
@@ -1104,7 +1365,7 @@
                   </packing>
                 </child>
                 <child>
-                  <!-- n-columns=3 n-rows=2 -->
+                  <!-- n-columns=3 n-rows=3 -->
                   <object class="GtkGrid" id="combo_grid">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
@@ -1126,7 +1387,7 @@
                             <property name="active">5</property>
                             <property name="id-column">0</property>
                             <child>
-                              <object class="GtkCellRendererText" id="variant_label_col1"/>
+                              <object class="GtkCellRendererText" id="weight_render"/>
                               <attributes>
                                 <attribute name="text">0</attribute>
                               </attributes>
@@ -1139,15 +1400,42 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkModelButton" id="map_weight">
-                            <property name="name">model.weight</property>
+                          <object class="GtkBox">
                             <property name="visible">True</property>
-                            <property name="can-focus">True</property>
-                            <property name="receives-default">True</property>
-                            <property name="action-name">font.weight</property>
-                            <property name="text" translatable="yes">Font Weight</property>
-                            <property name="inverted">True</property>
-                            <property name="centered">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="halign">center</property>
+                            <child>
+                              <object class="GtkCheckButton" id="enabled_weight">
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">False</property>
+                                <property name="halign">center</property>
+                                <property name="action-name">font.weight</property>
+                                <property name="draw-indicator">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkModelButton" id="map_weight">
+                                <property name="name">model.weight</property>
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">True</property>
+                                <property name="action-name">font.weight</property>
+                                <property name="text" translatable="yes">Font Weight</property>
+                                <property name="inverted">True</property>
+                                <property name="centered">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
                           </object>
                           <packing>
                             <property name="expand">False</property>
@@ -1162,21 +1450,21 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkBox" id="box_variant">
+                      <object class="GtkBox" id="box_ul_style">
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
                         <property name="orientation">vertical</property>
                         <child>
-                          <object class="GtkComboBox" id="font_variant">
-                            <property name="name">widget.variant</property>
+                          <object class="GtkComboBox" id="font_underline">
+                            <property name="name">widget.underline</property>
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="tooltip-text" translatable="yes">Font Variant</property>
-                            <property name="model">variant_store</property>
+                            <property name="tooltip-text" translatable="yes">Underline Style</property>
+                            <property name="model">ul_style_store</property>
                             <property name="active">0</property>
                             <property name="id-column">0</property>
                             <child>
-                              <object class="GtkCellRendererText" id="variant_label_col"/>
+                              <object class="GtkCellRendererText" id="underline_render"/>
                               <attributes>
                                 <attribute name="text">0</attribute>
                               </attributes>
@@ -1189,15 +1477,119 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkModelButton" id="map_variant">
-                            <property name="name">model.variant</property>
+                          <object class="GtkBox">
                             <property name="visible">True</property>
-                            <property name="can-focus">True</property>
-                            <property name="receives-default">True</property>
-                            <property name="action-name">font.variant</property>
-                            <property name="text" translatable="yes">Font Variant</property>
-                            <property name="inverted">True</property>
-                            <property name="centered">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="halign">center</property>
+                            <child>
+                              <object class="GtkCheckButton" id="enabled_underline">
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">False</property>
+                                <property name="halign">center</property>
+                                <property name="action-name">font.underline</property>
+                                <property name="draw-indicator">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkModelButton" id="map_underline">
+                                <property name="name">model.underline</property>
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">True</property>
+                                <property name="action-name">font.underline</property>
+                                <property name="text" translatable="yes">Underline Style</property>
+                                <property name="inverted">True</property>
+                                <property name="centered">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="left-attach">0</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkBox" id="box_strikethrough">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <object class="GtkComboBox" id="font_strikethrough">
+                            <property name="name">widget.strikethrough</property>
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="tooltip-text" translatable="yes">Strikethrough</property>
+                            <property name="model">strikethrough_store</property>
+                            <property name="active">1</property>
+                            <property name="id-column">0</property>
+                            <child>
+                              <object class="GtkCellRendererText" id="strikethrough_render"/>
+                              <attributes>
+                                <attribute name="text">0</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="halign">center</property>
+                            <child>
+                              <object class="GtkCheckButton" id="enabled_strikethrough">
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">False</property>
+                                <property name="halign">center</property>
+                                <property name="action-name">font.strikethrough</property>
+                                <property name="draw-indicator">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkModelButton" id="map_strikethrough">
+                                <property name="name">model.ul-style</property>
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">True</property>
+                                <property name="action-name">font.strikethrough</property>
+                                <property name="text" translatable="yes">Strikethrough</property>
+                                <property name="inverted">True</property>
+                                <property name="centered">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
                           </object>
                           <packing>
                             <property name="expand">False</property>
@@ -1208,7 +1600,7 @@
                       </object>
                       <packing>
                         <property name="left-attach">1</property>
-                        <property name="top-attach">0</property>
+                        <property name="top-attach">1</property>
                       </packing>
                     </child>
                     <child>
@@ -1226,7 +1618,7 @@
                             <property name="active">4</property>
                             <property name="id-column">0</property>
                             <child>
-                              <object class="GtkCellRendererText" id="variant_label_col2"/>
+                              <object class="GtkCellRendererText" id="stretch_render"/>
                               <attributes>
                                 <attribute name="text">0</attribute>
                               </attributes>
@@ -1239,15 +1631,42 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkModelButton" id="map_stretch">
-                            <property name="name">model.stretch</property>
+                          <object class="GtkBox">
                             <property name="visible">True</property>
-                            <property name="can-focus">True</property>
-                            <property name="receives-default">True</property>
-                            <property name="action-name">font.stretch</property>
-                            <property name="text" translatable="yes">Font Stretch</property>
-                            <property name="inverted">True</property>
-                            <property name="centered">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="halign">center</property>
+                            <child>
+                              <object class="GtkCheckButton" id="enabled_stretch">
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">False</property>
+                                <property name="halign">center</property>
+                                <property name="action-name">font.stretch</property>
+                                <property name="draw-indicator">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkModelButton" id="map_stretch">
+                                <property name="name">model.stretch</property>
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">True</property>
+                                <property name="action-name">font.stretch</property>
+                                <property name="text" translatable="yes">Font Stretch</property>
+                                <property name="inverted">True</property>
+                                <property name="centered">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
                           </object>
                           <packing>
                             <property name="expand">False</property>
@@ -1258,106 +1677,6 @@
                       </object>
                       <packing>
                         <property name="left-attach">2</property>
-                        <property name="top-attach">0</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkBox" id="box_ul_style">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="orientation">vertical</property>
-                        <child>
-                          <object class="GtkComboBox" id="font_ul_style">
-                            <property name="name">widget.ul-style</property>
-                            <property name="visible">True</property>
-                            <property name="can-focus">False</property>
-                            <property name="tooltip-text" translatable="yes">Underline Style</property>
-                            <property name="model">ul_style_store</property>
-                            <property name="active">0</property>
-                            <property name="id-column">0</property>
-                            <child>
-                              <object class="GtkCellRendererText" id="variant_label_col3"/>
-                              <attributes>
-                                <attribute name="text">0</attribute>
-                              </attributes>
-                            </child>
-                          </object>
-                          <packing>
-                            <property name="expand">False</property>
-                            <property name="fill">True</property>
-                            <property name="position">0</property>
-                          </packing>
-                        </child>
-                        <child>
-                          <object class="GtkModelButton" id="map_ul_style">
-                            <property name="name">model.ul-style</property>
-                            <property name="visible">True</property>
-                            <property name="can-focus">True</property>
-                            <property name="receives-default">True</property>
-                            <property name="action-name">font.ul-style</property>
-                            <property name="text" translatable="yes">Underline Style</property>
-                            <property name="inverted">True</property>
-                            <property name="centered">True</property>
-                          </object>
-                          <packing>
-                            <property name="expand">False</property>
-                            <property name="fill">True</property>
-                            <property name="position">1</property>
-                          </packing>
-                        </child>
-                      </object>
-                      <packing>
-                        <property name="left-attach">2</property>
-                        <property name="top-attach">1</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkBox" id="box_align">
-                        <property name="visible">True</property>
-                        <property name="can-focus">False</property>
-                        <property name="orientation">vertical</property>
-                        <child>
-                          <object class="GtkComboBox" id="font_alignment">
-                            <property name="name">widget.alignment</property>
-                            <property name="visible">True</property>
-                            <property name="can-focus">False</property>
-                            <property name="tooltip-text" translatable="yes">Font Alignment</property>
-                            <property name="model">alignment_store</property>
-                            <property name="active">0</property>
-                            <property name="id-column">0</property>
-                            <child>
-                              <object class="GtkCellRendererText" id="variant_label_col4"/>
-                              <attributes>
-                                <attribute name="text">0</attribute>
-                              </attributes>
-                            </child>
-                          </object>
-                          <packing>
-                            <property name="expand">False</property>
-                            <property name="fill">True</property>
-                            <property name="position">0</property>
-                          </packing>
-                        </child>
-                        <child>
-                          <object class="GtkModelButton" id="map_alignnment">
-                            <property name="name">model.alignment</property>
-                            <property name="visible">True</property>
-                            <property name="can-focus">True</property>
-                            <property name="receives-default">True</property>
-                            <property name="action-name">font.alignnment</property>
-                            <property name="text" translatable="yes">Alignment</property>
-                            <property name="inverted">True</property>
-                            <property name="centered">True</property>
-                          </object>
-                          <packing>
-                            <property name="expand">False</property>
-                            <property name="fill">True</property>
-                            <property name="position">1</property>
-                          </packing>
-                        </child>
-                      </object>
-                      <packing>
-                        <property name="left-attach">1</property>
                         <property name="top-attach">1</property>
                       </packing>
                     </child>
@@ -1376,7 +1695,7 @@
                             <property name="active">0</property>
                             <property name="id-column">0</property>
                             <child>
-                              <object class="GtkCellRendererText" id="variant_label_col5"/>
+                              <object class="GtkCellRendererText" id="style_render"/>
                               <attributes>
                                 <attribute name="text">0</attribute>
                               </attributes>
@@ -1389,15 +1708,288 @@
                           </packing>
                         </child>
                         <child>
-                          <object class="GtkModelButton" id="map_style">
-                            <property name="name">model.style</property>
+                          <object class="GtkBox">
                             <property name="visible">True</property>
-                            <property name="can-focus">True</property>
-                            <property name="receives-default">True</property>
-                            <property name="action-name">font.style</property>
-                            <property name="text" translatable="yes">Font Style</property>
-                            <property name="inverted">True</property>
-                            <property name="centered">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="halign">center</property>
+                            <child>
+                              <object class="GtkCheckButton" id="enabled_style">
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">False</property>
+                                <property name="halign">center</property>
+                                <property name="action-name">font.style</property>
+                                <property name="draw-indicator">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkModelButton" id="map_style">
+                                <property name="name">model.style</property>
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">True</property>
+                                <property name="action-name">font.style</property>
+                                <property name="text" translatable="yes">Font Style</property>
+                                <property name="inverted">True</property>
+                                <property name="centered">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="left-attach">1</property>
+                        <property name="top-attach">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkBox" id="box_variant">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <object class="GtkComboBox" id="font_variant">
+                            <property name="name">widget.variant</property>
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="tooltip-text" translatable="yes">Font Variant</property>
+                            <property name="model">variant_store</property>
+                            <property name="active">0</property>
+                            <property name="id-column">0</property>
+                            <child>
+                              <object class="GtkCellRendererText" id="variant_render"/>
+                              <attributes>
+                                <attribute name="text">0</attribute>
+                              </attributes>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkBox">
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="halign">center</property>
+                            <child>
+                              <object class="GtkCheckButton" id="enabled_variant">
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">False</property>
+                                <property name="halign">center</property>
+                                <property name="action-name">font.variant</property>
+                                <property name="draw-indicator">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkModelButton" id="map_variant">
+                                <property name="name">model.variant</property>
+                                <property name="visible">True</property>
+                                <property name="can-focus">True</property>
+                                <property name="receives-default">True</property>
+                                <property name="action-name">font.variant</property>
+                                <property name="text" translatable="yes">Font Variant</property>
+                                <property name="inverted">True</property>
+                                <property name="centered">True</property>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="left-attach">2</property>
+                        <property name="top-attach">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="homogeneous">True</property>
+                        <child>
+                          <object class="GtkBox" id="box_justification">
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="halign">center</property>
+                            <property name="orientation">vertical</property>
+                            <child>
+                              <object class="GtkComboBox" id="font_justification">
+                                <property name="name">widget.justification</property>
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="tooltip-text" translatable="yes">Font Stretch</property>
+                                <property name="model">justification_store</property>
+                                <property name="active">0</property>
+                                <property name="id-column">0</property>
+                                <child>
+                                  <object class="GtkCellRendererText" id="justification_render"/>
+                                  <attributes>
+                                    <attribute name="text">0</attribute>
+                                  </attributes>
+                                </child>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="halign">center</property>
+                                <child>
+                                  <object class="GtkCheckButton" id="enabled_justification">
+                                    <property name="visible">True</property>
+                                    <property name="can-focus">True</property>
+                                    <property name="receives-default">False</property>
+                                    <property name="halign">center</property>
+                                    <property name="action-name">font.justification</property>
+                                    <property name="draw-indicator">True</property>
+                                  </object>
+                                  <packing>
+                                    <property name="expand">False</property>
+                                    <property name="fill">True</property>
+                                    <property name="position">0</property>
+                                  </packing>
+                                </child>
+                                <child>
+                                  <object class="GtkModelButton" id="map_justification">
+                                    <property name="name">model.stretch</property>
+                                    <property name="visible">True</property>
+                                    <property name="can-focus">True</property>
+                                    <property name="receives-default">True</property>
+                                    <property name="action-name">font.justification</property>
+                                    <property name="text" translatable="yes">Font Justification</property>
+                                    <property name="inverted">True</property>
+                                    <property name="centered">True</property>
+                                  </object>
+                                  <packing>
+                                    <property name="expand">False</property>
+                                    <property name="fill">True</property>
+                                    <property name="position">1</property>
+                                  </packing>
+                                </child>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">1</property>
+                              </packing>
+                            </child>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkBox" id="box_wrap_mode">
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="halign">center</property>
+                            <property name="orientation">vertical</property>
+                            <child>
+                              <object class="GtkComboBox" id="font_wrap_mode">
+                                <property name="name">widget.wrap-mode</property>
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="tooltip-text" translatable="yes">Font Wrap Mode</property>
+                                <property name="model">wrap_mode_store_new</property>
+                                <property name="active">0</property>
+                                <property name="id-column">0</property>
+                                <child>
+                                  <object class="GtkCellRendererText" id="wrap_mode_render"/>
+                                  <attributes>
+                                    <attribute name="text">0</attribute>
+                                  </attributes>
+                                </child>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">0</property>
+                              </packing>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="visible">True</property>
+                                <property name="can-focus">False</property>
+                                <property name="halign">center</property>
+                                <child>
+                                  <object class="GtkCheckButton" id="enabled_wrap_mode">
+                                    <property name="visible">True</property>
+                                    <property name="can-focus">True</property>
+                                    <property name="receives-default">False</property>
+                                    <property name="halign">center</property>
+                                    <property name="action-name">font.wrap-mode</property>
+                                    <property name="draw-indicator">True</property>
+                                  </object>
+                                  <packing>
+                                    <property name="expand">False</property>
+                                    <property name="fill">True</property>
+                                    <property name="position">0</property>
+                                  </packing>
+                                </child>
+                                <child>
+                                  <object class="GtkModelButton" id="map_wrap_mode">
+                                    <property name="name">model.wrap-mode</property>
+                                    <property name="visible">True</property>
+                                    <property name="can-focus">True</property>
+                                    <property name="receives-default">True</property>
+                                    <property name="action-name">font.wrap-mode</property>
+                                    <property name="text" translatable="yes">Wrap Mode</property>
+                                    <property name="inverted">True</property>
+                                    <property name="centered">True</property>
+                                  </object>
+                                  <packing>
+                                    <property name="expand">False</property>
+                                    <property name="fill">True</property>
+                                    <property name="position">1</property>
+                                  </packing>
+                                </child>
+                              </object>
+                              <packing>
+                                <property name="expand">False</property>
+                                <property name="fill">True</property>
+                                <property name="position">2</property>
+                              </packing>
+                            </child>
                           </object>
                           <packing>
                             <property name="expand">False</property>
@@ -1408,7 +2000,8 @@
                       </object>
                       <packing>
                         <property name="left-attach">0</property>
-                        <property name="top-attach">1</property>
+                        <property name="top-attach">2</property>
+                        <property name="width">3</property>
                       </packing>
                     </child>
                   </object>
@@ -1421,19 +2014,47 @@
                   <object class="GtkBox" id="family_size_box">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
+                    <property name="valign">center</property>
                     <property name="margin-bottom">12</property>
                     <property name="homogeneous">True</property>
                     <child>
-                      <object class="GtkModelButton" id="map_font">
-                        <property name="name">model.family</property>
+                      <object class="GtkBox">
                         <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="halign">center</property>
-                        <property name="action-name">font.family</property>
-                        <property name="text" translatable="yes">Font Family</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <object class="GtkModelButton" id="map_family">
+                            <property name="name">model.family</property>
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">True</property>
+                            <property name="halign">center</property>
+                            <property name="action-name">font.family</property>
+                            <property name="text" translatable="yes">Font Family</property>
+                            <property name="inverted">True</property>
+                            <property name="centered">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkCheckButton" id="enabled_family">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">False</property>
+                            <property name="halign">center</property>
+                            <property name="action-name">font.family</property>
+                            <property name="draw-indicator">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -1442,13 +2063,13 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkFontButton" id="font_font">
+                      <object class="GtkFontButton" id="font_family">
                         <property name="name">widget.family</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
                         <property name="tooltip-text" translatable="yes">Font Family</property>
-                        <property name="valign">start</property>
+                        <property name="valign">center</property>
                         <property name="font">Sans 12</property>
                         <property name="language">c</property>
                         <property name="level">GTK_FONT_CHOOSER_LEVEL_VARIATIONS | GTK_FONT_CHOOSER_LEVEL_FEATURES | GTK_FONT_CHOOSER_LEVEL_FAMILY</property>
@@ -1465,15 +2086,42 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkModelButton" id="map_size">
-                        <property name="name">model.size</property>
+                      <object class="GtkBox">
                         <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="action-name">font.size</property>
-                        <property name="text" translatable="yes">Font Size</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="orientation">vertical</property>
+                        <child>
+                          <object class="GtkModelButton" id="map_size">
+                            <property name="name">model.size</property>
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">True</property>
+                            <property name="action-name">font.size</property>
+                            <property name="text" translatable="yes">Font Size</property>
+                            <property name="inverted">True</property>
+                            <property name="centered">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkCheckButton" id="enabled_size">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">False</property>
+                            <property name="halign">center</property>
+                            <property name="action-name">font.size</property>
+                            <property name="draw-indicator">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
                       </object>
                       <packing>
                         <property name="expand">False</property>
@@ -1487,9 +2135,10 @@
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="tooltip-text" translatable="yes">Font Size (Points)</property>
+                        <property name="valign">center</property>
                         <property name="max-length">3</property>
-                        <property name="width-chars">2</property>
-                        <property name="max-width-chars">3</property>
+                        <property name="width-chars">5</property>
+                        <property name="max-width-chars">6</property>
                         <property name="text" translatable="yes">12</property>
                         <property name="progress-fraction">0.16</property>
                         <property name="primary-icon-activatable">False</property>
@@ -1497,7 +2146,7 @@
                         <property name="primary-icon-sensitive">False</property>
                         <property name="secondary-icon-sensitive">False</property>
                         <property name="input-purpose">digits</property>
-                        <property name="digits">1</property>
+                        <property name="digits">2</property>
                         <property name="numeric">True</property>
                         <property name="value">12</property>
                       </object>
@@ -1523,11 +2172,10 @@
                     <property name="margin-top">6</property>
                     <property name="row-spacing">4</property>
                     <property name="column-spacing">14</property>
-                    <property name="row-homogeneous">True</property>
                     <property name="column-homogeneous">True</property>
                     <child>
-                      <object class="GtkColorButton" id="font_background">
-                        <property name="name">widget.background</property>
+                      <object class="GtkColorButton" id="font_background_rgba">
+                        <property name="name">widget.background-rgba</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
@@ -1542,8 +2190,8 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkColorButton" id="font_foreground">
-                        <property name="name">widget.foreground</property>
+                      <object class="GtkColorButton" id="font_foreground_rgba">
+                        <property name="name">widget.foreground-rgba</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
@@ -1558,15 +2206,15 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkColorButton" id="font_strikethrough">
-                        <property name="name">widget.strikethrough</property>
+                      <object class="GtkColorButton" id="font_strikethrough_rgba">
+                        <property name="name">widget.strikethrough-rgba</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
                         <property name="tooltip-text" translatable="yes">Strikethrough Color</property>
                         <property name="hexpand">True</property>
                         <property name="use-alpha">True</property>
-                        <property name="title" translatable="yes">Background Color</property>
+                        <property name="title" translatable="yes">Strikethrough Color</property>
                       </object>
                       <packing>
                         <property name="left-attach">2</property>
@@ -1574,15 +2222,15 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkColorButton" id="font_underline">
-                        <property name="name">widget.underline</property>
+                      <object class="GtkColorButton" id="font_underline_rgba">
+                        <property name="name">widget.underline-rgba</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
                         <property name="tooltip-text" translatable="yes">Underline Color</property>
                         <property name="hexpand">True</property>
                         <property name="use-alpha">True</property>
-                        <property name="title" translatable="yes">Background Color</property>
+                        <property name="title" translatable="yes">Underline Color</property>
                       </object>
                       <packing>
                         <property name="left-attach">3</property>
@@ -1590,83 +2238,15 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkModelButton" id="map_background">
-                        <property name="name">model.background</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="valign">start</property>
-                        <property name="action-name">font.background</property>
-                        <property name="text" translatable="yes">Background</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">0</property>
-                        <property name="top-attach">1</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkModelButton" id="map_foreground">
-                        <property name="name">model.foreground</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="valign">start</property>
-                        <property name="action-name">font.foreground</property>
-                        <property name="text" translatable="yes">Foreground</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">1</property>
-                        <property name="top-attach">1</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkModelButton" id="map_strikethrough">
-                        <property name="name">model.strikethrough</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="valign">start</property>
-                        <property name="action-name">font.strikethrough</property>
-                        <property name="text" translatable="yes">Strikethrough</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">2</property>
-                        <property name="top-attach">1</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkModelButton" id="map_underline">
-                        <property name="name">model.underline</property>
-                        <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="valign">start</property>
-                        <property name="action-name">font.underline</property>
-                        <property name="text" translatable="yes">Underline</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
-                      </object>
-                      <packing>
-                        <property name="left-attach">3</property>
-                        <property name="top-attach">1</property>
-                      </packing>
-                    </child>
-                    <child>
-                      <object class="GtkColorButton" id="font_paragraph">
-                        <property name="name">widget.paragraph-background</property>
+                      <object class="GtkColorButton" id="font_paragraph_background_rgba">
+                        <property name="name">widget.paragraph-background-rgba</property>
                         <property name="visible">True</property>
                         <property name="can-focus">True</property>
                         <property name="receives-default">True</property>
                         <property name="tooltip-text" translatable="yes">Paragraph Background Color</property>
                         <property name="hexpand">True</property>
                         <property name="use-alpha">True</property>
-                        <property name="title" translatable="yes">Background Color</property>
+                        <property name="title" translatable="yes">Paragraph Background Color</property>
                       </object>
                       <packing>
                         <property name="left-attach">4</property>
@@ -1674,16 +2254,224 @@
                       </packing>
                     </child>
                     <child>
-                      <object class="GtkModelButton" id="map_paragraph_background">
-                        <property name="name">model.paragraph-background</property>
+                      <object class="GtkBox">
                         <property name="visible">True</property>
-                        <property name="can-focus">True</property>
-                        <property name="receives-default">True</property>
-                        <property name="valign">start</property>
-                        <property name="action-name">font.paragraph-background</property>
-                        <property name="text" translatable="yes">Paragraph</property>
-                        <property name="inverted">True</property>
-                        <property name="centered">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="halign">center</property>
+                        <child>
+                          <object class="GtkCheckButton" id="enabled_background_rgba">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">False</property>
+                            <property name="halign">end</property>
+                            <property name="action-name">font.background-rgba</property>
+                            <property name="draw-indicator">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkModelButton" id="map_background_rgba">
+                            <property name="name">model.background-rgba</property>
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">True</property>
+                            <property name="halign">start</property>
+                            <property name="valign">start</property>
+                            <property name="action-name">font.background-rgba</property>
+                            <property name="text" translatable="yes">Background</property>
+                            <property name="inverted">True</property>
+                            <property name="centered">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="left-attach">0</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="halign">center</property>
+                        <child>
+                          <object class="GtkCheckButton" id="enabled_foreground_rgba">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">False</property>
+                            <property name="halign">end</property>
+                            <property name="action-name">font.foreground-rgba</property>
+                            <property name="draw-indicator">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkModelButton" id="map_foreground_rgba">
+                            <property name="name">model.foreground-rgba</property>
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">True</property>
+                            <property name="halign">start</property>
+                            <property name="valign">start</property>
+                            <property name="action-name">font.foreground-rgba</property>
+                            <property name="text" translatable="yes">Foreground</property>
+                            <property name="inverted">True</property>
+                            <property name="centered">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="left-attach">1</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="halign">center</property>
+                        <child>
+                          <object class="GtkCheckButton" id="enabled_strikethrough_rgba">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">False</property>
+                            <property name="halign">end</property>
+                            <property name="action-name">font.strikethrough-rgba</property>
+                            <property name="draw-indicator">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkModelButton" id="map_strikethrough_rgba">
+                            <property name="name">model.strikethrough-rgba</property>
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">True</property>
+                            <property name="halign">start</property>
+                            <property name="valign">start</property>
+                            <property name="action-name">font.strikethrough-rgba</property>
+                            <property name="text" translatable="yes">Strikethrough</property>
+                            <property name="inverted">True</property>
+                            <property name="centered">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="left-attach">2</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="halign">center</property>
+                        <child>
+                          <object class="GtkCheckButton" id="enabled_underline_rgba">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">False</property>
+                            <property name="halign">end</property>
+                            <property name="action-name">font.underline-rgba</property>
+                            <property name="draw-indicator">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkModelButton" id="map_underline_rgba">
+                            <property name="name">model.underline-rgba</property>
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">True</property>
+                            <property name="halign">start</property>
+                            <property name="valign">start</property>
+                            <property name="action-name">font.underline-rgba</property>
+                            <property name="text" translatable="yes">Underline</property>
+                            <property name="inverted">True</property>
+                            <property name="centered">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="left-attach">3</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="halign">center</property>
+                        <child>
+                          <object class="GtkCheckButton" id="enabled_paragraph_background_rgba">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">False</property>
+                            <property name="halign">end</property>
+                            <property name="action-name">font.paragraph-background-rgba</property>
+                            <property name="draw-indicator">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkModelButton" id="map_paragraph_background_rgba">
+                            <property name="name">model.paragraph-background-rgba</property>
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">True</property>
+                            <property name="halign">start</property>
+                            <property name="valign">start</property>
+                            <property name="action-name">font.paragraph-background-rgba</property>
+                            <property name="text" translatable="yes">Paragraph</property>
+                            <property name="inverted">True</property>
+                            <property name="centered">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
                       </object>
                       <packing>
                         <property name="left-attach">4</property>
@@ -1714,4 +2502,116 @@
       </object>
     </child>
   </template>
+  <object class="GtkPopover" id="other_pop">
+    <property name="can-focus">False</property>
+    <property name="relative-to">menu_other</property>
+    <child>
+      <object class="GtkFrame">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="label-xalign">0</property>
+        <property name="shadow-type">none</property>
+        <child>
+          <object class="GtkListBox">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="selection-mode">none</property>
+            <child>
+              <object class="GtkListBoxRow">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="activatable">False</property>
+                <property name="selectable">False</property>
+                <child>
+                  <!-- n-columns=2 n-rows=2 -->
+                  <object class="GtkGrid">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <child>
+                      <object class="GtkModelButton" id="map_accumulative_margin">
+                        <property name="name">model.accumulative-margin</property>
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">True</property>
+                        <property name="tooltip-text" translatable="yes">Margin Accumulates</property>
+                        <property name="halign">center</property>
+                        <property name="margin-start">10</property>
+                        <property name="margin-top">4</property>
+                        <property name="action-name">font.accumulative-margin</property>
+                        <property name="text" translatable="yes">Accumulative Margin</property>
+                        <property name="inverted">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">1</property>
+                        <property name="top-attach">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkModelButton" id="map_background_full_height">
+                        <property name="name">font.background-full-height</property>
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">True</property>
+                        <property name="tooltip-text" translatable="yes">Render Background Color at Full Height</property>
+                        <property name="halign">center</property>
+                        <property name="margin-left">10</property>
+                        <property name="margin-start">10</property>
+                        <property name="margin-top">4</property>
+                        <property name="action-name">font.background-full-height</property>
+                        <property name="text" translatable="yes">Background Full Height</property>
+                        <property name="inverted">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">1</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="enabled_accumulative_margin">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">False</property>
+                        <property name="halign">center</property>
+                        <property name="action-name">font.accumulative-margin</property>
+                        <property name="draw-indicator">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">0</property>
+                        <property name="top-attach">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkCheckButton" id="enabled_background_full_height">
+                        <property name="visible">True</property>
+                        <property name="can-focus">True</property>
+                        <property name="receives-default">False</property>
+                        <property name="halign">center</property>
+                        <property name="action-name">font.background-full-height</property>
+                        <property name="draw-indicator">True</property>
+                      </object>
+                      <packing>
+                        <property name="left-attach">0</property>
+                        <property name="top-attach">1</property>
+                      </packing>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child type="label">
+          <object class="GtkLabel">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="margin-start">8</property>
+            <property name="margin-end">12</property>
+            <property name="margin-top">4</property>
+            <property name="margin-bottom">4</property>
+            <property name="label" translatable="yes">Other Font Properties</property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
 </interface>
