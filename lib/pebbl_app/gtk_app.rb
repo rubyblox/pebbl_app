@@ -65,6 +65,8 @@ module PebblApp
   ## @see GtkApplication (How Do I...? GNOME Developer Center) https://developer-old.gnome.org/GtkApplication/
   class GtkApp < Gtk::Application
     include GAppMixin
+    extend GUserObject
+    self.register_type
 
     attr_accessor :framework, :open_args
 
@@ -88,7 +90,12 @@ module PebblApp
       if !opts.empty?
         AppLog.warn("Unused args in #{self.class}##{__method__}: #{opts}")
       end
-      super(name, flags)
+
+      ## subsequent of type_register here, then at least when this
+      ## method is reached from some subclass, super() here will
+      ## dispatch to GLib::Object
+      super("application-id" => name.freeze,
+            "flags" => flags)
 
       ##
       ## additional configuration
@@ -101,9 +108,7 @@ module PebblApp
 
     def config
       @config ||= PebblApp::GtkConf.new() do
-        ## FIXME store this deferred app_command_name block as a proc
-        ## in an AppMixin const, use; by default with some config_class
-        ## method on the class in AppMixin
+        ## FIXME update the binding for default app_command_name in config
         self.app_command_name
       end
     end

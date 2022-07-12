@@ -199,9 +199,11 @@ module PebblApp
             if template_child?(name)
               PebblApp::AppLog.warn(
                 "Template child already bound for #{id} in #{self}"
-              )
+              ) if $DEBUG
             else
-              PebblApp::AppLog.debug("Binding template child #{id} for #{self}")
+              PebblApp::AppLog.debug(
+                "Binding template child #{id} for #{self}"
+              ) if $DEBUG
               ## about the second arg for bind_template_child_full
               ## >> true => internal, Template child is available with a
               ##            builder object, via get_internal_child
@@ -292,7 +294,7 @@ in template for #{self.class} at #{path}")
             bytes = fio.read_bytes(nbytes)
             PebblApp::AppLog.debug(
               "Setting template data for #{self} @ #{filename}"
-            )
+            ) if $DEBUG
             self.set_template(data: bytes)
           ensure
             fio.unref() if fio

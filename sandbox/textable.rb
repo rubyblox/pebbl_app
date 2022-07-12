@@ -2,12 +2,30 @@
 
 require 'pebbl_app/gtk_app'
 
+require 'pango'
+
 module PebblApp
 
   module Util
     class << self
       def freeze_array(ary)
         ary.tap { |elt| elt.freeze }.freeze
+      end
+      ## nb Gdk::RGBA.parse(parse)
+
+      def inspect_property(property, widget, &block)
+        value = widget.get_property(property)
+        block.yield(value, property, widget)
+      end
+
+
+      def inspect_properties(widget, &block)
+        widget.class.properties.each do |p|
+          param = widget.class.property(p)
+          if param.readable?
+            inspect_property(p, widget, &block)
+          end
+        end
       end
     end
   end
@@ -43,13 +61,15 @@ module PebblApp
     ##
     ## Each of these has a value property of the provided name and a
     ## boolean <name>-set property in GtkTextTag
+    #
+    ## The following properties are not known to be represented in
+    ## Gtk::CellRendererText, though implemented in Gtk::TextTag
+    ## - `pixels-above-lines`, `pixels-below-lines`, `pixels-inside-wrap`
+    ## - `indent`, `left-margin`, `right-margin`
+    ## - `letter-spacing`, `background-full-height`
     ##
-    ## Not represented in Gtk::CellRendererText
-    ## - pixels above, below, in wrap
-    ## - indent, left margin, right margin
-    ## - letter spacing, background full height
-    ##
-    ## Text Tag Properties not used on the font config UI:
+    ## The following properties of Gtk::TextTag have not been
+    ## implemented in this release of the font configuration UI:
     ## - editable
     ## - scale
     TAG_SET_PROPS ||=
@@ -61,32 +81,42 @@ module PebblApp
                            strikethrough style underline variant
                            weight wrap-mode)
 
-    ## Properties for text tags that do not have a <name>-set property
+    ## Color properties for text tags
     ##
-    ## Not represented in Gtk::CellRendererText: name, accumulative-margin
+    ## The following properties are not known to be represented in
+    ## Gtk::CellRendererText, though implemented in Gtk::TextTag
+    ##  - `underlinne-rgba`
+    ##  - `paragraph-background-rgba`
+    ##  - `strikethrough-rgba
     ##
-    ## Not mapped here (no widget) : name, label-string (added)
-    TAG_OTHER_PROPS ||=
-      Util.freeze_array %w(accumulative-margin)
-
-    ## Color property mapping for text tags
-    ##
-    ## Each of these correspondds to an <name>-rgba property and a
-    ##<name>-set property  in text tags
-    ##
-    ## Not represented in Gtk::CellRendererText
-    ##  - underline color
-    ##  - paragraph-background color
-    ##  - strikethrough color
-    ##
-    TAG_RGBA ||=
+    TAG_RGBA_PROPS ||=
       Util.freeze_array %w(background foreground strikethrough
                            underline paragraph-background
                           ).map { |name| name + "-rgba" }
 
-    ## Property name mapping for TAG_SET_PROPS, TAG_OTHER_PROPS, TAG_RGBA
+    ## Properties for text tags that do not have a <name>-set property
+    ##
+    ## The `accumulative-margin` property it not known to be represented
+    ## in Gtk::CellRendererText, though implemented in Gtk::TextTag
+    ##
+    ## The following properties of Gtk::TextTag and PebblApp::FontDef
+    ## have not been implemented in this release of the font
+    ## configuration UI:
+    ## - `name` as in the programatic name of a Gtk::TexTag or FontDef
+    ## - `label-string` as for a user-visible label of a FontDef
+    ##
+    TAG_OTHER_PROPS ||=
+      Util.freeze_array %w(accumulative-margin)
+
+
+    ## Cumulative mapping (TAG_SET_PROPS, TAG_OTHER_PROPS, TAG_RGBA_PROPS)
+    ##
+    ## This constant is used as an array of configuration properties in
+    ## the TextableFontPrefs implementation.
     TAG_ALL ||=
-      TAG_OTHER_PROPS.dup.concat(TAG_SET_PROPS.dup.concat(TAG_RGBA.dup))
+      TAG_SET_PROPS.dup.concat(
+        TAG_RGBA_PROPS.dup.concat(TAG_OTHER_PROPS.dup)
+      ).freeze
 
   end
 
@@ -224,6 +254,7 @@ module PebblApp
                  ## ... map template elements ...
                  %w(fonts_store fonts_tree inherit_store inherit_tree
                     fonts_menu
+                    preview_buffer tag_sample
                    ))
 
     ## bind property widgets (acessed directly, no method binding)
@@ -259,44 +290,204 @@ module PebblApp
 
       bld = self.class.composite_builder
 
+      checkboxes = Hash.new
+      ## ^ lexically scoped storage, used in two callbacks defined
+      ## with the following block
+
       FontConst::TAG_ALL.map do |prop|
-        ## FIXME this "just works" for the widget/action mapping.
-        ##
-        ## For any single font, the initial state of each widget for the
-        ## properties of that font would be beyond the scope of here (TO DO)
+        ## configure an action to toggle widget states for the property
+        ## and set the sample's property when active. The action will be
+        ## in effect activated on a checkbox widget for the property's
+        ## configuration
         suffix = "_" + prop.gsub("-","_")
-        chk_id = "enabled" + suffix
-        if ! chk = self.get_internal_child(bld, chk_id)
-          raise "enabled checkbox not found: #{prop}"
+        checkbox_id = "enabled" + suffix
+        if checkbox = self.get_internal_child(bld, checkbox_id)
+          checkboxes[prop] = checkbox
+        else
+          raise "checkbox widget not found: #{prop} => #{checkbox_id}"
         end
         lbl_id = "map" + suffix
         if ! lbl = self.get_internal_child(bld, lbl_id)
           raise "label widget not found: #{prop} => #{lbl_id}"
         end
-        wdgt_id = "font" + suffix
-        ## wdgt may be null for two of the properties,
-        ## each of which has no value widget
-        wdgt = self.get_internal_child(bld, wdgt_id)
-        act = self.map_simple_action(prop, prefix: "font".freeze) do |*args|
-          ## activated after a change in state in the checkbox widget
-          if chk.active?
-            lbl.sensitive = true
-            wdgt.sensitive = true if wdgt
+
+        widget_id = "font" + suffix
+        ## 'widget' here may be null for two of the properties, each of
+        ## which has no value widget - a boolean property
+        if widget = self.get_internal_child(bld, widget_id)
+          if (prop == "strikethrough-rgba".freeze) ||
+              (prop == "underline-rgba".freeze)
+            idx = (prop =~ /-rgba$/)
+            related = prop[...idx]
           else
-            lbl.sensitive = false
-            wdgt.sensitive = false if wdgt
+            related = false
           end
+          callback = proc {
+            ## activated after a change in state in the checkbox widget
+            if checkbox.active?
+              if related
+                ## this will activate the checkcbox for e.g "underline"
+                ## when the checkbox for "underline-rgba" is activated
+                related_chk = checkboxes[related]
+                related_chk.active = true
+              end
+              handle_widget_property_active(prop, widget, lbl)
+            else
+              handle_widget_property_inactive(prop, widget, lbl)
+            end
+          }
+          value_signal = widget_value_signal(widget)
+          widget.signal_connect_after(value_signal) do |*args|
+            sample_activate_from_widget(prop, widget)
+          end
+        else
+          callback = proc {
+            if checkbox.active?
+              handle_boolean_property_active(prop, lbl)
+            else
+              handle_boolean_property_inactive(prop, lbl)
+            end
+          }
         end
+        ## freezing the callback to prevent it from disappearing in gc (FIXME)
+        callback.freeze
+        act = self.map_simple_action(prop, prefix: "font".freeze, &callback)
         ## disables the checkbox :
         # act.enabled = false
-        ## activates the checkbox, setting the initial state :
-        act.activate
+        ## sets the checkbox and model button to initial state ...
+        act.activate()
       end
 
+      initialize_sample
+    end
+
+    def handle_widget_property_active(prop, widget, label)
+      widget.sensitive = true
+      handle_property_active(prop, label)
+      sample_activate_from_widget(prop, widget)
+    end
+
+    def handle_boolean_property_active(prop, label)
+      handle_property_active(prop, label)
+      sample_activate(prop)
+    end
+
+    def handle_property_active(prop, label)
+      label.sensitive = true
+    end
+
+    def handle_widget_property_inactive(prop, widget, label)
+      widget.sensitive = false
+      handle_property_inactive(prop, label)
+    end
+
+    def handle_boolean_property_inactive(prop, label)
+      handle_property_inactive(prop, label)
+    end
+
+    def handle_property_inactive(prop, label)
+      label.sensitive = false
+      sample_deactivate(prop)
+    end
+
+    def widget_value_signal(widget)
+      case widget
+      when Gtk::ComboBox
+        "changed".freeze
+      when Gtk::SpinButton
+        "value-changed".freeze
+      when Gtk::FontButton
+        "font-set".freeze
+      when Gtk::ColorButton
+        "color-set".freeze
+      else
+        raise ArgumentError.new("Unsupported widget kind: #{widget.class}")
+      end
     end
 
     def to_s
       "#<%s 0x%06x>" % [self.class, __id__]
+    end
+
+    def initialize_sample
+      buff = preview_buffer
+      tag = tag_sample
+      start_iter = buff.start_iter
+      end_iter = buff.end_iter
+      buff.apply_tag(tag, start_iter, end_iter)
+    end
+
+    def sample_activate(prop)
+      tag_sample.set_property(prop, true)
+    end
+
+    ## @return [String or false]
+    def property_set_p_name(prop)
+      if prop == "accumulative-margin".freeze
+        ## there is no "-set" property for this value property
+        return false
+      elsif idx = (prop =~ /-rgba$/.freeze)
+        ## e.g "background-rgba" [in] => "background-set" [out]
+        set_p_name = (prop[...idx] + "-set").freeze
+      else
+        set_p_name = (prop + "-set").freeze
+      end
+      return set_p_name
+    end
+
+    def value_for_widget(widget)
+      case widget
+      when Gtk::ColorButton
+        return widget.rgba
+      when Gtk::ComboBox
+        model = widget.model
+        iter = widget.active_iter
+        ## always using index 1 for the value field, in the UI definition
+        return model.get_value(iter, 1)
+      when Gtk::FontChooser
+        desc = widget.font_desc
+        return desc.family
+      else
+        ## Gtk::SpinButton generally
+        return widget.value
+      end
+    end
+
+    def sample_activate_from_widget(prop, widget)
+      val = value_for_widget(widget)
+      if prop == "size".freeze
+        ## The text tag "size" property is one property in this
+        ## configuration dialog where the value for that property's
+        ## configuration widget must be translated before application to
+        ## the sample object.
+        ##
+        ## This does not in in itself provide support for unparsing/parsing
+        ## the value onto any string representation during serialziation
+        ## or desererialization of a FontDef or FontScheme.
+        ##
+        ## This value will also have to be set with a reciprocal
+        ## transformation, when initializing the dialog for any single
+        ## text tag or font definition.
+        val = val * Pango::SCALE
+      end
+      tag_sample.set_property(prop, val)
+      set_p = property_set_p_name(prop)
+      tag_sample.set_property(set_p, true)
+    end
+
+    def sample_deactivate(prop)
+      prop.freeze
+      if set_p_name = property_set_p_name(prop)
+        ## TBD this does not clear any existing value for the property,
+        tag_sample.set_property(set_p_name, false)
+      else
+        ## there is no "-set" property for "accumulative-margin",
+        ## thus property_set_p_name returns false for that property.
+        ##
+        ## the behavior here is to only set the property's value to
+        ## false
+        tag_sample.set_property(prop, false)
+      end
     end
 
   end

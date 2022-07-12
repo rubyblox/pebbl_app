@@ -51,7 +51,6 @@ module PebblApp::GObjType
       ## @see register_type
       def type_registered?()
         if class_variable_defined?(:@@registered)
-          ## class variables & instance variables DNW (??)
           class_variable_get(:@@registered)
         else
           false
