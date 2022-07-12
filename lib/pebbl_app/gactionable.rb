@@ -3,22 +3,165 @@
 require 'pebbl_app/gtk_framework'
 
 module PebblApp
-  ## Mixin for Gio::Action management with Gtk::Actionable and
-  ## Gtk::ActionMap implementations (typically of type Gtk::Widget or
-  ## Gio::Application)
+
+  ## Mixin for Gio::Action management with Gtk::Actionable,
+  ## Gtk::ActionMap, and other GLib::Object implementations.
+  ##
+  ## This mixin is activated by way of `include`, e.g
+  ## ~~~~
+  ## class IncludingClass
+  ##   include PebblApp::ActioanbleMixin
+  ## end
+  ## ~~~~
+  ##
   ##
   ## This mixin will define the following methods in the including class:
   ##
   ## **#map_simple_action**
-  ## : for binding a named action to some receiving object
+  ## : for binding a named action of type Gio::SimpleAction to some
+  ##   receiving object
+  ##
+  ## **#map_value_action** and **#map_stateful_action**
+  ## : for complex actions receiving a parameter in activation and/or an
+  ##   action state value
   ##
   ## **#default_action_prefix**
   ## : a utility method for #map_simple_action, used when no action prefix
   ##   can be determined from the arguments provided to that method.
   ##
+  ## The `map_simple_action` method is generally compatible with
+  ## Gio::Action usage cases in Gtk::Widget and Gio::Application
+  ## objects.
+  ##
+  ## The `map_value_action` and `map_stateful_action` methods should
+  ## generally not be used for actions used internally by `Gtk::Widget`
+  ## objects, but may be of use for other GLib objects.
+  ##
   ## @see GAction (How Do I...? GNOME Developer Center) https://developer-old.gnome.org/GAction/
   module ActionableMixin
+
+    class << self
+
+      ## @private Methiod This method is used for implementing the
+      ## `map_simple_action`, `map_value_action`, and
+      ## `map_stateful_action` methods in a class including
+      ## ActionableMixin
+      def map_action(name, prefix, to, param_type, handler, &ctor)
+        if name.include?(PebblApp::Const::DOT)
+          elts = name.split(PebblApp::Const::DOT)
+          parsed_prefix = elts.first
+          nr = elts.length
+          if nr.eql?(1)
+            name = name_components.first
+          elsif nr >= 2
+            ## no style warning here, if the name substring includes a dot
+            name = elts[1..].join(PebblApp::Const::DOT)
+          else
+            raise ArgumentError.new("Unable to parse action name: #{name.inspect}")
+          end
+          if prefix && (prefix != parsed_prefix)
+            raise ArgumentError.new(
+              "Provided prefix %p does not match implied prefix %p in %p" % [
+                prefix, parsed_prefix, name
+              ])
+          else
+            prefix ||= parsed_prefix
+          end
+        else
+          prefix ||= default_action_prefix(to)
+        end
+
+        if prefix.empty?
+          raise ArgumentError.new("Empty prefix for #{name}")
+        end
+
+        if (Gtk::Widget === to)
+          prefix.freeze
+          ## Known Limitation: Gtk::Widget#get_action_group may return
+          ## an action group not literally bound to the widget
+          ## itself. This may result in unspecified side effects for
+          ## action binding, and should be noted in the main
+          ## documentation.
+          ##
+          ## There might not be any public API available for determining
+          ## the exact widget that an action group for some prefix has
+          ## been bound to, short of a depth-first manual traversal of
+          ## the set of widget ancestors for any single widget.
+          ##
+          ## If the caller must override some action group in a
+          ## containing widget, the caller may add the overriding action
+          ## group to that widget before calling this method. Albeit,
+          ## this may not represent an ideal approach for applications.
+          ##
+          ## Generally, each window should be created such that every
+          ## action prefix for any widget under that window will map to
+          ## exactly one action group within that widget's' widget tree.
+          ##
+          ## This utility method may not provide a complete support for
+          ## debugging with regards to widget/prefix and group/action
+          ## bindings. A comprehensive widget inspector may be provided
+          ## in some other API.
+          if ! (action_to = to.get_action_group(prefix))
+            action_to = Gio::SimpleActionGroup.new
+            to.insert_action_group(prefix, action_to)
+          end
+        else
+          ## when Gio:Application === to || Gio::ActionMap === to
+          ## there may not be any public API available for determing if
+          ## an action prefix exists on 'to'
+          ##
+          ## If the prefix is "app" and `to` is a Gio::Application, then
+          ## generally it may "just work".
+          ##
+          ## For other to/prefix bindings, the caller should provide any
+          ## orchestration needed for binding an action group and/or
+          ## action map for that prefix in 'to', or simply provide a
+          ## prefix known to exist on the receiver.
+          ##
+          ## Generally, for prefixes not "app" the prefix should be
+          ## bound to some Gtk::Widget.
+          ##
+          ## The "app" prefix itself may be accessible under an object
+          ## not a Gio::Application, e.g within a Gio::ApplicationWindow.
+          ## This prefix should generally be used only for actions that
+          ## have a relevance directly within an application scope,
+          ## e.g an "app.quit" action
+          action_to = to
+        end
+
+        PebblApp::AppLog.debug("Binding action %s.%s for %s" %
+                               [prefix, name, to]) if $DEBUG
+
+        act = ctor.yield(name, param_type)
+        if param_type && handler
+          act.signal_connect("activate".freeze) do |action, param|
+            handler.yield(action, param)
+          end
+        elsif handler
+          ## the param value received by the callback should always be
+          ## nil here.
+          ##
+          ## The nil value received by the intermediate signal callback
+          ## will be discarded in this instance, not passed to the
+          ## callback provided to this method.
+          ##
+          ## Generally, this may not be noticed in applications unless a
+          ## lambda object is provided as the callback.
+          act.signal_connect("activate".freeze) do |action|
+            handler.yield(action)
+          end
+        end
+        ## action without a callback is supported here ...
+        # raise ArgumentError.new("No block provided")
+        action_to.add_action(act)
+        return act
+      end
+
+    end ## class << ActionableMixin
+
+
     def self.included(whence)
+
 
       ## Add a Gio::Action to some receiving object.
       ##
@@ -65,6 +208,12 @@ module PebblApp
       ## with no parameter value, the callback will be activated for that
       ## action.
       ##
+      ## **Compatibility**
+      ##
+      ## This method returns a Gio::SimpleAction. When using `nil` as
+      ## the _`param_type`_, this method is known to be generally
+      ## interoperable with actionable GTK widgets, e.g Gtk::ModelButton
+      ##
       ## @param name [String] The action name, or "<prefix>.<name>" string.
       ##
       ## @param prefix [String, nil] If provided, the prefix for the
@@ -81,119 +230,77 @@ module PebblApp
       ##  then the Gio::Action#activate method should be called with
       ##  either a GLib::Variant or Ruby object of a compatible type, to
       ##  ensure that the action's callback is activated for that call.
+      ##  When using the action as an action for a GTK widget, the
+      ##  `param_type` should generally be `nil`.
       ##
       ## @param handler [Proc] a callback for the action.
       ##
       def map_simple_action(name, prefix: nil, to: self,
                             param_type: nil, &handler)
-        if name.include?(PebblApp::Const::DOT)
-          elts = name.split(PebblApp::Const::DOT)
-          parsed_prefix = elts.first
-          nr = elts.length
-          if nr.eql?(1)
-            name = name_components.first
-          elsif nr >= 2
-            ## no style warning here, if the name substring includes a dot
-            name = elts[1..].join(PebblApp::Const::DOT)
-          else
-            raise ArgumentError.new("Unable to parse action name: #{name.inspect}")
-          end
-          if prefix && (prefix != parsed_prefix)
-            raise ArgumentError.new(
-              "Provided prefix %p does not match implied prefix %p in %p" % [
-                prefix, parsed_prefix, name
-              ])
-          else
-            prefix ||= parsed_prefix
-          end
-        else
-          prefix ||= default_action_prefix(to)
+        ActionableMixin.map_action(name, prefix, to, param_type, handler) do
+          |name, param_type|
+          Gio::SimpleAction.new(name.freeze, param_type)
         end
+      end
 
-        if prefix.empty?
-          raise ArgumentError.new("Empty prefix for #{name}")
+      ## Add a ValueAction to some receiving GLib object. If initialized
+      ## without a `nil` param_type, the ValueAction can be activated
+      ## with a value
+      ##
+      ## **Compatibility**
+      ##
+      ## This method returns a ValueAction with an initialized value for
+      ## the provided `param_type`. This is not known to be interoperable
+      ## with actionable GTK widgets, but may be of use for other
+      ## objects in GLib.
+      ##
+      ## @param name (see #map_simple_action)
+      ## @param prefix (see #map_simple_action)
+      ## @param to (see #map_simple_action)
+      ## @param value initial value for the action; Should be compatible
+      ##  with the provided `param_type`
+      ## @param param_type (see #map_simple_action)
+      def map_value_action(name, prefix: nil, to: self,
+                           value: false,
+                           param_type: ValueAction.guess_variant(value).freeze,
+                           enabled: false, &handler)
+        ActionableMixin.map_action(name, prefix, to, param_type, handler) do
+          |name, param_type|
+          ValueAction.new(name.freeze,
+                          value: value, param_type: param_type,
+                          enabled: enabled)
         end
+      end
 
-        if block_given?
-          if (Gtk::Widget === to)
-            prefix.freeze
-            ## Known Limitation: Gtk::Widget#get_action_group may return
-            ## an action group not literally bound to the widget
-            ## itself. This may result in unspecified side effects for
-            ## action binding, and should be noted in the main
-            ## documentation.
-            ##
-            ## There might not be any public API available for determining
-            ## the exact widget that an action group for some prefix has
-            ## been bound to, short of a depth-first manual traversal of
-            ## the set of widget ancestors for any single widget.
-            ##
-            ## If the caller must override some action group in a
-            ## containing widget, the caller may add the overriding action
-            ## group to that widget before calling this method. Albeit,
-            ## this may not represent an ideal approach for applications.
-            ##
-            ## Generally, each window should be created such that every
-            ## action prefix for any widget under that window will map to
-            ## exactly one action group within that widget's' widget tree.
-            ##
-            ## This utility method may not provide a complete support for
-            ## debugging with regards to widget/prefix and group/action
-            ## bindings. A comprehensive widget inspector may be provided
-            ## in some other API.
-            if ! (action_to = to.get_action_group(prefix))
-              action_to = Gio::SimpleActionGroup.new
-              to.insert_action_group(prefix, action_to)
-            end
-          else
-            ## when Gio:Application === to || Gio::ActionMap === to
-            ## there may not be any public API available for determing if
-            ## the prefix exists on 'to'
-            ##
-            ## If the prefix is "app" and `to` is a Gio::Application, then
-            ## generally it may "just work".
-            ##
-            ## For other to/prefix bindings, the caller should provide any
-            ## orchestration needed for binding an action group and/or
-            ## action map for that prefix in 'to'.
-            ##
-            ## Generally, for prefixes not "app" the prefix should be
-            ## bound to some Gtk::Widget.
-            ##
-            ## The "app" prefix itself may be accessible under an object
-            ## not a Gio::Application, e.g within a Gio::ApplicationWindow.
-            ## This prefix should generally be used only for actions that
-            ## have a relevance directly within an application scope,
-            ## e.g an "app.quit" action
-            action_to = to
-          end
 
-          PebblApp::AppLog.debug("Binding action #{prefix}.#{name} for #{self}")
-          act = Gio::SimpleAction.new(name.freeze, param_type)
-          if param_type
-            act.signal_connect("activate".freeze) do |action, param|
-              handler.yield(action, param)
-            end
-          else
-            ## the param value received by the callback should always be
-            ## nil here.
-            ##
-            ## The nil value received by the intermediate signal callback
-            ## will be discarded in this instance, not passed to the
-            ## callback provided to this method.
-            ##
-            ## Generally, this may not be noticed in applications unless a
-            ## lambda object is provided as the callback.
-            act.signal_connect("activate".freeze) do |action, _|
-              handler.yield(action)
-            end
-          end
-          action_to.add_action(act)
-        else
-          raise ArgumentError.new("No block provided")
+      ## Add a StatefulAction to some receiving GLib object.
+      ##
+
+      ## **Compatibility**
+      ##
+      ## This method returns a StatefulAction with an initialized value and
+      ## state for each of the provided `param_type` and `state_type`.
+      ## This is not known to be interoperable with actionable GTK
+      ## widgets, , but may be of use for other objects in GLib.
+      ##
+      ## @param name (see #map_simple_action)
+      ## @param prefix (see #map_simple_action)
+      ## @param to (see #map_simple_action)
+      ## @param value (see #map_value_action)
+      ## @param param_type (see #map_simple_action)
+      ## @param state initial state for the action
+      def map_stateful_action(name, prefix: nil, to: self,
+                              value: false,
+                              param_type: ValueAction.guess_variant(value).freeze,
+                              state: false,
+                              enabled: false, &handler)
+        ActionableMixin.map_action(name, prefix, to, param_type, handler) do
+          |name, param_type|
+          ## the state-type property is not ever writable
+          StatefulAction.new(name.freeze,
+                             value: value, param_type: param_type,
+                             state: state, enabled: enabled)
         end
-
-        return act
       end
 
       ## a utility method for #map_simple_action if called without an
@@ -223,5 +330,166 @@ module PebblApp
       end
 
     end ## included
-  end ## AcitonableMixin
+  end ## ActionableMixin
+
+
+  ## A Gio::SimpleAction that supports activation with a value
+  ##
+  ## **Compatibility**
+  ##
+  ## This class is defined as a general convenience class for Ruby
+  ## applications onto GLib.
+  ##
+  ## This class is not known to be interoperable with actionable GTK widgets,
+  ## but may be used with other GLib objects.
+  ##
+  ## @see Gio::SimpleAction
+  ## @see StatefulAction
+  ## @see ActionableMixin
+  class ValueAction  < Gio::SimpleAction
+    extend GUserObject
+    register_type
+
+    class << self
+      ## Return a variant indicating 'true'
+      def true_variant
+        if class_variable_defined? :@@true_variant
+          @@true_variant
+        else
+          @@true_variant =
+            GLib::Variant.new(true, GLib::VariantType::BOOLEAN).freeze
+        end
+      end
+
+      ## Return a variant indicating 'false'
+      def false_variant
+        if class_variable_defined? :@@false_variant
+          @@false_variant
+        else
+          @@false_variant =
+            GLib::Variant.new(false, GLib::VariantType::BOOLEAN).freeze
+        end
+      end
+
+      ## Return either the true_variant or the false_variant per whether
+      ## the provided state represents a truthy value or a falsey value
+      def tf_for(state)
+        state ? true_variant : false_variant
+      end
+
+      ## @private
+      def guess_variant_type(value)
+        case value
+        when TrueClass, FalseClass, NilClass
+          "b"
+        when String
+          "s"
+        when Array
+          sub = value.map { |elt| guess_variant_type(elt) }.sort.uniq
+          if (sub.length.eql?(1)) then
+            "a#{sub}"
+          else
+            "a*"
+          end
+        when Integer
+          bits = value.bit_length
+          plusp = value.positive?
+          if bits <= 8
+            plusp ? "y" : "n"
+          elsif bits <= 16
+            plusp ? "n" : "q"
+          elsif bits <= 32
+            plusp ? "i" : "u"
+          elsif bits <= 64
+            plusp ? "x" : "t"
+          else
+            "v"
+          end
+        when Bignum
+          ## in Ruby an Integer is also a Bignum ...
+          "v"
+        else
+          ## other
+          "v"
+        end.freeze
+      end
+
+
+      def guess_variant(value)
+        GLib::VariantType.new(guess_variant_type(value))
+      end
+    end ## class << ValueAction
+
+
+    def initialize(name,
+                   value: false,
+                   param_type: ValueAction.guess_variant(value).freeze,
+                   enabled: false, **other)
+      super("enabled".freeze => enabled ? true : false,
+            "name".freeze => name.freeze,
+            "parameter-type".freeze => param_type,
+            **other
+           )
+    end
+
+    def true_variant
+      ValueAction.true_variant
+    end
+    def false_variant
+      ValueAction.false_variant
+    end
+
+    def activate(param)
+      set_param = GLib::Variant === param ?
+        param : GLib::Variant.new(param, self.parameter_type)
+      super(set_param)
+    end
+
+  end
+
+  ## Class for a stateful implementation of Gio::Action
+  ##
+  ## See #state=
+  ##
+  ## A StatefulAction is also a ValueAction. As such, when initialized
+  ## with a `param_type` not `nil`, the action can be activated with a
+  ## value, as well as receiving a value for #state=
+  ##
+  ## The #activate method may be generally orthogonal to #state=
+  ##
+  ## **Compatibility**
+  ##
+  ## This class is defined as a general convenience class for Ruby
+  ## applications onto GLib.
+  ##
+  ## This class is not known to be interoperable with actionable GTK
+  ## widgets, but may be used with other GLib objects.
+  ##
+  ## @see Gio::SimpleAction
+  ## @see ValueAction
+  ## @see ActionableMixin
+  class StatefulAction < ValueAction
+    extend GUserObject
+    register_type
+
+    def initialize(name,
+                   value: false,
+                   param_type: ValueAction.guess_variant(value).freeze,
+                   state: false,
+                   enabled: false)
+      ## the state-type property is not ever writable,
+      ## not even in the constructor
+      init_state =
+        GLib::Variant === state ? state : GLib::Variant.new(state).freeze
+      super(name, value: value, param_type: param_type, enabled: enabled,
+            "state".freeze => init_state)
+    end
+
+    def state=(state)
+      set_state = GLib::Variant === state ?
+        state : GLib::Variant.new(state, self.state_type)
+      super(set_state)
+    end
+
+  end
 end
