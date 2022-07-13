@@ -23,6 +23,8 @@ module PebblApp
         %w(GAppMixin),
       "gcomposite" =>
         %w(UIError CompositeWidget FileCompositeWidget),
+      "gdk_keys" =>
+        %w(GdkKeys),
       "gdialog" =>
         %w(DialogMixin),
       "gmain" =>

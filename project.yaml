@@ -93,6 +93,7 @@ gems:
     source_files:
       - lib/pebbl_app/gapp_mixin.rb
       - lib/pebbl_app/gapp.rb
+      - lib/pebbl_app/gdk_keys.rb
       - lib/pebbl_app/gmain.rb
       - lib/pebbl_app/gobj_type.rb
       - lib/pebbl_app/gtk_app.rb
