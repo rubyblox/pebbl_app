@@ -11,37 +11,47 @@ module PebblApp
       def freeze_array(ary)
         ary.tap { |elt| elt.freeze }.freeze
       end
-      ## nb Gdk::RGBA.parse(parse)
+    end ## class << Util
+  end
 
-      def inspect_property(property, widget, &block)
-        value = widget.get_property(property)
-        block.yield(value, property, widget)
-      end
-
-
-      def inspect_properties(widget, &block)
-        widget.class.properties.each do |p|
-          param = widget.class.property(p)
+  module GtkUtil
+    class << self
+      ## @param widget [Gtk::Widget]
+      def properties_map(widget, mask = GLib::Param::READWRITE,
+                        &callback)
+        ## FIXME move to a GtkUtil module
+        wdgt_class = widget.classs
+        wdgt_class.properties.each do |property|
+          param = wdgt_class.property(property)
           if param.readable?
-            inspect_property(p, widget, &block)
+            value = widget.get_property(property)
+            callback.yield(value, property, widget)
           end
         end
       end
+
     end
   end
 
 
   module StringLabelMixin
+    module Const
+      PROP_LABEL_STRING ||= "label-string".freeze
+    end
     def self.included(whence)
       whence.extend GUserObject
       whence.register_type
-      whence.install_property(GLib::Param::String.new(
-        "label-string".freeze, ## param name
-        "Label String".freeze, ## param nick
-        "String label for an object".freeze, ## param blurb
-        "(Unknown)".freeze, ## param default
-        ## flags:
-        GLib::Param::READABLE | GLib::Param::WRITABLE))
+      whence.install_property(
+        GLib::Param::String.new(
+          Const::PROP_LABEL_STRING, ## param name
+          "Label String".freeze, ## param nick
+          "String label for an object".freeze, ## param blurb
+          "(Unknown)", ## param default
+          ## flags:
+          GLib::Param::READWRITE |
+            GLib::Param::STATIC_NAME |
+            GLib::Param::STATIC_NICK |
+            GLib::Param::STATIC_BLURB))
 
       def label_string()
         @label_string
@@ -49,15 +59,17 @@ module PebblApp
 
       def label_string=(value)
         @label_string = value
-        notify("label-string".freeze)
+        notify(Const::PROP_LABEL_STRING)
       end
     end
   end
 
-
-  ## Contsants for properties used in this UI
+  ## Constants for properties used in the TextableFontPrefs dialog
   module FontConst
-    ## Properties for text tags
+    SET_RE = /-set$/.freeze
+    RGBA_RE = /-rgba$/.freeze
+
+    ## Properties for text tags (non-RGBA, non-boolean)
     ##
     ## Each of these has a value property of the provided name and a
     ## boolean <name>-set property in GtkTextTag
@@ -129,11 +141,31 @@ module PebblApp
   ## @see FontScheme
   class FontDef < Gtk::TextTag
     self.include StringLabelMixin
+    class << self
 
-    ## a user-visible name for this FontDef
-    #alias :name :label_string ## ???
+      ## @return [Pango::FontDescription]
+      def font_default()
+        sc = Gtk::StyleContext.new
+        sc.get_property("font", Gtk::StateFlags::NORMAL).value
+      end
 
-    ## inheritance information for this FontDef
+      ## @return [Gtk::TextTag]
+      def text_tag_default(name = nil)
+        fdesc = font_default
+        tag = Gtk::TextTag.new(name)
+        tag.set_property("font-desc", fdesc)
+        return tag
+      end
+
+      def font_def_default(name = nil)
+        fdesc = font_default
+        fdef = new("name" => name)
+        fdef.set_property("font-desc", fdesc)
+        return fdef
+      end
+    end
+
+    ## ordered list of inherited font definitions
     attr_accessor :inherits
 
     class << self
@@ -156,6 +188,17 @@ module PebblApp
 
     end
 
+    def initialize(**properties)
+      name_str = "name"
+      ## TBD constructor args - accepting all properties here
+      ##
+      ## This dispatches to the constructor in Gtk::Object scope
+      super(name_str => properties[name_str]) ## constructor only
+      properties.delete("name".freeze)
+      properties.each do |name, val|
+        set_property(name, val)
+      end
+    end
 
 
     ## return a new hash value for a YAML a encoding of a FontDef
@@ -248,51 +291,146 @@ module PebblApp
   end ## TreeUtils
 
 
+
+  ## A font configuration dialogue with a layout inspired by Emacs
+  ## customization faces
+  ##
   class TextableFontPrefs < Gtk::Dialog
+
+    module Const
+      ## offset for configurable properties in internal array mappings
+      CONFIG_OFFSET = 2
+    end
+
     extend PebblApp::FileCompositeWidget
     use_template(File.expand_path("../ui/textable.font.ui", __dir__),
                  ## ... map template elements ...
-                 %w(fonts_store fonts_tree inherit_store inherit_tree
-                    fonts_menu
-                    preview_buffer tag_sample
+                 %w(header_font_label fonts_tree inherit_tree
+                    fonts_menu preview_buffer tag_sample font_size
+                    font_new_dialog font_new_name
+                    font_new_label font_new_grid
+                    font_delete_dialog font_delete_label
                    ))
 
-    ## bind property widgets (acessed directly, no method binding)
+    include PebblApp::ActionableMixin
+
+    ## to be initilized in constructor:
+    ## fonts_store
+    ## inherit_store
+
+    ## bind property widgets (template children)
+    ##
+    ## These will be accessed without a  method binding,
+    ## thus not passed to use_template
+    ##
+    ## Two general categories of configuration widget initialized here:
+    ## - configuration widget having a value property
+    ## - configuration widget for a boolean property
+    ##
+    ## The first category of configuration widget corresponds generally
+    ## to the <name>/<name>-set semantics for most of the configuration
+    ## attributes of a Gtk::TextTag. In these instances, the <name>
+    ## property holds the value for the configuration attribute, while
+    ## the <name>-set property holds a boolean flag indicating whether
+    ## that attribute is set for the TextTag, In application, each
+    ## property in this category will have a value widget of some kind.
+    ##
+    ## There are two boolean valued properties of Gtk::TextTag, such
+    ## that have no <name>-set property.
+    ##
+    ## In all instances, each configuration attribute will have a
+    ## checkbox and a model button, in the configuration UI.
+    ##
+    ## Callbacks for these widgets will be initialized in the
+    ## consturctor. This section simply ensures that the widgets form
+    ## the Glade UI definition are available as template child objects.
+    ##
+    ## Each of these elements from the UI definition will be accessed
+    ## without a direct method binding, mainly via get_internal_child
+    ## in the constructor
+    ##
     FontConst::TAG_ALL.each do |prop|
       field = prop.gsub("-", "_")
+      ## bind the model button and checkbox
+      ## for each configuration attribute
       model = "map_" + field ## model button
       chk = "enabled_" + field ## check box
       bind_template_child_full(model, true, 0)
       bind_template_child_full(chk, true, 0)
 
-
+      ## bind the value widget for each value property
       if ! (prop == "accumulative-margin".freeze ||
             prop == "background-full-height".freeze)
-        ## ^ no widget for these properties, outside of the model button
         wdgt = "font_" + field
-        bind_template_child_full(wdgt, true, 0)
+        if ! template_children.include?(wdgt)
+          bind_template_child_full(wdgt, true, 0)
+          template_children << wdgt
+        end
       end
     end
 
-    include PebblApp::DialogMixin
+    include DialogMixin
+
+    include AccelMixin
 
 
-    attr_reader :font_scheme
+    attr_reader :font_scheme, :fonts_store, :inherit_store
 
     def initialize
       super
       ## clear table views and cell renderers inherited from the template
-      TreeUtils.clear_tree_store(fonts_store)
-      TreeUtils.clear_tree_renderers(fonts_tree)
-      TreeUtils.clear_tree_store(inherit_store)
+      # TreeUtils.clear_tree_store(inherit_store) ## see fonts_store
       TreeUtils.clear_tree_renderers(inherit_tree)
 
+      ## right-click context menu handler for fonts_tree
+      ## - activate the fonts_menu on right click
+      ## - FIXME only if this dialog was initialized in "Developer Mode"
+      fonts_tree.signal_connect("button-press-event") do |wdgt, evt|
+        ## NB Gdk::EventButton === evt
+        case evt.button
+        when 3
+          fonts_menu.popup_at_pointer(evt)
+        end
+      end
+
+      @default_tag = Gtk::TextTag.new
+      Gtk::TextTag.properties.each do |p|
+        ## unset any <attr>-set flags
+        ##
+        ## for each <attr>-set this will generally set the <attr> to its
+        ## "Null state" value (e.g null font family)
+        if p.match?(FontConst::SET_RE)
+          @default_tag.set_property(p, false)
+        end
+      end
+      ## a default indicated in the GNOME devhelp docs for this property:
+      @default_tag.set_property("accumulative-margin", true)
+      ## ensuing a non-zero pango font size is used
+      @default_tag.size = sz = FontDef.font_default.size / Pango::SCALE
+      ## set widget initial values before any signal bindings
+      font_size.value = sz
+
+
+      ## initialize the sample tag
+      ##
+      ## calling this before any further UI elements are configured,
+      ## this will not activate any of the 'notify' signal callbacks
+      ## attached to the sample tag, below, there after a list store
+      ## has been initialized to the fonts_tree
+      initialize_sample
+
+      ## initialize the font label for the header bar
+      header_font_label.text = ""
+
+      ##
+      ## initialize actions and local caching for checkbox, label, and
+      ## value widgets
+      ##
 
       bld = self.class.composite_builder
 
-      checkboxes = Hash.new
-      ## ^ lexically scoped storage, used in two callbacks defined
-      ## with the following block
+      @property_callbacks = Hash.new
+      @set_p_widgets = Hash.new
 
       FontConst::TAG_ALL.map do |prop|
         ## configure an action to toggle widget states for the property
@@ -301,34 +439,82 @@ module PebblApp
         ## configuration
         suffix = "_" + prop.gsub("-","_")
         checkbox_id = "enabled" + suffix
-        if checkbox = self.get_internal_child(bld, checkbox_id)
-          checkboxes[prop] = checkbox
-        else
+
+        if ! checkbox = self.get_internal_child(bld, checkbox_id)
           raise "checkbox widget not found: #{prop} => #{checkbox_id}"
         end
+
         lbl_id = "map" + suffix
         if ! lbl = self.get_internal_child(bld, lbl_id)
           raise "label widget not found: #{prop} => #{lbl_id}"
         end
 
+        ## configure an action/callback for each propety
+        ##
+        ## the prefix and name for each of these action definitions
+        ## will correspond to a configuration value in the UI template
+        ## for this class
+
         widget_id = "font" + suffix
-        ## 'widget' here may be null for two of the properties, each of
-        ## which has no value widget - a boolean property
+
+        ## binding a set_p checkbox for every property mapped here.
+        ##
+        ## for the one configurable property without a corresponding
+        ## "<name>-set" property, the key for the set_p checkbox will
+        ## be the property name itself
+        set_p_name = property_set_p_name(prop)
+        @set_p_widgets[set_p_name] = checkbox
+
+
+        checkbox.signal_connect("notify::active".freeze) do |chk|
+          ## activated after the checkbox is checked/unchecked
+          if iter = fonts_store_active_iter
+            AppLog.warn("State @ #{set_p_name} = #{chk.active?}") if $DEBUG
+            set_p_idx = @fonts_store_indices[set_p_name]
+            fonts_tree.model.set_value(iter, set_p_idx, chk.active?)
+          end
+        end
+
+
+        AppLog.info("#{prop} set-p => #{set_p_name}") if $DEBUG
+
+        ## 'widget' here may be null for a property that has no value
+        ## widget, i.e a boolean property.
         if widget = self.get_internal_child(bld, widget_id)
+          ##
+          ## For all value properites
+          ##
+
+          @property_callbacks[prop] = widget_setter_proc(widget, prop)
+
           if (prop == "strikethrough-rgba".freeze) ||
               (prop == "underline-rgba".freeze)
-            idx = (prop =~ /-rgba$/)
-            related = prop[...idx]
+            ## activation for ensuring that a related/dependent
+            ## widget will be activated for each property having an
+            ## effective dependency relation in the configuration.
+            ##
+            ## e.g for activating the 'strikethrough' checkbox when the
+            ## 'strikethrough-rgba' checkbox is activated
+            if idx = (prop =~ FontConst::RGBA_RE)
+              related = property_set_p_name(prop[...idx])
+              AppLog.info("#{prop} related => #{prop[...idx]} => #{related}")
+            else
+              AppLog.error("Wrong mapping for #{prop} related => #{prop[...idx]}}")
+            end
           else
             related = false
           end
+
           callback = proc {
-            ## activated after a change in state in the checkbox widget
+            ## activated after a change of state in the checkbox widget
             if checkbox.active?
               if related
                 ## this will activate the checkcbox for e.g "underline"
                 ## when the checkbox for "underline-rgba" is activated
-                related_chk = checkboxes[related]
+                related_chk = @set_p_widgets[related]
+                AppLog.warn(
+                  "Related chk @ #{prop} (#{checkbox}) => #{related} : #{related_chk}"
+                ) if $DEBUG
                 related_chk.active = true
               end
               handle_widget_property_active(prop, widget, lbl)
@@ -337,28 +523,398 @@ module PebblApp
             end
           }
           value_signal = widget_value_signal(widget)
-          widget.signal_connect_after(value_signal) do |*args|
+          ##
+          ## propagate changes when any value widget's value is set
+          ##
+          widget.signal_connect_after(value_signal) do |widget, * _|
+            ## update the sample tag (FIXME not working out for colors now)
             sample_activate_from_widget(prop, widget)
+            value = value_for_widget(widget)
+            if prop == "size".freeze
+              value = value * Pango::SCALE
+            elsif value.respond_to?(:to_i)
+              value = value.to_i
+            end
+            AppLog.info(
+              "[#{widget.class} #{value_signal}] Setting #{prop} => #{value.inspect}"
+            ) if $DEBUG
+            fonts_model_cursor_activate(prop, value)
           end
         else
+          ## boolean configuration attributes
+          ##
+          ## boolean sample and model attributes will be
+          ## managed in each handle_boolean_* method
+          ##
+          @set_p_widgets[prop] = checkbox
           callback = proc {
-            if checkbox.active?
+            active = checkbox.active?
+            if active
               handle_boolean_property_active(prop, lbl)
             else
               handle_boolean_property_inactive(prop, lbl)
             end
+            fonts_model_cursor_activate(prop, active)
           }
         end
-        ## freezing the callback to prevent it from disappearing in gc (FIXME)
+        ## freezing each callback to prevent it from disappearing in gc (FIXME)
         callback.freeze
         act = self.map_simple_action(prop, prefix: "font".freeze, &callback)
         ## disables the checkbox :
         # act.enabled = false
         ## sets the checkbox and model button to initial state ...
         act.activate()
+      end ## FontConst::TAG_ALL => checkbox & widget iterator
+
+
+      ## fonts_menu
+      ##
+      ## Actions in the fonts_menu:
+      ## - win.font-new
+      ## - win.font-delete
+      ##
+      ## Callbacks in both actions will operate on the fonts_tree
+
+      ## font_new_dialog activation
+      ##
+      ## freezing at least the action name and prefix, to try to prevent
+      ## this from being GC'd
+      ##
+      ## The prefix will be bound for an action group in the fonts_menu
+      map_simple_action("font-new", #.freeze, ## also the prefix ...
+                        prefix: "win", to: fonts_menu) do
+        ## activate the "New Font" dialogue (FIXME only if editable)
+        font_new_dialog.show
       end
 
-      initialize_sample
+      ## resuable menu - hide instead of delete/destroy
+      fonts_menu.signal_connect("delete-event") do |menu|
+        menu.hide_on_delete
+      end
+
+      ##
+      ## fonts_tree, fonts_store
+      ##
+
+      ## clear any cell renderers inherited from the template
+      TreeUtils.clear_tree_renderers(fonts_tree)
+
+      ## all properties %s with a corresponding %s-set property
+      value_props = FontConst::TAG_SET_PROPS.dup.concat(
+        FontConst::TAG_RGBA_PROPS.dup)
+      ## using two columns in addition to the columns for properties
+      ## listed in constants here
+      ## - font name (i.e Gtk::TextTag#name)
+      ## - font label (i.e Font#label_string)
+      n_cols = Const::CONFIG_OFFSET +
+        (value_props.length * 2) + FontConst::TAG_OTHER_PROPS.length
+      col_types = Array.new(n_cols)
+      col_names = Array.new(n_cols)
+      col_types[0] = FontDef.property("name".freeze).value_type
+      col_names[0] = "name".freeze
+      col_types[1] = FontDef.property("label-string".freeze).value_type
+      col_names[1] = "label-string".freeze
+      n = Const::CONFIG_OFFSET
+      value_props.each do |vprop|
+        ## value properties with a corresponding %-set property
+        ## e.g propertes on a FontDef or general Gtk::TextTag
+        vprop.freeze
+        col_types[n] = FontDef.property(vprop).value_type
+        col_names[n] = vprop
+        n = n + 1
+        set_p_name = property_set_p_name(vprop)
+        col_types[n] = FontDef.property(set_p_name).value_type
+        col_names[n] = set_p_name
+        n = n + 1
+      end
+
+      FontConst::TAG_OTHER_PROPS.each do |bprop|
+        ## boolean properties (no %-set property)
+        bprop.freeze
+        col_types[n] = FontDef.property(bprop).value_type
+        col_names[n] = bprop
+        n = n + 1
+      end
+
+      ## store the array of types and properties for access in callbacks
+      @fonts_store_types = col_types.freeze
+      @fonts_store_props = col_names.freeze
+      @fonts_config_props = col_names[2..].freeze
+      @fonts_store_indices = indices = Hash.new
+      col_names.each_index do |idx|
+        prop = col_names[idx]
+        indices[prop] = idx
+      end
+      @fonts_store_indices.freeze
+
+      ## initialize the model, i.e list store for the fonts_tree
+      ## using the column types interpolated in the previous
+      @fonts_store = store = Gtk::ListStore.new(* col_types)
+      fonts_tree.model = store
+
+      ## initialize a single display column for the fonts_tree,
+      ## using a text cell renderer for that column
+      ## - FIXME us a Gtk::Label & update all font propeties of it
+      ##  (less visually confusing)
+      rdr = Gtk::CellRendererText.new
+      @fonts_tree_font_col = col = Gtk::TreeViewColumn.new("Font", rdr)
+      fonts_tree.insert_column(col, -1)
+
+      ## given the list store (model) for the fonts_tree and the visual
+      ## column initialized here, column 0 from the list store will
+      ## provide the text attribute for the cell renderer to that visual
+      ## column
+      col.add_attribute(rdr, "text", 0)
+      render_attrs = {} if $DEBUG ## debugging for tree cell renering
+      ## initialize all intersectional properties of the cell renderer
+      Gtk::CellRendererText.properties.each do |prop|
+        if idx = col_names.index(prop)
+          AppLog.debug(
+            "Adding renderer attribute: #{prop} @ #{idx} [#{col_types[idx]}]"
+          ) if $DEBUG
+          render_attrs[prop] = idx if $DEBUG
+          col.add_attribute(rdr, prop, idx)
+        end
+      end
+
+      ##
+      ## callback for activation of a fow in fonts_tree
+      ##
+      ## Overview: retrieve an iterator for the tree path from the
+      ## event, then operate on values of the model (list store) using
+      ## the iteroator for that tree path
+      ##
+      ## A tree iterator for the active row will be available asynchronously
+      ## via the method #fonts_store_active_iter
+      fonts_tree.signal_connect_after("row-activated") do |view, path, _|
+        model = fonts_tree.model
+        iter = model.get_iter(path)
+
+        ## update the font label in the header bar
+        label =  model.get_value(iter, 1)
+        if label.empty?
+          label = "(No label)".freeze
+        end
+        name =  model.get_value(iter, 0)
+        if name.empty?
+          name = "(anonymous)".freeze
+        end
+        if label == name
+          header_font_label.text = label
+        else
+          header_font_label.text = "%s (%s)" % [label, name]
+        end
+        ##
+        ## update the configuration UI for the now-active now
+        ##
+        n = Const::CONFIG_OFFSET
+        @fonts_config_props.each do |prop|
+          prop.freeze
+          val = model.get_value(iter, n)
+          AppLog.debug("[Active Row] #{prop} => #{val.inspect}") if $DEBUG
+
+          if prop.match?(FontConst::SET_RE) ||
+              prop == "accumulative-margin".freeze
+            ## This is a <prop>-set column - transfer the value directly
+            ## if any checkbox widget is found for the value
+            if chk = @set_p_widgets[prop]
+              chk.active = val
+            elsif $DEBUG
+              AppLog.warn(
+                "[Active Row] No set-p widget found for #{prop.inspect}"
+              )
+            end
+          elsif (set_p_name = property_set_p_name(prop)) &&
+              (set_p_idx = @fonts_store_indices[set_p_name])
+            if model.get_value(iter, set_p_idx)
+              ## ^ Set the value only if it's set-p in this row
+              if (cb = @property_callbacks[prop])
+                cb.yield(val)
+              else
+                ## reached for boolean properties
+                #AppLog.error("No value callback fround for #{prop}")
+              end
+            else
+              ## reached for the actual -set properties
+              # AppLog.warn("TBD set_p_idx @ #{set_p_name}")
+            end
+          elsif $DEBUG
+           AppLog.warn(
+              "[Active Row] No active mapping found for  #{prop.inspect}"
+            )
+          end
+          ## and continue iteration ...
+          n = n + 1
+        end
+      end ## row-activated handler on fonts_tree
+
+      map_simple_action("win.fonts-select-none") do
+        if iter = fonts_store_active_iter
+          sel = fonts_tree.selection
+          sel.unselect_path(iter.path)
+        end
+      end
+      ##
+      ## Event handlers for font_new_dialog
+      ##
+
+      font_new_dialog.signal_connect_after("key-press-event") do |window, evt|
+        if evt.keyval.eql?(PebblApp::GdkKeys::Key_Escape)
+          window.hide
+        end
+      end
+
+      font_new_dialog.signal_connect("delete-event") do |window|
+        ## The font_new_dialog is defined in the same UI file as
+        ## the template for this dialog window.
+        ##
+        ## This "leaf dialog" window has not been defined with a
+        ## composite class
+        ##
+        ## As a reuable dialog window, the window will be hidden instead
+        ## of destroyed on delete-event (e.g when closed)
+        window.hide_on_delete
+      end
+
+      ## clear entry fields when hidden (reusable dialog)
+      font_new_dialog.signal_connect_after("hide") do |_|
+        font_new_name.text = ""
+        font_new_label.text = ""
+      end
+
+      ## reset focus when shown
+      font_new_dialog.signal_connect_after("show") do |window|
+        window.set_focus(font_new_label)
+      end
+
+      ## auto-fill the font_new_name field with a downcased
+      ## representation of font_new_label
+      font_new_name.signal_connect("focus") do |widget|
+        if widget.text.empty?
+          widget.text = font_new_label.text.downcase
+        end
+        ## ensure that other focus handlers will activate
+        false
+      end
+
+      map_simple_action("font-new.accept", to: font_new_dialog) do
+        ## add a new item to the fonts_store, then select in the fonts_tree
+        name = font_new_name.text
+        name = format("font_%x", Time.now.strftime("%s").to_i) if name.empty?
+        label = font_new_label.text
+        label = name if label.empty?
+        ## hide the widget, clearing any entered values
+        font_new_dialog.hide
+        AppLog.warn(
+          "New font @ name: #{name.inspect}, label: #{label.inspect}"
+        ) if $DEBUG
+        ## set initial values
+        ary = Array.new(@fonts_store_props.length)
+        ary[0] = name
+        ary[1] = label
+        n = Const::CONFIG_OFFSET
+        @fonts_config_props.each do |prop|
+          val = font_property_default(prop)
+          AppLog.debug(
+            "(#{n}) Default #{prop} => #{val.inspect} [#{@fonts_store_types[n]}]"
+          ) if $DEBUG
+          if render_idx = render_attrs[prop]
+            ## if $DEBUG
+            AppLog.debug("@ render: #{render_idx}")
+          else
+            ## properties not presented in the cell renderer
+            AppLog.debug("not rendered: #{prop}") if $DEBUB
+          end if $DEBUG
+          ary[n] = val
+          n = n + 1
+        end
+        ## appennd the item to the fonts_store
+        iter = fonts_store.insert(-1, ary) ## with values
+
+        ## focus and select the active item ...
+        fonts_tree.set_cursor(iter.path, @fonts_tree_font_col, false)
+        ## Lastly, set the new row as active.
+        ##
+        ## The row-activated handler should then update the sample
+        ## to reflect the item's properties
+        fonts_tree.row_activated(iter.path, @fonts_tree_font_col)
+      end ## font-new.accept action on font_new_dialog
+      map_simple_action("font-new.cancel", to: font_new_dialog) do
+        font_new_dialog.hide
+      end
+
+      ## Event handlers for font_delete_dialog
+      ##
+      map_simple_action("font-delete",
+                        prefix: "win", to: fonts_menu) do
+        ## populate some values to the font_delete_dialog content widgets
+        if iter = fonts_store_active_iter
+          name = fonts_tree.model.get_value(iter, 0)
+          label = fonts_tree.model.get_value(iter, 1)
+          if name == label
+            font_delete_label.text = "Delete font #{label}?"
+          else
+            font_delete_label.text = "Delete font #{label} (#{name})?"
+          end
+        else
+          font_delete_label.text = "No active font"
+        end
+        font_delete_dialog.show
+      end
+
+      font_delete_dialog.signal_connect_after("key-press-event") do |window, evt|
+        if evt.keyval.eql?(PebblApp::GdkKeys::Key_Escape)
+          window.hide
+        end
+      end
+
+      font_delete_dialog.signal_connect("delete-event") do |window|
+        window.hide_on_delete
+      end
+
+      map_simple_action("font-delete.accept", to: font_delete_dialog) do
+        if iter = fonts_store_active_iter
+          fonts_tree.model.remove(iter)
+        end
+        font_delete_dialog.hide
+      end
+
+      map_simple_action("font-delete.cancel", to: font_delete_dialog) do
+        font_delete_dialog.hide
+      end
+
+    end ## #initailize
+
+    def property_set_p_name(prop)
+      ## moving some hard-coding into a separate method
+      if prop.match?(FontConst::SET_RE)
+        ## a debug catch of a kind
+        raise ArgumentError.new("Set-p property: #{prop}")
+      elsif prop == "accumulative-margin".freeze
+        ## this boolean value property has no additional "-set" property
+        ##
+        ## reached under the row-activated signal for fonts_tree
+        return prop
+      elsif (prop == "underline-rgba".freeze) ||
+        (prop == "strikethrough-rgba".freeze)
+        ## ^ handling the two exceptions to the general mapping of
+        ## <name>-rgba and <name>-set for a color attr <name>
+        set_prefix = prop
+      elsif idx = (prop =~ FontConst::RGBA_RE)
+        set_prefix = prop[...idx]
+      else
+        set_prefix = prop
+      end
+      return (set_prefix + "-set").freeze
+    end
+
+    def fonts_store_active_iter
+      cursor_path, _ = fonts_tree.cursor()
+      if cursor_path
+        fonts_tree.model.get_iter(cursor_path)
+      else
+        false
+      end
     end
 
     def handle_widget_property_active(prop, widget, label)
@@ -405,11 +961,85 @@ module PebblApp
       end
     end
 
+    def widget_setter_proc(widget, prop)
+      case widget
+      when Gtk::ComboBox
+        ## always using column 1 to store the referencable value
+        ## in a combo box
+        proc { |val|
+          if val
+            mdl = widget.model
+            ## iterate on the model until finding a matching value
+            ## in column 1
+            n = 0
+            if (iter = mdl.iter_first)
+              combo_val = mdl.get_value(iter, 1)
+              catch(:found) do |tag|
+                if combo_val == val
+                  widget.set_active(n)
+                  throw tag, n
+                else
+                  n = n + 1
+                end
+              end
+            else
+              AppLog.warn("No entries found in model for #{widget}")
+            end
+          end
+        }
+      when Gtk::SpinButton
+        if prop == "size"
+          proc {
+            |val| widget.value = val / Pango::SCALE
+          }
+        else
+          proc {
+            |val| widget.value = val
+          }
+        end
+      when Gtk::FontButton
+        ## value should be a font family here
+        proc { |val|
+          widget.set_property("font", val)  if val
+        }
+      when Gtk::ColorButton
+        ## value should be a Gtk RGBA here
+        proc { |val|
+          widget.set_rgba(val) if val
+        }
+      end
+    end
     def to_s
       "#<%s 0x%06x>" % [self.class, __id__]
     end
 
+    def font_property_default(name)
+      val = @default_tag.get_property(name)
+      if name == "size".freeze
+        ## FIXME factor this out of the API here
+        return val * Pango::SCALE
+      else
+        return val
+      end
+    end
+
     def initialize_sample
+      ## the sample tag is initialized as a template child.
+      ##
+      ## This initializes the tag to use a set of font properties
+      ## initialized for a default <<TBD instance>>
+      #tag_default = FontDef.new()
+      #tag_default.size = @default_font.size
+      Gtk::TextTag.properties do |p|
+        param = Gtk::TextTag.property(p)
+        if param.readable? && param.writable? &&
+            p.match?(FontConst::SET_RE)
+          # val = font_property_default(p) #tag_default.get_property(p)
+          # tag_sample.set_property(p, val)
+          tag_sample.set_property(p, false)
+        end
+      end
+      ## apply the sample tag to the preview buffer
       buff = preview_buffer
       tag = tag_sample
       start_iter = buff.start_iter
@@ -421,18 +1051,29 @@ module PebblApp
       tag_sample.set_property(prop, true)
     end
 
-    ## @return [String or false]
-    def property_set_p_name(prop)
-      if prop == "accumulative-margin".freeze
-        ## there is no "-set" property for this value property
-        return false
-      elsif idx = (prop =~ /-rgba$/.freeze)
-        ## e.g "background-rgba" [in] => "background-set" [out]
-        set_p_name = (prop[...idx] + "-set").freeze
-      else
-        set_p_name = (prop + "-set").freeze
+    def fonts_model_cursor_activate(prop, value)
+      if iter = fonts_store_active_iter
+        ## ^ else no active row - no fonts, or no font previously
+        ##  in the fonts_tree
+        idx = @fonts_store_indices[prop]
+        model = fonts_tree.model
+        model.set_value(iter, idx, value)
+        set_p_name = property_set_p_name(prop)
+        ## also update any set-p field in the list store
+        if set_p_name
+          if set_idx = @fonts_store_indices[set_p_name]
+            if set_p_name != prop
+              ## avoid unconditinally setting the accumulative-margin
+              ## field to true
+              model.set_value(iter, set_idx, true)
+            end
+          else
+            AppLog.error("no set-p property found for value property #{prop}")
+          end
+        else
+          AppLog.error("?? set-p property ?? #{prop}")
+        end
       end
-      return set_p_name
     end
 
     def value_for_widget(widget)
@@ -525,7 +1166,7 @@ module PebblApp
     def quit()
       super()
       self.windows.each do |wdw|
-        PebblApp::AppLog.debug("Closing #{wdw}")
+        AppLog.debug("Closing #{wdw}")
         wdw.close
       end
       if @gmain.running
