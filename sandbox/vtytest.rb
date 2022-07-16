@@ -156,6 +156,9 @@ class VtyAppWindow < Gtk::ApplicationWindow
     end
   end
 
+  ## utility for map_accel_path
+  include PebblApp::AccelMixin
+
   ## PID of the subprocess, or nil
   attr_accessor :subprocess_pid
   ## convenience accessor
@@ -296,6 +299,12 @@ class VtyAppWindow < Gtk::ApplicationWindow
     editpop_textview.signal_connect("delete-event") do |menu|
       menu.hide_on_delete
     end
+
+    @accel_map_group =
+      map_accel_path(%i(Return mod1), "<Vty>/Secondary Input/Send".freeze,
+                     to: vty_send)
+
+
     ## TBD move this to a ManagedPty adapter
     success, pid  = self.vty.spawn_sync(Vte::PtyFlags::DEFAULT, Dir.pwd,
                                         sh, vty_env, GLib::Spawn::SEARCH_PATH)

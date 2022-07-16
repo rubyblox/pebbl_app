@@ -17,8 +17,10 @@ module PebblApp
 
   defautoloads(
     __dir__, {
+      "accel_mixin" =>
+        %w(AccelMixin),
       "gactionable" =>
-        %(ActionableMixin),
+        %w(ActionableMixin),
       "gapp_mixin" =>
         %w(GAppMixin),
       "gcomposite" =>

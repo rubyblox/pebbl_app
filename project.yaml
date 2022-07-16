@@ -91,6 +91,7 @@ gems:
           versions: ">=3.5.2"
       - [pebbl_app-support, ">=1.0"]
     source_files:
+      - lib/pebbl_app/accel_mixin.rb
       - lib/pebbl_app/gapp_mixin.rb
       - lib/pebbl_app/gapp.rb
       - lib/pebbl_app/gdk_keys.rb
