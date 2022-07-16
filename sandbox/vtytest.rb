@@ -166,7 +166,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
   ## convenience method
   attr_accessor :newline
 
-  def initialize(app)
+  def initialize(app = Gio::Application.default)
     super(application: app)
     ## debug after the super call, to ensure the Gtk object is initialized
     PebblApp::AppLog.debug("Initializing #{self}")
@@ -201,7 +201,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
 
     map_simple_action("win.save-text") do |action|
       ## FIXME needs impl
-      vwin_save_text(action)
+      vtwin_save_text(action)
     end
 
     map_simple_action("win.save-data") do |action|
@@ -282,6 +282,20 @@ class VtyAppWindow < Gtk::ApplicationWindow
       PebblApp::AppLog.debug("Commit: #{text.inspect}")
     end if $DEBUG
 
+    ## bind 'esc' to close the popover
+    ##
+    ## as the popover has no window, this may not be possible via a
+    ## GTK AccelGroup
+    self.editpop_textview.signal_connect_after("key-press-event") do |obj, evt|
+      if evt.keyval.eql?(PebblApp::GdkKeys::Key_Escape)
+        editpop_popover.hide
+      end
+    end
+
+    ## hide the popover instead of destroy
+    editpop_textview.signal_connect("delete-event") do |menu|
+      menu.hide_on_delete
+    end
     ## TBD move this to a ManagedPty adapter
     success, pid  = self.vty.spawn_sync(Vte::PtyFlags::DEFAULT, Dir.pwd,
                                         sh, vty_env, GLib::Spawn::SEARCH_PATH)
