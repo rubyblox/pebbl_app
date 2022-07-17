@@ -335,8 +335,10 @@ module PebblApp
     ## that attribute is set for the TextTag, In application, each
     ## property in this category will have a value widget of some kind.
     ##
-    ## There are two boolean valued properties of Gtk::TextTag, such
-    ## that have no <name>-set property.
+    ## There is at least one boolean valued property of Gtk::TextTag,
+    ## such that has been defined without a <name>-set property. In
+    ## application here, this will be rendered as a special instance of
+    ## a boolean valued property.
     ##
     ## In all instances, each configuration attribute will have a
     ## checkbox and a model button, in the configuration UI.
@@ -397,34 +399,33 @@ module PebblApp
       Gtk::TextTag.properties.each do |p|
         ## unset any <attr>-set flags
         ##
-        ## for each <attr>-set this will generally set the <attr> to its
-        ## "Null state" value (e.g null font family)
+        ## Ih side effects: For each <attr>-set property of Gtk::TextTag
+        ## this will generally set the <attr> to its "Null state" value.
         if p.match?(FontConst::SET_RE)
           @default_tag.set_property(p, false)
         end
       end
+      ##
+      ## Setting the sample tag's initial values before any signal bindings
+      ##
       ## a default indicated in the GNOME devhelp docs for this property:
       @default_tag.set_property("accumulative-margin", true)
-      ## ensuing a non-zero pango font size is used
+      ## using a non-zero Pango font size for the default tag
       @default_tag.size = sz = FontDef.font_default.size / Pango::SCALE
-      ## set widget initial values before any signal bindings
       font_size.value = sz
 
 
       ## initialize the sample tag
       ##
-      ## calling this before any further UI elements are configured,
-      ## this will not activate any of the 'notify' signal callbacks
-      ## attached to the sample tag, below, there after a list store
-      ## has been initialized to the fonts_tree
+      ## calling this before any further UI elements are configured
       initialize_sample
 
       ## initialize the font label for the header bar
       header_font_label.text = ""
 
       ##
-      ## initialize actions and local caching for checkbox, label, and
-      ## value widgets
+      ## initialize all actions and local caching for checkbox, label,
+      ## and value widgets for each configuration attribute
       ##
 
       bld = self.class.composite_builder
@@ -582,7 +583,7 @@ module PebblApp
       ##
       ## The prefix will be bound for an action group in the fonts_menu
       map_simple_action("font-new", #.freeze, ## also the prefix ...
-                        prefix: "win", to: fonts_menu) do
+                        prefix: "win", receiver: fonts_menu) do
         ## activate the "New Font" dialogue (FIXME only if editable)
         font_new_dialog.show
       end
@@ -602,6 +603,7 @@ module PebblApp
       ## all properties %s with a corresponding %s-set property
       value_props = FontConst::TAG_SET_PROPS.dup.concat(
         FontConst::TAG_RGBA_PROPS.dup)
+
       ## using two columns in addition to the columns for properties
       ## listed in constants here
       ## - font name (i.e Gtk::TextTag#name)
@@ -754,6 +756,7 @@ module PebblApp
           sel.unselect_path(iter.path)
         end
       end
+
       ##
       ## Event handlers for font_new_dialog
       ##
@@ -797,7 +800,7 @@ module PebblApp
         false
       end
 
-      map_simple_action("font-new.accept", to: font_new_dialog) do
+      map_simple_action("font-new.accept", receiver: font_new_dialog) do
         ## add a new item to the fonts_store, then select in the fonts_tree
         name = font_new_name.text
         name = format("font_%x", Time.now.strftime("%s").to_i) if name.empty?
@@ -839,14 +842,15 @@ module PebblApp
         ## to reflect the item's properties
         fonts_tree.row_activated(iter.path, @fonts_tree_font_col)
       end ## font-new.accept action on font_new_dialog
-      map_simple_action("font-new.cancel", to: font_new_dialog) do
+
+      map_simple_action("font-new.cancel", receiver: font_new_dialog) do
         font_new_dialog.hide
       end
 
       ## Event handlers for font_delete_dialog
       ##
       map_simple_action("font-delete",
-                        prefix: "win", to: fonts_menu) do
+                        prefix: "win", receiver: fonts_menu) do
         ## populate some values to the font_delete_dialog content widgets
         if iter = fonts_store_active_iter
           name = fonts_tree.model.get_value(iter, 0)
@@ -872,14 +876,14 @@ module PebblApp
         window.hide_on_delete
       end
 
-      map_simple_action("font-delete.accept", to: font_delete_dialog) do
+      map_simple_action("font-delete.accept", receiver: font_delete_dialog) do
         if iter = fonts_store_active_iter
           fonts_tree.model.remove(iter)
         end
         font_delete_dialog.hide
       end
 
-      map_simple_action("font-delete.cancel", to: font_delete_dialog) do
+      map_simple_action("font-delete.cancel", receiver: font_delete_dialog) do
         font_delete_dialog.hide
       end
 

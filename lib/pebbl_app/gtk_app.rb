@@ -102,7 +102,7 @@ module PebblApp
       ##
       self.signal_connect("handle-local-options") do
         ## 0 : success, no further option processing needed for this application
-        return 0
+        0
       end
     end
 
@@ -182,6 +182,10 @@ module PebblApp
     def start()
       self.register
       self.activate
+      ## This should dispatch to Gio::Application#run, which may provide
+      ## some additional handling for registration and deregistration
+      ## onto dbus :
+      self.run
     end
 
   end

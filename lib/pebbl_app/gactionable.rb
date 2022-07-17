@@ -46,7 +46,7 @@ module PebblApp
       ## `map_simple_action`, `map_value_action`, and
       ## `map_stateful_action` methods in a class including
       ## ActionableMixin
-      def map_action(name, prefix, to, param_type, handler, &ctor)
+      def map_action(name, prefix, receiver, param_type, handler, &ctor)
         if name.include?(PebblApp::Const::DOT)
           elts = name.split(PebblApp::Const::DOT)
           parsed_prefix = elts.first
@@ -75,13 +75,13 @@ module PebblApp
           raise ArgumentError.new("Empty prefix for #{name}")
         end
 
-        if (Gtk::Widget === to)
+        if (Gtk::Widget === receiver)
           prefix.freeze
           ## Known Limitation: Gtk::Widget#get_action_group may return
           ## an action group not literally bound to the widget
-          ## itself. This may result in unspecified side effects for
-          ## action binding, and should be noted in the main
-          ## documentation.
+          ## but rather to some containing widget.. This may result in
+          ## unspecified side effects for action binding, and should be
+          ## noted in the main documentation.
           ##
           ## There might not be any public API available for determining
           ## the exact widget that an action group for some prefix has
@@ -101,9 +101,9 @@ module PebblApp
           ## debugging with regards to widget/prefix and group/action
           ## bindings. A comprehensive widget inspector may be provided
           ## in some other API.
-          if ! (action_to = to.get_action_group(prefix))
-            action_to = Gio::SimpleActionGroup.new
-            to.insert_action_group(prefix, action_to)
+          if ! (action_recv = receiver.get_action_group(prefix))
+            action_recv = Gio::SimpleActionGroup.new
+            receiver.insert_action_group(prefix, action_recv)
           end
         else
           ## when Gio:Application === to || Gio::ActionMap === to
@@ -126,11 +126,11 @@ module PebblApp
           ## This prefix should generally be used only for actions that
           ## have a relevance directly within an application scope,
           ## e.g an "app.quit" action
-          action_to = to
+          action_recv = receiver
         end
 
         PebblApp::AppLog.debug("Binding action %s.%s for %s" %
-                               [prefix, name, to]) if $DEBUG
+                               [prefix, name, receiver]) if $DEBUG
 
         act = ctor.yield(name, param_type)
         if param_type && handler
@@ -153,7 +153,7 @@ module PebblApp
         end
         ## action without a callback is supported here ...
         # raise ArgumentError.new("No block provided")
-        action_to.add_action(act)
+        action_recv.add_action(act)
         return act
       end
 
@@ -221,8 +221,9 @@ module PebblApp
       ##  should include only the action name, without any prefix name
       ##  string.
       ##
-      ## @param to [Gtk::Actionable, Gtk::ActionMap] The object for the
-      ##  action's binding
+      ## @param receiver [Gtk::Actionable, Gtk::ActionMap, or nil] The
+      ##  object to receive the action's binding. If nil, then the
+      ##  scoped instance of the implementing class will be used.
       ##
       ## @param param_type [false, GLib::VariantType, string] Either a
       ##  string with a syntax as described under "GVariant Format
@@ -235,9 +236,10 @@ module PebblApp
       ##
       ## @param handler [Proc] a callback for the action.
       ##
-      def map_simple_action(name, prefix: nil, to: self,
+      def map_simple_action(name, prefix: nil, receiver: nil,
                             param_type: nil, &handler)
-        ActionableMixin.map_action(name, prefix, to, param_type, handler) do
+        receiver = self if ! receiver
+        ActionableMixin.map_action(name, prefix, receiver, param_type, handler) do
           |name, param_type|
           Gio::SimpleAction.new(name.freeze, param_type)
         end
@@ -256,15 +258,16 @@ module PebblApp
       ##
       ## @param name (see #map_simple_action)
       ## @param prefix (see #map_simple_action)
-      ## @param to (see #map_simple_action)
+      ## @param receiver (see #map_simple_action)
       ## @param value initial value for the action; Should be compatible
       ##  with the provided `param_type`
       ## @param param_type (see #map_simple_action)
-      def map_value_action(name, prefix: nil, to: self,
+      def map_value_action(name, prefix: nil, receiver: nil,
                            value: false,
                            param_type: ValueAction.guess_variant(value).freeze,
                            enabled: false, &handler)
-        ActionableMixin.map_action(name, prefix, to, param_type, handler) do
+        receiver = self if ! receiver
+        ActionableMixin.map_action(name, prefix, receiver, param_type, handler) do
           |name, param_type|
           ValueAction.new(name.freeze,
                           value: value, param_type: param_type,
@@ -285,16 +288,17 @@ module PebblApp
       ##
       ## @param name (see #map_simple_action)
       ## @param prefix (see #map_simple_action)
-      ## @param to (see #map_simple_action)
+      ## @param receiver (see #map_simple_action)
       ## @param value (see #map_value_action)
       ## @param param_type (see #map_simple_action)
       ## @param state initial state for the action
-      def map_stateful_action(name, prefix: nil, to: self,
+      def map_stateful_action(name, prefix: nil, receiver: nil,
                               value: false,
                               param_type: ValueAction.guess_variant(value).freeze,
                               state: false,
                               enabled: false, &handler)
-        ActionableMixin.map_action(name, prefix, to, param_type, handler) do
+        receiver = self if ! receiver
+        ActionableMixin.map_action(name, prefix, receiver, param_type, handler) do
           |name, param_type|
           ## the state-type property is not ever writable
           StatefulAction.new(name.freeze,
@@ -308,24 +312,26 @@ module PebblApp
       ##
       ## This method may be overridden as needed, in any implementing class
       ##
-      ## @param to [Gtk::Appliation, Gtk::Widget] an object that may
+      ## @param receiver [Gtk::Appliation, Gtk::Widget] an object that may
       ##  receive an action binding as via map_simple_action
-      def default_action_prefix(to = self)
-        case to
+      def default_action_prefix(receiver = nil)
+        case receiver
+        when NilClass, FalseClass
+          default_action_prefix self
         when Gtk::Application
           ## no action_prefixes method for this class of object
           "app".freeze
         when Gtk::Widget
           all = to.action_prefixes
-          if all.empty
-            raise ArgumentError.new("No action prefixes found for #{to}")
+          if all.empty?
+            raise ArgumentError.new("No action prefixes found for #{receiver}")
           else
             ## Assumption: the first action prefix may represent a default
             ## e.g "win" in %w(win app) for a Gtk::ApplicationWindow
             all[0]
           end
         else
-          raise ArgumentError.new("No action support known for #{to}")
+          raise ArgumentError.new("No action support known for #{receiver}")
         end
       end
 

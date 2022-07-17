@@ -354,11 +354,11 @@ class VtyAppWindow < Gtk::ApplicationWindow
     }
 
     map_simple_action(act_send, prefix: vtwin_prefix,
-                      to: self, &send_cb)
+                      receiver: self, &send_cb)
 
     ## stage input from the editpop_sourcewin buffer before send
     map_simple_action(act_send, prefix: sourcewin_prefix,
-                      to: editpop_sourcewin) do |_|
+                      receiver: editpop_sourcewin) do |_|
       vty_entry_buffer.text = editpop_sourceview.buffer.text
       send_cb.yield
     end
@@ -371,31 +371,31 @@ class VtyAppWindow < Gtk::ApplicationWindow
       editpop_sourcewin.show
     }
     map_simple_action(act_detach, prefix: editpop_prefix,
-                      to: self, &sourcewin_cb)
+                      receiver: self, &sourcewin_cb)
     map_simple_action(act_detach, prefix: editpop_prefix,
-                      to: editpop_popover, &sourcewin_cb)
+                      receiver: editpop_popover, &sourcewin_cb)
 
     ##
     ## Scope-specific actions & signal bindings
     ##
 
-    map_simple_action("eof", prefix: vtwin_prefix, to: self) do
+    map_simple_action("eof", prefix: vtwin_prefix, receiver: self) do
       ## reusing the feed_cb from the vtwin.send/sourcewin.send actions
       feed_cb.yield(PebblApp::Shell::Const::EOF)
     end
 
-    map_simple_action("reset", prefix: vtwin_prefix, to: self) do
+    map_simple_action("reset", prefix: vtwin_prefix, receiver: self) do
       vty.reset(false, false)
     end
 
     map_simple_action(act_hide, prefix: editpop_prefix,
-                      to: editpop_popover) do
+                      receiver: editpop_popover) do
       ## ^ FIXME rename the "to" arg => "scope" here
       editpop_popover.hide
     end
 
     map_simple_action(common_show, prefix: editpop_prefix,
-                      to: self) do
+                      receiver: self) do
        editpop_popover.show
     end
 
@@ -409,12 +409,12 @@ class VtyAppWindow < Gtk::ApplicationWindow
     end
 
     map_simple_action(act_cancel, prefix: sourcewin_prefix,
-                      to: editpop_sourcewin) do
+                      receiver: editpop_sourcewin) do
       editpop_sourcewin.hide
     end
 
     map_simple_action(act_clear, prefix: sourcewin_prefix,
-                      to: editpop_sourcewin) do
+                      receiver: editpop_sourcewin) do
       editpop_sourceview.buffer.text = ""
     end
 
@@ -591,6 +591,8 @@ class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
 
   include PebblApp::ActionableMixin
 
+  extend PebblApp::GUserObject
+  self.register_type
 
   FEATURE_FLAGS = Vte::FeatureFlags.constants.dup.tap { |flags|
     flags.delete(:FLAGS_MASK) }.select { |name|
