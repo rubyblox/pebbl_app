@@ -23,6 +23,14 @@
   <object class="GtkTextBuffer" id="editpop_textbuffer">
     <property name="tag-table">editpop_tags</property>
   </object>
+  <object class="GThemedIcon" id="popover_close_icon">
+    <property name="names">window-close-symbolic
+window-close</property>
+  </object>
+  <object class="GThemedIcon" id="popover_syntax_icon">
+    <property name="names">open-menu-symbolic
+preferences-system</property>
+  </object>
   <object class="GtkMenu" id="vtwin_vty_menu">
     <property name="visible">True</property>
     <property name="can-focus">False</property>
@@ -322,28 +330,37 @@
     <property name="relative-to">vty_entry</property>
     <property name="modal">False</property>
     <child>
-      <object class="GtkBox">
+      <!-- n-columns=3 n-rows=2 -->
+      <object class="GtkGrid">
         <property name="visible">True</property>
         <property name="can-focus">False</property>
-        <property name="orientation">vertical</property>
         <child>
           <object class="GtkLabel">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
+            <property name="halign">center</property>
+            <property name="margin-start">24</property>
             <property name="hexpand">True</property>
             <property name="label" translatable="yes">Input</property>
             <property name="single-line-mode">True</property>
           </object>
           <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">0</property>
+            <property name="left-attach">1</property>
+            <property name="top-attach">0</property>
           </packing>
         </child>
         <child>
           <object class="GtkTextView" id="editpop_textview">
             <property name="visible">True</property>
             <property name="can-focus">True</property>
+            <property name="has-focus">True</property>
+            <property name="is-focus">True</property>
+            <property name="can-default">True</property>
+            <property name="has-default">True</property>
+            <property name="receives-default">True</property>
+            <property name="tooltip-text" translatable="yes">Secondary Input.
+
+The Escape key deactivates</property>
             <property name="hadjustment">editpop_adjustment_h</property>
             <property name="hscroll-policy">natural</property>
             <property name="vadjustment">editpop_adjustment_v</property>
@@ -362,9 +379,37 @@
             <property name="monospace">True</property>
           </object>
           <packing>
-            <property name="expand">False</property>
-            <property name="fill">True</property>
-            <property name="position">1</property>
+            <property name="left-attach">0</property>
+            <property name="top-attach">1</property>
+            <property name="width">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkModelButton" id="editpop_syntax">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">True</property>
+            <property name="tooltip-text" translatable="yes">Syntax</property>
+            <property name="action-name">editpop.syntax</property>
+            <property name="icon">popover_syntax_icon</property>
+          </object>
+          <packing>
+            <property name="left-attach">2</property>
+            <property name="top-attach">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkModelButton" id="editpop_close">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="receives-default">True</property>
+            <property name="tooltip-text" translatable="yes">Close</property>
+            <property name="action-name">editpop.hide</property>
+            <property name="icon">popover_close_icon</property>
+          </object>
+          <packing>
+            <property name="left-attach">0</property>
+            <property name="top-attach">0</property>
           </packing>
         </child>
       </object>

@@ -285,25 +285,20 @@ class VtyAppWindow < Gtk::ApplicationWindow
       PebblApp::AppLog.debug("Commit: #{text.inspect}")
     end if $DEBUG
 
-    ## bind 'esc' to close the popover
-    ##
-    ## as the popover has no window, this may not be possible via a
-    ## GTK AccelGroup
-    self.editpop_textview.signal_connect_after("key-press-event") do |obj, evt|
-      if evt.keyval.eql?(PebblApp::GdkKeys::Key_Escape)
-        editpop_popover.hide
-      end
-    end
-
-    ## hide the popover instead of destroy
-    editpop_textview.signal_connect("delete-event") do |menu|
-      menu.hide_on_delete
-    end
 
     @accel_map_group =
       map_accel_path(%i(Return mod1), "<Vty>/Secondary Input/Send".freeze,
-                     to: vty_send)
+                     receiver: vty_send)
 
+    ## Widget action for the scope of the editpop_close button and
+    ## a Key binding for 'Esc' to close (hide) the editpop popover
+    map_simple_action("editpop.hide", to: self.editpop_popover) do
+      ## ^ FIXME rename the "to" arg => "scope" here
+      editpop_popover.hide
+    end
+    map_accel_path(:Escape, "<Vty>/Secondary Input/Hide".freeze,
+                   receiver: editpop_close, group: @accel_map_group,
+                   locked: true)
 
     ## TBD move this to a ManagedPty adapter
     success, pid  = self.vty.spawn_sync(Vte::PtyFlags::DEFAULT, Dir.pwd,

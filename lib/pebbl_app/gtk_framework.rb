@@ -25,8 +25,6 @@ module PebblApp
         %w(GAppMixin),
       "gcomposite" =>
         %w(UIError CompositeWidget FileCompositeWidget),
-      "gdk_keys" =>
-        %w(GdkKeys),
       "gdialog" =>
         %w(DialogMixin),
       "gmain" =>
@@ -37,6 +35,8 @@ module PebblApp
         %w(GtkConf),
       "guser_object" =>
         %w(GUserObject),
+      "keysym" =>
+        %w(Keysym),
       "gir_proxy" =>
         %w(InvokerP FuncInfo),
       "gtk_framework/threads" => ## FIXME remove, refactor legacy to use "anonymous threads"

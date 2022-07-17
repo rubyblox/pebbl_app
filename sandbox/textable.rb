@@ -759,7 +759,7 @@ module PebblApp
       ##
 
       font_new_dialog.signal_connect_after("key-press-event") do |window, evt|
-        if evt.keyval.eql?(PebblApp::GdkKeys::Key_Escape)
+        if evt.keyval.eql?(PebblApp::Keysym::Key_Escape)
           window.hide
         end
       end
@@ -863,7 +863,7 @@ module PebblApp
       end
 
       font_delete_dialog.signal_connect_after("key-press-event") do |window, evt|
-        if evt.keyval.eql?(PebblApp::GdkKeys::Key_Escape)
+        if evt.keyval.eql?(PebblApp::Keysym::Key_Escape)
           window.hide
         end
       end
