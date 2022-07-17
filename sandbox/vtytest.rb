@@ -22,6 +22,13 @@ require 'pebbl_app/shell'
 require 'vte3'
 require 'shellwords'
 
+require 'gtksourceview3'
+
+## A Glade-compatible GtkSource::View class
+class SourceView < GtkSource::View
+  type_register
+end
+
 module Const
   UNKNOWN = "(unknown)".freeze
   ## subtitle strings for pty state (TBD gettext)
@@ -106,12 +113,14 @@ class VtyAppWindow < Gtk::ApplicationWindow
   ## && something to load the resource bundle at a pathnmame relative to
   ## some external base directory
   use_template(File.expand_path("../ui/appwindow.vtytest.ui", __dir__),
-               %w(vty vty_send vtwin_vty_menu vty_app_menu vty_menu
+               %w(vty vty_send sourcewin_send
                   vty_entry vty_entry_buffer vty_entry_completion
                   editpop_popover editpop_textbuffer
                   editpop_tags
                   editpop_textview
                   vtwin_header
+                  editpop_sourcewin editpop_sourceview sourcewin_header
+                  editpop_close sourcewin_close
                  ))
 
   include PebblApp::ActionableMixin
@@ -151,8 +160,11 @@ class VtyAppWindow < Gtk::ApplicationWindow
     ## TBD @ setting shell here
     if instance_variable_defined?(:@shell)
        instance_variable_get(:@shell)
-    else
+    elsif self.application
       self.shell = self.application.shell
+    else
+      ## app window was initialized with a null application field
+      self.shell = [Vte.user_shell.dup.freeze].freeze
     end
   end
 
@@ -219,24 +231,201 @@ class VtyAppWindow < Gtk::ApplicationWindow
     map_simple_action("win.close") do |action|
       vtwin_close(action)
     end
-    ## coordination for the input text entry
-    ## and popover text view
-    popover = self.editpop_popover
+    ##
+    ## coordination for input text entry, intermediate popopver,
+    ## and the source view input dialog
+    ##
+
     self.vty_entry.signal_connect("icon-press") do |obj|
+      popover = self.editpop_popover
       if popover.visible?
         popover.hide
       else
         popover.show
       end
     end
+    popover = self.editpop_popover
+    @editpop_swap_text = true
     popover.signal_connect("hide") do |obj|
-      ## TBD not every "hide"  for the popover should result in swapping
-      ## the text into the entry buffer
-      self.vty_entry_buffer.text = self.editpop_textbuffer.text
+      if @editpop_swap_text
+        self.vty_entry_buffer.text = self.editpop_textbuffer.text
+      end
     end
     popover.signal_connect("show") do |obj|
-      self.editpop_textbuffer.text = self.vty_entry_buffer.text
+      if editpop_sourcewin.visible?
+        editpop_textbuffer.text =
+          editpop_sourceview.buffer.text if @editpop_swap_text
+        editpop_sourcewin.hide
+      else
+        editpop_textbuffer.text =
+          vty_entry_buffer.text if @editpop_swap_text
+      end
     end
+
+    ##
+    ## common features
+    ##
+    [editpop_popover, editpop_sourcewin].each do |obj|
+      ## hide reusable elements instead of destroy
+      ##
+      ## In one effect, this prevents that all signals, actions, and key
+      ## bindings for these dialog windows would have to be re-mapped on
+      ## every 'show' event
+      obj.signal_connect("delete-event") do |popover|
+        popover.hide_on_delete
+      end
+
+      obj.signal_connect_after("focus") do |popover|
+        @last_focused_input = popover
+        false ## continue event propagation
+      end
+
+    end
+
+    vty_entry.signal_connect_after("focus") do |entry|
+      @last_focused_input = entry
+      false ## continue event propagation
+    end
+
+    ##
+    ## Common key mappings
+    ##
+    send_path_str = "<Vty>/Secondary Input/Send".freeze
+    send_keys =%i(Return mod1)
+    hide_path_str = "<Vty>/Secondary Input/Hide".freeze
+    close_keys = PebblApp::Keysym::Key_Escape
+
+    ## initialize and add each AccelGroup to the corresponding Window
+    @vty_map_group = Gtk::AccelGroup.new
+    add_accel_group(@vty_map_group)
+    @editpop_map_group = Gtk::AccelGroup.new
+    editpop_sourcewin.add_accel_group(@editpop_map_group)
+
+    ## bind common accel paths, using each corresponding group,
+    ## scope (window), and receiver (widget)
+    [[self, @vty_map_group, vty_send, nil],
+     [editpop_popover, @vty_map_group, nil, editpop_close],
+     [editpop_sourcewin, @editpop_map_group, sourcewin_send, sourcewin_close]
+    ].each do |scope, group, send_recv, close_recv|
+      map_accel_path(send_keys, send_path_str,
+                     scope: scope,
+                     receiver: send_recv,
+                     group: group) if send_recv
+      map_accel_path(close_keys, hide_path_str,
+                     scope: scope,
+                     receiver: close_recv,
+                     group: group,
+                     locked: true) if close_recv
+    end
+
+
+    ## common action prefixes
+    vtwin_prefix = "vtwin"
+    sourcewin_prefix = "sourcewin"
+    editpop_prefix = "editpop"
+    ## common action names
+    act_send = "send"
+    act_detach = "detach"
+    act_hide = "hide"
+    act_cancel = "cancel"
+    act_clear = "clear"
+    ## local action and Gtk signal name :
+    common_show = "show"
+
+
+    ##
+    ## Common send action
+    ##
+    if vty.respond_to?(:feed_child_raw)
+      ## earlier versions of Ruby-GNOME vte
+      feed_cb = proc {|text| vty.feed_child_raw(text) }
+    else
+      feed_cb = proc {|text| vty.feed_child(text) }
+    end
+
+    send_cb = proc { |_|
+      popover = self.editpop_popover
+      if popover.visible?
+        popover.hide
+      end
+      text = vty_entry_buffer.text + self.newline
+      PebblApp::AppLog.debug("Sending text: #{text.inspect}") if $DEBUG
+      feed_cb.yield(text)
+    }
+
+    map_simple_action(act_send, prefix: vtwin_prefix,
+                      to: self, &send_cb)
+
+    ## stage input from the editpop_sourcewin buffer before send
+    map_simple_action(act_send, prefix: sourcewin_prefix,
+                      to: editpop_sourcewin) do |_|
+      vty_entry_buffer.text = editpop_sourceview.buffer.text
+      send_cb.yield
+    end
+
+
+    ##
+    ## Common detach => show action binding
+    ##
+    sourcewin_cb = proc {
+      editpop_sourcewin.show
+    }
+    map_simple_action(act_detach, prefix: editpop_prefix,
+                      to: self, &sourcewin_cb)
+    map_simple_action(act_detach, prefix: editpop_prefix,
+                      to: editpop_popover, &sourcewin_cb)
+
+    ##
+    ## Scope-specific actions & signal bindings
+    ##
+
+    map_simple_action("eof", prefix: vtwin_prefix, to: self) do
+      ## reusing the feed_cb from the vtwin.send/sourcewin.send actions
+      feed_cb.yield(PebblApp::Shell::Const::EOF)
+    end
+
+    map_simple_action("reset", prefix: vtwin_prefix, to: self) do
+      vty.reset(false, false)
+    end
+
+    map_simple_action(act_hide, prefix: editpop_prefix,
+                      to: editpop_popover) do
+      ## ^ FIXME rename the "to" arg => "scope" here
+      editpop_popover.hide
+    end
+
+    map_simple_action(common_show, prefix: editpop_prefix,
+                      to: self) do
+       editpop_popover.show
+    end
+
+    editpop_sourcewin.signal_connect(common_show) do
+      if editpop_popover.visible?
+        ## this widget will not transfer text from the ibuf entry box
+        editpop_sourceview.buffer.text =
+          editpop_textbuffer.text if @editpop_swap_text
+        editpop_popover.hide
+      end
+    end
+
+    map_simple_action(act_cancel, prefix: sourcewin_prefix,
+                      to: editpop_sourcewin) do
+      editpop_sourcewin.hide
+    end
+
+    map_simple_action(act_clear, prefix: sourcewin_prefix,
+                      to: editpop_sourcewin) do
+      editpop_sourceview.buffer.text = ""
+    end
+
+    vtwin_header.signal_connect_after("notify::title") do |header|
+      sourcewin_header.subtitle = header.title
+    end
+
+
+    ###
+    ### shell launch / PTY init
+    ###
 
     self.vty.enable_sixel = true if VtyApp::FEATURE_FLAGS.include?(:FLAG_SIXEL)
 
@@ -286,19 +475,6 @@ class VtyAppWindow < Gtk::ApplicationWindow
     end if $DEBUG
 
 
-    @accel_map_group =
-      map_accel_path(%i(Return mod1), "<Vty>/Secondary Input/Send".freeze,
-                     receiver: vty_send)
-
-    ## Widget action for the scope of the editpop_close button and
-    ## a Key binding for 'Esc' to close (hide) the editpop popover
-    map_simple_action("editpop.hide", to: self.editpop_popover) do
-      ## ^ FIXME rename the "to" arg => "scope" here
-      editpop_popover.hide
-    end
-    map_accel_path(:Escape, "<Vty>/Secondary Input/Hide".freeze,
-                   receiver: editpop_close, group: @accel_map_group,
-                   locked: true)
 
     ## TBD move this to a ManagedPty adapter
     success, pid  = self.vty.spawn_sync(Vte::PtyFlags::DEFAULT, Dir.pwd,
@@ -383,49 +559,11 @@ class VtyAppWindow < Gtk::ApplicationWindow
     ## - Gtk Stack switching & the UI
   end
 
-  def vtwin_send
-    ## FIXME further requirements for this method
-    ## - input history recording, on activation with the #vty_send button
-    ## - input history browsing, to be available in the #vty_entry widget
-    ## - ensure this is extensible for an AltVtyAppWindow in which all
-    ##   input to the subprocess would be mapped through a pipe
-    ##   coordinated via a pre-spawn setup function for a process
-    ##   wrapper for the actual command.
-    ##   - the actual command would be initialized on a pty
-    ##   - the process wrapper would use at least three pipes
-    ##     for bridged communication beween the AltPty GUI
-    ##     and the main process
-    ##   - I/O could still be mapped directly to the PTY spawned by the
-    ##     process wrapper
-    ##   - this could be ported easily enough for any application
-    ##     that would need only the pipe i/o under a piped process
-    ##     wrapper, no pty (TBD as to how to update the Vte::Terminal
-    ##     GUI with such a hack)
+  ## @private obsolete
+  def vtwin_send(_)
     ##
-
-    popover = self.editpop_popover
-    if popover.visible?
-      ## a side effect of the hide action:
-      ## any text in the popover text view will be set to the text
-      ## buffer in the main text entry field
-      popover.hide
-    end
-
-    ## mapped to the 'clicked' signal on the window 'send' button
-    ##
-    ## send any text in vty_entry_buffer to the pty,
-    ## using feed_child_raw (if defined)
-    ## or feed_child (if local sources / updated)
-    text = vty_entry_buffer.text + self.newline
-    PebblApp::AppLog.debug("Sending text: #{text.inspect}")
-    if vty.respond_to?(:feed_child_raw)
-      # PebblApp::AppLog.debug("using feed_child_raw")
-      vty.feed_child_raw(text)
-    else
-      ## patch
-      # PebblApp::AppLog.debug("using feed_child")
-      vty.feed_child(text)
-    end
+    ## [see action definitions]
+    raise RuntimeError.new("Obsolete method reached")
   end
 
   def vtwin_received_eof(vty)
