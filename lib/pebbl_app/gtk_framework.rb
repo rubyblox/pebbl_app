@@ -37,6 +37,8 @@ module PebblApp
         %w(GUserObject),
       "keysym" =>
         %w(Keysym),
+      "tree_util" =>
+        %w(TreeUtil),
       "gir_proxy" =>
         %w(InvokerP FuncInfo),
       "gtk_framework/threads" => ## FIXME remove, refactor legacy to use "anonymous threads"

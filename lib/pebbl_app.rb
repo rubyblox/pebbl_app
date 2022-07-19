@@ -48,6 +48,7 @@ module PebblApp
   autoload(:ProjectModule, 'pebbl_app/project_module.rb')
   autoload(:Shell, 'pebbl_app/shell.rb')
   autoload(:SignalMap, 'pebbl_app/signals.rb')
+  autoload(:Util, 'pebbl_app/util.rb')
   autoload(:YSpec, 'pebbl_app/y_spec.rb')
 
   %i(ConfigurationError Conf).each do |cls|

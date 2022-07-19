@@ -67,6 +67,7 @@ gems:
       - lib/pebbl_app/project_module.rb
       - lib/pebbl_app/shell.rb
       - lib/pebbl_app/project/spec_finder.rb ## ?? see conf. patch & remove refs
+      - lib/pebbl_app/util.rb
       - lib/pebbl_app/y_spec.rb
     # sandbox_files:
     #   ## not published with the gem - FIXME unmaintained prototypes
@@ -92,6 +93,7 @@ gems:
       - [pebbl_app-support, ">=1.0"]
     source_files:
       - lib/pebbl_app/accel_mixin.rb
+      - lib/pebbl_app/gactioanble.rb
       - lib/pebbl_app/gapp_mixin.rb
       - lib/pebbl_app/gapp.rb
       - lib/pebbl_app/gmain.rb
@@ -101,6 +103,7 @@ gems:
       - lib/pebbl_app/gtk_conf.rb
       - lib/pebbl_app/gtk_framework.rb
       - lib/pebbl_app/keysym.rb
+      - lib/pebbl_app/tree_util.rb
       ## merged with upwards module
       #- lib/pebbal_app/gtk_framework/exceptions.rb
       ## earlier prototype definitions:

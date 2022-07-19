@@ -243,53 +243,6 @@ module PebblApp
     end ## class << FontScheme
   end
 
-  module TreeUtils
-    class << self
-      ## @param model [Gtk::ListStore, Gtk::TreeStore]
-      def clear_tree_store(model)
-        while data = model.first
-          ## second element is a path for the first model row (unused here)
-          store = data[0]
-          iter = data[2]
-          store.remove(iter)
-        end
-        return model
-      end
-      ## remove all cell renderers from a Gtk::TreeView
-      ##
-      ## @param view [Gtk::TreeView}
-      ##
-      ## @param capture_p [boolean] if true, return an array of cell
-      ##  renderers removed
-      ##
-      ## @return [Array<Gtk::CellRenderer>, boolean] if capture_p, the cell
-      ##  renderers removed. Else, true if cell renderers were removed.
-      ##  In either case, false if no cell renderers were removed.
-      def clear_tree_renderers(view, capture_p = false)
-        n = view.n_columns - 1
-        ret = capture_p ? [] : false
-        until (n == -1)
-          if col = view.get_column(n)
-            if capture_p
-              ret.push(col)
-            else
-              ret = true
-            end
-            view.remove_column(col)
-            n = n - 1
-          end
-        end
-        if (capture_p ? ret.empty? : !ret)
-          return false
-        else
-          return ret
-        end
-      end
-
-    end ## class << TreeUtils
-
-  end ## TreeUtils
-
 
 
   ## A font configuration dialogue with a layout inspired by Emacs
@@ -381,8 +334,8 @@ module PebblApp
     def initialize
       super
       ## clear table views and cell renderers inherited from the template
-      # TreeUtils.clear_tree_store(inherit_store) ## see fonts_store
-      TreeUtils.clear_tree_renderers(inherit_tree)
+      # TreeUtil.clear_tree_store(inherit_store) ## see fonts_store
+      TreeUtil.clear_tree_renderers(inherit_tree)
 
       ## right-click context menu handler for fonts_tree
       ## - activate the fonts_menu on right click
@@ -598,7 +551,7 @@ module PebblApp
       ##
 
       ## clear any cell renderers inherited from the template
-      TreeUtils.clear_tree_renderers(fonts_tree)
+      TreeUtil.clear_tree_renderers(fonts_tree)
 
       ## all properties %s with a corresponding %s-set property
       value_props = FontConst::TAG_SET_PROPS.dup.concat(
