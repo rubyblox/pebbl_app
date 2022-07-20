@@ -127,6 +127,156 @@ window_nofullscreen
       </object>
     </child>
   </object>
+  <object class="GtkMenu" id="vty_context_menu">
+    <property name="visible">True</property>
+    <property name="can-focus">False</property>
+    <child>
+      <object class="GtkMenuItem" id="ctx_select_all">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">vtwin.select-all</property>
+        <property name="label" translatable="yes">Select All</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="ctx_select_none">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">vtwin.selection-clear</property>
+        <property name="label" translatable="yes">Clear Selection</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="ctx_copy_text">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">vtwin.copy-text</property>
+        <property name="label" translatable="yes">Copy Text</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="ctx_copy_html">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">vtwin.copy-html</property>
+        <property name="label" translatable="yes">Copy HTML</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="ctx_reset">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">vtwin.reset</property>
+        <property name="label" translatable="yes">Reset Terminal</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="ctx_prefs">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="action-name">vtwin.prefs</property>
+        <property name="label" translatable="yes">Preferences</property>
+        <property name="use-underline">True</property>
+      </object>
+    </child>
+  </object>
+  <object class="GtkPopover" id="vty_context_pop">
+    <property name="can-focus">False</property>
+    <child>
+      <object class="GtkListBox">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <child>
+          <object class="GtkListBoxRow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <child>
+              <object class="GtkModelButton">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="halign">center</property>
+                <property name="action-name">vtwin.select-all</property>
+                <property name="text" translatable="yes">Select All</property>
+                <property name="centered">True</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkListBoxRow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <child>
+              <object class="GtkModelButton">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="halign">center</property>
+                <property name="action-name">vtwin.copy-text</property>
+                <property name="text" translatable="yes">Copy Text</property>
+                <property name="centered">True</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkListBoxRow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <child>
+              <object class="GtkModelButton">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="halign">center</property>
+                <property name="action-name">vtwin.copy-html</property>
+                <property name="text" translatable="yes">Copy HTML</property>
+                <property name="centered">True</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkListBoxRow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <child>
+              <object class="GtkModelButton">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="action-name">vtwin.reset</property>
+                <property name="text" translatable="yes">Reset Terminal</property>
+                <property name="centered">True</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkListBoxRow">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <child>
+              <object class="GtkModelButton">
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">True</property>
+                <property name="halign">center</property>
+                <property name="text" translatable="yes">Preferences</property>
+                <property name="centered">True</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
   <object class="GtkEntryBuffer" id="vty_entry_buffer">
     <property name="text" translatable="yes">Dir.pwd</property>
   </object>
@@ -247,6 +397,7 @@ window_nofullscreen
     <property name="width-request">710</property>
     <property name="height-request">485</property>
     <property name="can-focus">False</property>
+    <property name="events">GDK_BUTTON_PRESS_MASK | GDK_STRUCTURE_MASK</property>
     <property name="icon-name">utilities-terminal-symbolic</property>
     <property name="startup-id">space.thinkum.vtytest</property>
     <child>
@@ -321,10 +472,6 @@ window_nofullscreen
                 <property name="visible">True</property>
                 <property name="can-focus">True</property>
                 <property name="has-focus">True</property>
-                <property name="is-focus">True</property>
-                <property name="can-default">True</property>
-                <property name="has-default">True</property>
-                <property name="receives-default">True</property>
                 <property name="vadjustment">vty_adj_v</property>
                 <property name="cursor-shape">ibeam</property>
                 <property name="encoding">UTF-8</property>
@@ -466,11 +613,6 @@ A secondary input buffer is available via the icon</property>
               <object class="GtkTextView" id="editpop_textview">
                 <property name="visible">True</property>
                 <property name="can-focus">True</property>
-                <property name="has-focus">True</property>
-                <property name="is-focus">True</property>
-                <property name="can-default">True</property>
-                <property name="has-default">True</property>
-                <property name="receives-default">True</property>
                 <property name="tooltip-text" translatable="yes">Secondary Input.
 
 The Escape key deactivates</property>
@@ -503,7 +645,7 @@ The Escape key deactivates</property>
           <object class="GtkModelButton" id="editpop_detach">
             <property name="visible">True</property>
             <property name="can-focus">True</property>
-            <property name="receives-default">True</property>
+            <property name="receives-default">False</property>
             <property name="tooltip-text" translatable="yes">Close</property>
             <property name="action-name">editpop.detach</property>
             <property name="icon">popover_detach_icon</property>

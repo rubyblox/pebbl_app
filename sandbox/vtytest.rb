@@ -29,19 +29,29 @@ class SourceView < GtkSource::View
   type_register
 end
 
-module Const
-  UNKNOWN = "(unknown)".freeze
-  ## subtitle strings for pty state (TBD gettext)
-  RUNNING = "running".freeze
-  FAILED = "failed".freeze
-  EXITED = "exited".freeze
+module Vty
 
-  ## Default for a Vte option - charcters to parse as a part of a word,
-  ## during word-focused text selection in the Vte Pty
-  ##
-  ## Devehlp specifies "ASCII" here but that may not have been updated
-  ## since the further adoption of UTF-8 in Vte
-  WORD_CHARS="-.:/$%@~&"
+  module Const
+
+    ## Label for an unknown process state in the PTY of a Vty terminal
+    UNKNOWN = "unknown".freeze
+
+    ## Label for a running process state in the PTY of a Vty terminal
+    RUNNING = "running".freeze
+
+    ## Label for an error process state in the PTY of a Vty terminal
+    FAILED = "failed".freeze
+
+    ## Label for an exited process state in the PTY of a Vty terminal
+    EXITED = "exited".freeze
+
+    ## Default for a Vte option - charcters to parse as a part of a word,
+    ## during word-focused text selection in the Vte Pty
+    ##
+    ## Devehlp specifies "ASCII" here but that may not have been updated
+    ## since the further adoption of UTF-8 in Vte
+    WORD_CHARS="-.:/$%@~&"
+  end
 end
 
 
@@ -114,6 +124,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
   ## some external base directory
   use_template(File.expand_path("../ui/appwindow.vtytest.ui", __dir__),
                %w(vty vty_send sourcewin_send
+                  vty_context_pop vty_context_menu
                   vty_entry vty_entry_buffer vty_entry_completion
                   editpop_popover editpop_textbuffer
                   editpop_tags
@@ -133,7 +144,6 @@ class VtyAppWindow < Gtk::ApplicationWindow
       app_id = false
       window_id = false
       if (app = self.application)
-        ## FIXME still retrieving an uninitialized object here
         app_id = app.application_id
       else
         app_id = "(no application)".freeze
@@ -186,11 +196,14 @@ class VtyAppWindow < Gtk::ApplicationWindow
     ## debug after the super call, to ensure the Gtk object is initialized
     PebblApp::AppLog.debug("Initializing #{self}")
 
+    self.vtwin_header.subtitle = Vty::Const::UNKNOWN
+
     ##
     ## local conf
     ##
 
-    vty.word_char_exceptions=Const::WORD_CHARS
+    ## FIXME make this a profile property
+    vty.word_char_exceptions=Vty::Const::WORD_CHARS
 
     ## trying implementation w/i a scrolled window
     vty.enable_fallback_scrolling=nil
@@ -251,12 +264,18 @@ class VtyAppWindow < Gtk::ApplicationWindow
         self.vty_entry_buffer.text = self.editpop_textbuffer.text
       end
     end
+
     popover.signal_connect("show") do |obj|
+      ## prevent GTK from focusing any menu buttons in the popover
+      self.focus = editpop_textview
       if editpop_sourcewin.visible?
+        ## conditionally set text from sourcewin if visible
+        ## && hide the sourcewin
         editpop_textbuffer.text =
           editpop_sourceview.buffer.text if @editpop_swap_text
         editpop_sourcewin.hide
       else
+        ## conditionally set text from the vty entry buffer
         editpop_textbuffer.text =
           vty_entry_buffer.text if @editpop_swap_text
       end
@@ -300,6 +319,11 @@ class VtyAppWindow < Gtk::ApplicationWindow
     add_accel_group(@vty_map_group)
     @editpop_map_group = Gtk::AccelGroup.new
     editpop_sourcewin.add_accel_group(@editpop_map_group)
+
+    map_accel_path(:Return, "<Vty>/Input Buffer/Send",
+                   group: @vty_map_group,
+                   scope: self, receiver: vty_send)
+
 
     ## bind common accel paths, using each corresponding group,
     ## scope (window), and receiver (widget)
@@ -363,7 +387,6 @@ class VtyAppWindow < Gtk::ApplicationWindow
       send_cb.yield
     end
 
-
     ##
     ## Common detach => show action binding
     ##
@@ -420,6 +443,51 @@ class VtyAppWindow < Gtk::ApplicationWindow
 
     vtwin_header.signal_connect_after("notify::title") do |header|
       sourcewin_header.subtitle = header.title
+    end
+
+
+    ##
+    ## context menu actions on vtwin_prefix
+    ##
+
+    ## ensure that the vtwin prefix is defined for the context menu
+    ##
+    ## Actions bound for this prefix group, in the previous code:
+    ## - vtwin.reset
+    ##
+    grp = self.get_action_group(vtwin_prefix)
+    vty_context_menu.insert_action_group(vtwin_prefix, grp)
+
+    map_simple_action("select-all", prefix: vtwin_prefix,
+                      receiver: vty_context_menu) do
+      vty.select_all
+    end
+
+    map_simple_action("selection-clear", prefix: vtwin_prefix,
+                      receiver: vty_context_menu) do
+      vty.unselect_all
+    end
+
+    map_simple_action("copy-text", prefix: vtwin_prefix,
+                      receiver: vty_context_menu) do
+      vty.copy_clipboard_format(Vte::Format::TEXT)
+    end
+
+    map_simple_action("copy-html", prefix: vtwin_prefix,
+                      receiver: vty_context_menu) do
+      vty.copy_clipboard_format(Vte::Format::HTML)
+    end
+
+    map_simple_action("prefs", prefix: vtwin_prefix,
+                      receiver: vty_context_menu) do
+      vtwin_show_prefs(nil)
+    end
+
+    ## activation for the context menu
+    vty.signal_connect_after("button-press-event") do |_, evt|
+      if evt.button == 3
+        vty_context_menu.popup_at_pointer(evt)
+      end
     end
 
 
@@ -486,9 +554,9 @@ class VtyAppWindow < Gtk::ApplicationWindow
       self.title = sh_shortname
       self.vtwin_header.title = sh_shortname
       self.subprocess_pid = pid
-      self.vtwin_header.subtitle = Const::RUNNING
+      self.vtwin_header.subtitle = Vty::Const::RUNNING
     else
-      self.vtwin_header.subtitle = Const::FAILED
+      self.vtwin_header.subtitle = Vty::Const::FAILED
       ## FIXME needs a more graceful handler
       PebblApp::AppLog.debug("Failed. closing window")
       self.close
@@ -576,7 +644,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
     ## assigned to the vty object (a Vte::Teriminal) on the app window
     if ! self.in_destruction?
       self.vtwin_header.subtitle = "pid %s %s %s" % [
-        self.subprocess_pid, Const::EXITED, status
+        self.subprocess_pid, Vty::Const::EXITED, status
       ]
     end
   end
