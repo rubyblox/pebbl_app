@@ -1,26 +1,49 @@
 #!/usr/bin/env -S bundle exec ruby
 
-## startup script for vtytest.rb (sandbox)
+## not a lot of useful for catching errors after 'invoke'
+##!/usr/bin/env -S rdbg -c bundle exec ruby
+
+## startup script for vty.rb (sandbox)
 
 require 'pebbl_app'
 PebblApp::AppLog.app_log ||=
-  PebblApp::AppLog.new(domain: "vtytest")
+  PebblApp::AppLog.new(domain: "vty")
 PebblApp::AppLog.app_log.level = "DEBUG"
 
+## FIXME add to Framework defs for rg interop
+##
 ## apparently the syntax GDK expects for the X11 backend here
 ENV['GDK_BACKEND'] = "x11"
 
-require_relative(%<../sandbox/vtytest.rb>)
+require 'vty'
 
 $DEBUG = true
 
-$APP = VtyApp.new
-if ! ( ARGV.include?('--command') || ARGV.include?('-c') )
-  ## FIXME only if IRB is enabled in bundler conf:
-  # $APP.default_shell = %w(ruby -r irb -r irb/completion -e IRB.start -- --multiline)
-  ## ^ --multiline not applied here
-  $APP.shell = %w(irb --multiline)
+## early framework initialization, before any class names
+## are resolved over GIR
+timeout = (ENV['GTK_INIT_TIMEOUT'] ||
+           PebblApp::Const::GTK_INIT_TIMEOUT_DEFAULT)
+VtyApp.framework(timeout: timeout).init
 
+$APP = VtyApp.new
+
+if ! ( ARGV.include?('--command') || ARGV.include?('-c') )
+  ## setting a default shell for purpose of tests
+  ## - this precedes the implementation of any preferences API in VtyApp
+  ## - using any interactive Ruby shell avaialble with Bundler.
+  ## - user's default shell will be used if none is configured here
+  ##   and if none is configured via command line option
+  ## - see also, the project Gemfile @ irb, pry as to how to enable
+  ##   pry and/or IRB for bundler in this project
+  ## - IRB will be used if both IRB and Pry are selected under Bundler
+  if Bundler.settings
+    with = Bundler.settings['with']
+    if with.include?(:irb)
+      $APP.shell=%w(irb --multiline)
+    elsif with.include?(:pry)
+      $APP.shell=%w(pry)
+    end
+  end
 end
 
 $APP.main(argv: ARGV)
