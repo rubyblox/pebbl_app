@@ -57,11 +57,11 @@ shared_examples "an app filesystem manager" do |conf|
     ## representing the app_dirname, suffixed to pathname from the
     ## corresponding method in the namespace module
     expect(File.basename(subject.send(mtd))).to be ==
-      File.basename(subject.app_dirname)
+      File.basename(ns.app_dirname)
 
     ## testing full pathname under the provided implementation method
     expect(subject.send(mtd)).to be ==
-      File.join(ns.send(ns_mtd), subject.app_dirname)
+      File.join(ns.send(ns_mtd), ns.app_dirname)
   end
 end
 
@@ -73,10 +73,10 @@ describe PebblApp::App do
       expect(subject.file_manager).to_not be_falsey
       expect(subject.file_manager).to be_a PebblApp::FileManager
     end
-    it "delegates the #app_config_home method" do
-      expect(subject.file_manager.respond_to?(:app_config_home)).to be true
-      expect(subject.respond_to?(:app_config_home)).to be true
-      expect(subject.app_config_home).to be == subject.file_manager.app_config_home
+
+      expect(subject.file_manager.class.respond_to?(:config_home)).to be true
+      expect(subject.class.respond_to?(:config_home)).to be true
+      expect(subject.class.config_home).to be == subject.file_manager.class.config_home
     end
   end
 
@@ -174,6 +174,37 @@ describe PebblApp::App do
         mtd: :config_dirs, var: PebblApp::Const::XDG_CONFIG_DIRS_ENV,
         value: ""
     end
+
+
+    context "app metadata in implementing namespace" do
+      let(:altname) { "TestApp" }
+
+      it "provides a default app name" do
+        class AppTest01
+          include PebblApp::AppMixin
+        end
+        expect(AppTest01.app_name).to be == "app_test01"
+      end
+
+      it "accepts an app name" do
+        class AppTest02
+          ## FIXME see previous remark
+          include PebblApp::AppMixin
+        end
+        AppTest02.app_name = altname
+        expect(AppTest02.app_name).to be == altname
+      end
+
+      it "uses a downcased app dirname" do
+        class AppTest03 # < described_class
+          ## FIXME see previous remark
+          include PebblApp::AppMixin
+        end
+        AppTest03.app_name = altname
+        expect(AppTest03.app_dirname).to be == altname.downcase
+      end
+    end
+
   end ## class methods
 
   context "instance methods" do
@@ -183,37 +214,6 @@ describe PebblApp::App do
       end
     end
 
-    context "app metadata in implementing namespace" do
-      let(:altname) { "TestApp" }
-
-      it "provides a default app name" do
-        ## this default value should not be used in any applications,
-        ## except for purpose of testing
-        ##
-        ## PebblApp::App is in effect an abstract class
-        expect(subject.app_name).to be == "pebbl_app.app"
-      end
-
-      it "accepts an app name" do
-        orig = subject.app_name
-        begin
-          subject.app_name = altname
-          expect(subject.app_name).to be == altname
-        ensure
-          subject.app_name = orig
-        end
-      end
-
-      it "uses a downcased app dirname" do
-        orig = subject.app_name
-        begin
-          subject.app_name = altname
-          expect(subject.app_dirname).to be == altname.downcase
-        ensure
-          subject.app_name = orig
-        end
-      end
-    end
 
     context "app filesystem" do
       it_behaves_like "an app filesystem manager",

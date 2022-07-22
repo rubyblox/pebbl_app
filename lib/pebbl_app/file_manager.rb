@@ -66,7 +66,7 @@ module PebblApp
       def data_home
         envdir(Const::XDG_DATA_HOME_ENV) do
           ## fallback block
-          return (Files.join(self.home, Const::XDG_DATA_SUBDIR))
+          return (File.join(self.home, Const::XDG_DATA_SUBDIR))
         end
       end
 
@@ -77,7 +77,7 @@ module PebblApp
       def config_home
         envdir(Const::XDG_CONFIG_HOME_ENV) do
           ## fallback block
-          return (Files.join(self.home, Const::XDG_CONFIG_SUBDIR))
+          return (File.join(self.home, Const::XDG_CONFIG_SUBDIR))
         end
       end
 
@@ -88,7 +88,7 @@ module PebblApp
       def cache_home
         envdir(Const::XDG_CACHE_HOME_ENV) do
           ## fallback block
-          return (Files.join(self.home, Const::XDG_CACHE_SUBDIR))
+          return (File.join(self.home, Const::XDG_CACHE_SUBDIR))
         end
       end
 
@@ -99,7 +99,7 @@ module PebblApp
       def state_home
         envdir(Const::XDG_STATE_HOME_ENV) do
           ## fallback block
-          return Files.join(self.home, Const::XDG_STATE_SUBDIR)
+          return File.join(self.home, Const::XDG_STATE_SUBDIR)
         end
       end
 
@@ -131,7 +131,7 @@ module PebblApp
           ## single uptime session on the host. This should be generally
           ## portable, regardless.
           run_subdir = format("run-%d", Process.uid)
-          rundir = Files.join(self.tmpdir, run_subdir)
+          rundir = File.join(self.tmpdir, run_subdir)
           n = 0
           while Files.exists(rundir) && !Files.owned?(rundir)
             rundir = rundir + Const::DOT + n
@@ -182,6 +182,7 @@ module PebblApp
         end
       end
 
+      ## @private utility method in FileManager
       def envdir(envar, &fallback)
         if envdir = ENV[envar]
           return envdir
@@ -190,19 +191,17 @@ module PebblApp
         end
       end
 
+      ## @private utility method in FileManager
       def map_join(name, dirs)
         dirs.map do |p|
-          Files.join(p, name)
+          File.join(p, name)
         end
       end
 
+      ## @private utility method in FileManager
       def flatten_dirs(dirs)
-        dirs.flat_map do |d|
-          if Files.directory?(d)
-            d
-          else
-            []
-          end
+        dirs.select do |d|
+          File.directory?(d)
         end
       end
 
@@ -239,7 +238,7 @@ module PebblApp
     def app_data_home()
       @app_data_home ||=
         FileManager.envdir(app_env_name + "_DATA_HOME") do
-          Files.join(FileManager.data_home, app_dirname)
+          File.join(FileManager.data_home, app_dirname)
         end
     end
 
@@ -270,7 +269,7 @@ module PebblApp
     def app_config_home()
       @app_config_home ||=
         FileManager.envdir(app_env_name + "_CONFIG_HOME") do
-          Files.join(FileManager.config_home, app_dirname)
+          File.join(FileManager.config_home, app_dirname)
         end
     end
 
@@ -289,7 +288,7 @@ module PebblApp
     def app_state_home()
       @app_state_home ||=
         FileManager.envdir(app_env_name + "_STATE_HOME") do
-          Files.join(FileManager.state_home, app_dirname)
+          File.join(FileManager.state_home, app_dirname)
         end
     end
 
@@ -308,7 +307,7 @@ module PebblApp
     def app_cache_home()
       @app_cache_home ||=
         FileManager.envdir(app_env_name + "_CACHE_HOME") do
-          Files.join(FileManager.cache_home, app_dirname)
+          File.join(FileManager.cache_home, app_dirname)
         end
     end
 
@@ -331,7 +330,7 @@ module PebblApp
     ## @return [String] an app subdir onto the class' runtime_dir
     def app_runtime_dir!()
       basedir = FileManager.runtime_dir!
-      dir = Files.join(basedir, app_dirname)
+      dir = File.join(basedir, app_dirname)
       File.mkdir_p(dir) do |subdir|
         Files.chmod(0o0700, subdir)
       end

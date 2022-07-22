@@ -59,9 +59,19 @@ module PebblApp
     ##
     ## @param name [Integer, String] Name of the signal to trap
     ##
-    ## @param block [proc] Callback for the signal trap
+    ## @param block [proc] Callback for the signal trap. Two parameters
+    ##  will be yielded to this block
     ##
-    ## @return [String] the name provided to this method
+    ## @yieldparam kind [String or Integer]
+    ##    the signal name provided to set_handler
+    ##
+    ## @yieldparam handler [Object]
+    ##    an object representing the signal trap handler that was
+    ##    previously bound when this method was invoked. If the previous
+    ##    binding should be invoked, this object can be converted to a
+    ##    proc using SignalMap.proc_for_handler
+    ##
+    ## @return [String] the signal name provided to this method
     ##
     ## @see #with_handlers for reentrant evaluation with a SignalMap
     ##
@@ -116,6 +126,10 @@ module PebblApp
     ##
     ## @see #with_handlers for reentrant evaluation with a SignalMap
     def bind_handlers(&block)
+      ## This method is used in the definition of with_handlers
+      ## and may be used separately, such as when the signal trap
+      ## handlers may be invoked in a scope other than the scope in
+      ## which the signal trap calls were produced
       handlers.each do |kind, hdlr|
         begin
           ## this is where the Signal.trap callback is bound

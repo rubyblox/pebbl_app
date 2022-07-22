@@ -63,19 +63,6 @@ describe PebblApp::Conf do
     expect(inst.command_name).to be == name
   end
 
-  it "applies a block for deferred command_name access" do
-    time = nil
-    inst = described_class.new() do
-      time = Time.new
-    end
-    expect(inst.instance_variable_defined?(:@command_name)).to be false
-    expect(inst.instance_variable_defined?(:@command_name_block)).to_not be false
-    expect(inst.command_name).to_not be false
-    expect(inst.instance_variable_defined?(:@command_name)).to be true
-    expect(time).to_not be nil
-    expect(inst.command_name).to be == time.to_s
-  end
-
 
   it "sets the command_name as the option parser's program name" do
     parser = subject.make_option_parser

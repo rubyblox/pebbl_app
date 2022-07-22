@@ -13,28 +13,21 @@ RSpec.configure do |config|
   end
   $DATA_ROOT = File.dirname(gemfile)
 
+  ##
   ## configure an ENV for the testing environment
+  ##
+
   if !(test_out_dir = ENV['TEST_OUTPUT_DIR'])
     test_out_dir = File.join($DATA_ROOT, "tmp/tests")
   end
   test_tmpdir = File.expand_path("tmp", test_out_dir)
   test_home_dir=File.expand_path("home", test_tmpdir)
 
-  ## an ephemeral, singleton mkdir_p method
-  ##
-  ## this mirrors the implementation in
-  ## rblib lib/pebbl_app/files.rb
-  ## @ PebblApp::Framework::Files.mkdir_p
-  def config.mkdir_p(path)
-    dirs = []
-    lastdir = nil
-    File.expand_path(path).split(File::SEPARATOR)[1..].each do |name|
-      dirs << name
-      lastdir = File::SEPARATOR + dirs.join(File::SEPARATOR)
-      Dir.mkdir(lastdir) if ! File.directory?(lastdir)
-    end
-  end
-  config.mkdir_p(test_home_dir)
+  ## using mkdir_p from FileUtils rather than from PebblApp:Files
+  ## in this setup code for rspec
+  require 'fileutils'
+  FileUtils.mkdir_p(test_tmpdir)
+  FileUtils.mkdir_p(test_home_dir)
   ENV['TMPDIR'] = test_tmpdir
   ENV['HOME'] = test_home_dir
 

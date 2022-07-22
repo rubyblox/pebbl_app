@@ -93,7 +93,7 @@ gems:
       - [pebbl_app-support, ">=1.0"]
     source_files:
       - lib/pebbl_app/accel_mixin.rb
-      - lib/pebbl_app/gactioanble.rb
+      - lib/pebbl_app/gactionable.rb
       - lib/pebbl_app/gapp_mixin.rb
       - lib/pebbl_app/gapp.rb
       - lib/pebbl_app/gmain.rb
@@ -107,10 +107,9 @@ gems:
       ## merged with upwards module
       #- lib/pebbal_app/gtk_framework/exceptions.rb
       ## earlier prototype definitions:
-      - lib/pebbl_app/gtk_framework/logging.rb
       - lib/pebbl_app/gtk_framework/threads.rb
       - lib/pebbl_app/gtk_framework/sysexit.rb
-      - lib/pebbl_app/gtk_framework/gbuilder_app.rb
+      - lib/pebbl_app/gbuilder_app.rb
       ## sandbox
       #- lib/pebbl_app/gtk_framework/basedir.rb
       - sandbox/service-example.rb

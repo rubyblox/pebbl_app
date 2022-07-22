@@ -30,10 +30,6 @@ describe "spec_helper.rb" do
     expect(global_variables.include?(:$RSPEC_CONFIG)).to be true
   end
 
-  it "defines a mkdir_p method" do
-    expect($RSPEC_CONFIG.singleton_methods.include?(:mkdir_p)).to_not be_falsey
-  end
-
   ## this test serves to illustrate the HOME directory used for tests in
   ## the rspec output, furthermore testing the initialization for the
   ## test homedir in the project's ./spec_helper.rb

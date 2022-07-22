@@ -17,47 +17,175 @@ module PebblApp
   ##
   ## Methods for Application Metadata, defined when this module is
   ## included in an impelemnting class:
-  ## - #app_name, #app_name=
-  ## - #app_dirname
-  ## - #app_command_name
+  ## - app_name, app_name=
+  ## - app_dirname
+  ## - app_env_name
+  ## - app_command_name
   ## - #file_manager and methods forwarding to the same
   ## - #config
   module AppMixin
 
     class << self
-      def pop_opt(name, opts, &fallback)
-        kwd = name.to_sym
-        if opts.include?(kwd)
-          opts.delete(kwd)
-        elsif block_given?
-          fallback.yield
-        end
+      ## @private Utility method for the mixin implementation of PebblApp::AppMixin
+      def def_class_name_field(scope, name, &block)
+        reader_name = name.to_sym
+        classvar = ("@@" +  name.to_s).to_sym
+        writer_name = (reader_name.to_s + "=").to_sym
+        scope.define_method(writer_name,
+                            ## not inherited properly for subclasses ...
+                            -> (val) {
+                              if scope.class_variable_defined?(classvar)
+                                ## FIXME use a more specific exception class
+                                raise RuntimeError.new(
+                                  "Field is already bound in %s: %s" % [
+                                  scope, reader_name
+                                ])
+                              else
+                                scope.class_variable_set(classvar, val)
+                              end
+                            })
+        ## the reader method will be returned, after definition
+        scope.define_method(reader_name,
+                            -> () {
+                              if scope.class_variable_defined?(classvar)
+                                scope.class_variable_get(classvar)
+                              else
+                                val = block.yield(name)
+                                scope.class_variable_set(classvar, val)
+                              end
+                            })
       end
     end ## class <<
 
-    def self.included(whence)
-      whence.extend Forwardable
+    def self.extended(whence)
 
-      def initialize(*args)
-        opts = args.last
-        if Hash === opts
-          @app_name = AppMixin.pop_opt(:app_name, opts) do
-            PebblApp::ProjectModule.s_to_filename(self.class, Const::DOT).freeze
-          end
-          @app_dirname = AppMixin.pop_opt(:app_dirname, opts) do
-            (@app_name && @app_name.downcase)
-          end
-          @app_env_name = AppMixin.pop_opt(:app_env_name, opts) do
-            (@app_dirname && @app_dirname.split(Const::DOT).last.upcase)
-          end
-          if opts.empty?
-            ## remove the option hash from args, before forwarding
-            ## to any actual class constructor
-            args.pop
-          end
-        end
-        super(*args)
+      ## @!method app_name
+      ##
+      ## return an app name for this application class.
+      ##
+      ## Once set, this value may be used for deriving default values
+      ## for each of the app_dirname and app_env_name fields. If a
+      ## non-default value will be used, the value should be set with
+      ## app_name= before any call to app_name.
+      ##
+      ##
+      ## @return [String] the application name
+      ##
+      ## @see app_name=
+      ##
+      ## @see app_dirname
+      ##
+      ## @see app_env_name
+      ##
+      ## @see app_command_name
+      ##
+      ## @!method app_name=
+      ## Set the application name for this application class
+      ##
+      ## This method may be called at most once, and must be called before
+      ## any call to the app_name, app_dirname, or app_env_name reader
+      ## methods
+      ##
+      ## If not set, the default value will be interpolated from the
+      ## implementing class' name, using PebblApp::ProjectModule.s_to_filename
+      ##
+      ## @param name [String] the application name to use
+      ##
+      ## @see app_name
+      AppMixin.def_class_name_field(whence.singleton_class, :app_name) do
+        ## Fixme move this to the Gio::Application thing and rename => app_id
+        PebblApp::ProjectModule.s_to_filename(whence.name, Const::DOT).freeze
       end
+
+
+      ## @!method app_dirname
+      ##
+      ## Return a directory basename for application files for this
+      ## applicaiton class
+      ##
+      ## @return [String] the basename
+      ##
+      ## @!method app_dirname=
+      ## Set the directory basename for this application class
+      ##
+      ## This method may be called at most once, and must be called before
+      ## any call to the app_dirname or app_env_name reader methods
+      ##
+      ## If not set, the default value will be interpolated as the
+      ## string downcase representation of the app_name field
+      ##
+      ## @param name [String] the base directory name to use
+      ##
+      ## @see app_dirname
+      AppMixin.def_class_name_field(whence.singleton_class, :app_dirname) do
+        whence.app_name.downcase
+      end
+
+
+      ## @!method app_env_name
+      ##
+      ## Return a variable name prefix for environment variables
+      ## configuring this application class
+      ##
+      ## @return [String] the environment variable name prefix
+      ##
+      ## @see app_env_name=
+      ##
+      ## @!method app_env_name=
+      ## Set an environment variable name prefix for the application
+      ## class
+      ##
+      ## This method may be called at most once, and must be called before
+      ## any call to app_env_name
+      ##
+      ## If not set, the default value will be interpolated as the
+      ## string upcase representation of the the first non-dot segment
+      ## of the app_name field
+      ##
+      ## @param name [String] the envrionment variable name prefix to use
+      ##
+      ## @see app_env_name
+      AppMixin.def_class_name_field(whence.singleton_class, :app_env_name) do
+        whence.app_name.split(Const::DOT).last.upcase
+      end
+
+      ## @!method app_command_name
+      ## Return a shell command name for this application
+      ##
+      ## @return [String] the shell command name
+      ##
+      ## @see app_command_name=
+      ##
+      ## @!method app_command_name=(name)
+      ## This method may be called at most once, and must be called before
+      ## any call to app_command_name.
+      ##
+      ## If not set, the default value will be interpolated as the
+      ## file basename of the value of `$0`
+      ##
+      ## @param name [String] the command name to use
+      ##
+      ## @see app_command_name
+      AppMixin.def_class_name_field(whence.singleton_class, :app_command_name) do
+        File.basename($0)
+      end
+
+      whence.singleton_class.extend Forwardable
+      ## Forward to each class method defined originally on
+      ## FileManager, from a method of the same name defined on the
+      ## including class
+      PebblApp::FileManager.methods(false).map do |mtd|
+        if PebblApp::FileManager.method(mtd).public?
+          whence.singleton_class.def_delegator(PebblApp::FileManager, mtd)
+        end
+      end
+
+    end ## AppMixin.extended
+
+
+    def self.included(whence)
+      ## Add all mixin class methods
+      whence.extend self
 
       ## Return the SignalMap for this application
       ##
@@ -258,87 +386,14 @@ module PebblApp
       exit
     end
 
-    ## return an app name for this application
-    ##
-    ## If no app name has been configured then a
-    ## default app name will be interpolated from the implementing
-    ## class' name, using PebblApp::ProjectModule.s_to_filename
-    ##
-    ## If an implementing class overrides this method, the
-    ## implementation should ensure that other values derived from this
-    ## method will be updated in the implementing class
-    ##
-    ## @return [String] an app name
-    ##
-    ## @see #app_dirname
-    ##
-    ## @see #app_env_name
-    ##
-    ## @see #app_command_name
-    def app_name
-      @app_name ||=
-      PebblApp::ProjectModule.s_to_filename(self.class, Const::DOT).freeze
-    end
-
-    ## Return a directory basename for application files
-    ##
-    ## An implementing class overriding this method should ensure that
-    ## the value stays synchronized with the app_dirname field in the
-    ## file_manager for the extending instance.
-    ##
-    ## Generally, if the file manager's @app_dirname is changed before
-    ## this variable is accessed for read, then the updated value should
-    ## be reflected on first read for this method.
-    ##
-    ## @return [String] the basename
-    def app_dirname
-      if name = @app_dirname
-        name
-      elsif (mgr = @file_manager)
-        ## not bound locally, but a file manager has been initialized.
-        ## forward to the file manager and bind here
-        @app_dirname ||= mgr.app_dirname
-      else
-        app_name.downcase
-      end
-    end
-
-    ## Return a variable name prefix for environment variables for this
-    ## application
-    ##
-    ## An implementing class overriding this method should ensure that
-    ## the value stays synchronized with the app_env_name field in the
-    ## file_manager for the extending instance.
-    ##
-    ## Generally, if the file manager's @app_env_name is changed before
-    ## this variable is accessed for read, then the updated value should
-    ## be reflected on first read for this method.
-    ##
-    def app_env_name
-      if name = @app_env_name
-        name
-      elsif (mgr = @file_manager)
-        ## not bound locally, but a file manager has been initialized.
-        ## forward to the file manager and bind here
-        @app_env_name = @file_manager.app_env_name
-      else
-        app_dirname.split(Const::DOT).last.upcase
-      end
-    end
-
-    ## Return a shell command name for this application
-    ##
-    ## @return [String] the shell command name
-    def app_command_name
-      @app_command_name ||= File.basename($0)
-    end
 
     ## Return a FileManager, such that may be applied in computing any
     ## application filesystem directories for this app
     ##
     ## @return [FileManager] a FileManager instance
     def file_manager
-      @file_manager ||= FileManager.new(app_dirname, app_env_name)
+      @file_manager ||= FileManager.new(self.class.app_dirname,
+                                        self.class.app_env_name)
     end
 
     ## Return this app's Conf object
@@ -365,18 +420,6 @@ module PebblApp
           self.define_method(mtd, lambda { self.file_manager.send(mtd) })
         end
       end
-
-    class << self
-      extend Forwardable
-      ## Forward to each class method defined originally on
-      ## FileManager, from a method of the same name defined on the
-      ## including class
-      PebblApp::FileManager.methods(false).map do |mtd|
-        if PebblApp::FileManager.method(mtd).public?
-          def_delegator(PebblApp::FileManager, mtd)
-        end
-      end
-    end
 
   end ## AppMixin
 end
