@@ -180,28 +180,35 @@ describe PebblApp::App do
       let(:altname) { "TestApp" }
 
       it "provides a default app name" do
-        class AppTest01
+        class AppTest01 < described_class
+          ## also testing the mixin implementation & inheritance
+          ## of the app%name methods
           include PebblApp::AppMixin
         end
         expect(AppTest01.app_name).to be == "app_test01"
+        ## test for side effects:
+        expect(described_class.app_name).to_not be == "app_test01"
       end
 
       it "accepts an app name" do
-        class AppTest02
-          ## FIXME see previous remark
-          include PebblApp::AppMixin
+        class AppTest02 < described_class
+          ## also testing onto inheritance for the app%name methods
         end
         AppTest02.app_name = altname
         expect(AppTest02.app_name).to be == altname
+        ## test for side effects:
+        expect(described_class.app_name).to_not be == altname
       end
 
       it "uses a downcased app dirname" do
-        class AppTest03 # < described_class
-          ## FIXME see previous remark
+        class AppTest03
+          ## also testing the mixin implementation of the app%name methods
           include PebblApp::AppMixin
         end
         AppTest03.app_name = altname
         expect(AppTest03.app_dirname).to be == altname.downcase
+        ## test for side effects:
+        expect(described_class.app_dirname).to_not be == altname.downcase
       end
     end
 

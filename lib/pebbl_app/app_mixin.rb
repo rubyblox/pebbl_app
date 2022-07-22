@@ -8,54 +8,73 @@ require 'optparse'
 
 module PebblApp
 
-  ## Generalized App support for PebblApp
+  ## General class for non-continuable configuration errors during
+  ## application initialization
+  class AppConfigError < RuntimeError
+  end
+
+  ## App support mixin for PebblApp
   ##
-  ## Methods for Application Initialization:
-  ## - #configure, see #config
-  ## - #start
-  ## - #main
+  ## **Instance Methods**
   ##
-  ## Methods for Application Metadata, defined when this module is
-  ## included in an impelemnting class:
+  ## The following instance methods are defined when this module is
+  ## included in an implementing class.
+  ##
+  ## Instance Methods for Application Initialization
+  ## - `configure`, see also `config`
+  ## - `start`
+  ## - `main`
+  ##
+  ## Instance Methods for Application Metadata
+  ## - `file_manager` and methods forwarding to the same
+  ## - `config`
+  ##
+  ## **Class Methods**
+  ##
+  ## The following methods are defined on the implementing class, when
+  ## this module is extended and/or included
+  ##
+  ## Class Methods for Application Metadata
   ## - app_name, app_name=
-  ## - app_dirname
-  ## - app_env_name
-  ## - app_command_name
-  ## - #file_manager and methods forwarding to the same
-  ## - #config
+  ## - app_dirname, app_dirname=
+  ## - app_env_name, app_env_name=
+  ## - app_command_name, app_command_name=
+  ##
   module AppMixin
 
     class << self
       ## @private Utility method for the mixin implementation of PebblApp::AppMixin
       def def_class_name_field(scope, name, &block)
         reader_name = name.to_sym
-        classvar = ("@@" +  name.to_s).to_sym
+        ## using instance storage in the singleton class, for each class
+        ## directly implementing this mixin and each subclass of each
+        ## such directly implementing class
+        svar = ("@" +  name.to_s).to_sym
         writer_name = (reader_name.to_s + "=").to_sym
         scope.define_method(writer_name,
-                            ## not inherited properly for subclasses ...
                             -> (val) {
-                              if scope.class_variable_defined?(classvar)
+                              if self.instance_variable_defined?(svar)
                                 ## FIXME use a more specific exception class
-                                raise RuntimeError.new(
-                                  "Field is already bound in %s: %s" % [
-                                  scope, reader_name
+                                raise AppConfigError.new(
+                                  "Field is already bound in %s: %s => %p" % [
+                                  self, reader_name, self.instance_variable_get(svar)
                                 ])
                               else
-                                scope.class_variable_set(classvar, val)
+                                self.instance_variable_set(svar, val)
                               end
                             })
         ## the reader method will be returned, after definition
         scope.define_method(reader_name,
                             -> () {
-                              if scope.class_variable_defined?(classvar)
-                                scope.class_variable_get(classvar)
+                              if self.instance_variable_defined?(svar)
+                                self.instance_variable_get(svar)
                               else
                                 val = block.yield(name)
-                                scope.class_variable_set(classvar, val)
+                                self.instance_variable_set(svar, val)
                               end
                             })
       end
-    end ## class <<
+    end ## class << AppMixin
 
     def self.extended(whence)
 
@@ -91,7 +110,11 @@ module PebblApp
       ##
       ## @param name [String] the application name to use
       ##
+      ## @raise AppConfigError if an app_name is already bound
+      ##  for the class
+      ##
       ## @see app_name
+      ##
       AppMixin.def_class_name_field(whence.singleton_class, :app_name) do
         ## Fixme move this to the Gio::Application thing and rename => app_id
         PebblApp::ProjectModule.s_to_filename(whence.name, Const::DOT).freeze
@@ -116,7 +139,11 @@ module PebblApp
       ##
       ## @param name [String] the base directory name to use
       ##
+      ## @raise AppConfigError if an app_dirname is already bound
+      ##  for the class
+      ##
       ## @see app_dirname
+      ##
       AppMixin.def_class_name_field(whence.singleton_class, :app_dirname) do
         whence.app_name.downcase
       end
@@ -144,6 +171,9 @@ module PebblApp
       ##
       ## @param name [String] the envrionment variable name prefix to use
       ##
+      ## @raise AppConfigError if an app_env_name is already bound
+      ##  for the class
+      ##
       ## @see app_env_name
       AppMixin.def_class_name_field(whence.singleton_class, :app_env_name) do
         whence.app_name.split(Const::DOT).last.upcase
@@ -165,6 +195,9 @@ module PebblApp
       ##
       ## @param name [String] the command name to use
       ##
+      ## @raise AppConfigError if an app_command_name is already bound
+      ##  for the class
+      ##
       ## @see app_command_name
       AppMixin.def_class_name_field(whence.singleton_class, :app_command_name) do
         File.basename($0)
@@ -172,8 +205,20 @@ module PebblApp
 
       whence.singleton_class.extend Forwardable
       ## Forward to each class method defined originally on
-      ## FileManager, from a method of the same name defined on the
-      ## including class
+      ## FileManager, from a class method of the same name
+      ## accessible on the implementing class
+      ##
+      ## Subsequently, for an implementing class C
+      ##  Forwardable === C.singleton_class
+      ##  => true
+      ## Although
+      ##  Forwardable === C
+      ##  => false
+      ##
+      ## As a matter of convenience for applications, this ensures that
+      ## methods such as `data_home` will be accessible as class methods
+      ## on the implementing class. This would correspond to some instance
+      ## methods on the implementing class, e.g `app_data_home`
       PebblApp::FileManager.methods(false).map do |mtd|
         if PebblApp::FileManager.method(mtd).public?
           whence.singleton_class.def_delegator(PebblApp::FileManager, mtd)

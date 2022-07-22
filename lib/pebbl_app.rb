@@ -35,6 +35,7 @@ module PebblApp
     end ## self.autoload method
   end ## class << self
 
+  autoload(:AppConfigError, 'pebbl_app/app_mixin.rb')
   autoload(:AppMixin, 'pebbl_app/app_mixin.rb')
   autoload(:App, 'pebbl_app/app.rb')
   autoload(:Const, 'pebbl_app/const.rb')
