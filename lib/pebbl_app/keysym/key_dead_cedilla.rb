@@ -1,7 +1,0 @@
-## PebblApp::Keysym::Key_dead_cedilla
-module PebblApp
-  module Keysym
-    ## Key code for the key "dead_cedilla"
-    Key_dead_cedilla = 0xfe5b
-  end
-end

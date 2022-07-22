@@ -1,7 +1,0 @@
-## PebblApp::Keysym::Key_Macedonia_GJE
-module PebblApp
-  module Keysym
-    ## Key code for the key "Macedonia_GJE"
-    Key_Macedonia_GJE = 0x6b2
-  end
-end
