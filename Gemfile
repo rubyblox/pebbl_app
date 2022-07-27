@@ -1,5 +1,9 @@
 # Gemfile for Pebbl App
 
+if ENV['CI']
+  $DEBUG ||= true
+end
+
 # ensure that this file is evaluted under e.g -I 'lib'
 if ! $LOAD_PATH.member?(File.join(__dir__, "lib"))
   $LOAD_PATH.unshift(File.join(__dir__, "lib"))
