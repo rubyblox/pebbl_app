@@ -319,7 +319,7 @@ module PebblApp
       ## @see #map_sys_trap
       def handle_int_trap(previous)
         AppLog.warn("Interrupt trap")
-        quit
+        quit if self.respond_to?(:quit)
       end
 
       ## Handle the SIGTERM signal. This method may be called within a
@@ -330,7 +330,7 @@ module PebblApp
       ## @see #map_sys_trap
       def handle_term_trap(previous)
         AppLog.warn("Terminating on signal")
-        quit
+        quit if self.respond_to?(:quit)
         exit
       end
 
@@ -342,7 +342,7 @@ module PebblApp
       ## @see #map_sys_trap
       def handle_quit_trap(previous)
         AppLog.warn("Quitting on signal")
-        quit
+        quit if self.respond_to?(:quit)
         exit
       end
 
@@ -391,6 +391,19 @@ module PebblApp
         end
       end
 
+
+      #@!method quit
+      ##
+      ## This method is not defined in AppMixin, but should be defined
+      ## in any implementing class.
+      ##
+      ## When defined, this method will be called from the default
+      ## signal trap callbacks for each of the SIGTERM and SIGQUIT
+      ## signals. These are implemented respectively in the methods
+      ## handle_term_trap and handle_quit_trap, defined with this mixin
+      ## module. These methods may be overridden in an impelementing
+      ## class.
+
     end ## included
 
 
@@ -404,10 +417,11 @@ module PebblApp
     ##
     ## The provided argv may be destructively modified by this method
     def configure(argv: ARGV)
+      ## ensure any signal trap handlers are bound before dispatch
       map_sys_trap
       bind_sys_trap
       # AppLog.info("configure for AppMixin")
-      config.configure(argv: argv)
+      config.configure(argv)
     end
 
     ## prototype method, should be overridden in implementing classes
@@ -419,19 +433,6 @@ module PebblApp
       Kernel.warn("Reached prototype #{__method__} method", uplevel: 0)
     end
 
-    ## prototype method, may be overridden in an implementing class
-    ##
-    ## This method will exit the process, without cleanups for threads
-    ## or other resources
-    ##
-    ## The #quit method in an implemneting class may be reached from a
-    ## signal trap callback bound with the default #map_sys_trap method
-    ##
-    def quit()
-      exit
-    end
-
-
     ## Return a FileManager, such that may be applied in computing any
     ## application filesystem directories for this app
     ##
@@ -441,14 +442,28 @@ module PebblApp
                                         self.class.app_env_name)
     end
 
+    ## Initialize and return a new Conf object for deferred
+    ## initialization under #config
+    ##
+    ## @return [Conf] the Conf object
+    def conf_new
+      Conf.new
+    end
+
     ## Return this app's Conf object
     ##
     ## @return [Conf] the Conf object
+    ##
+    ## @see conf_new
     def config
-      @config ||= Conf.new() do
-        ## defer access to the app_command_name field,
-        ## which should be configured before #configure' is called
-        self.app_command_name
+      if @config
+        return @config
+      else
+        inst = conf_new
+        inst.map_default(:command_name) do
+          self.class.app_command_name
+        end
+        @config = inst
       end
     end
 

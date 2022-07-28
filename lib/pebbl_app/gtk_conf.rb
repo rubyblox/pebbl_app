@@ -4,15 +4,12 @@ require 'pebbl_app'
 
 require 'optparse'
 
-class PebblApp::GtkConf < PebblApp::Conf
+module PebblApp
 
-  ## Constants for PebblApp::GtkConf
-  module Const
-    DISPLAY_ENV ||= 'DISPLAY'.freeze
-    GTK_INIT_TIMEOUT_DEFAULT ||= 15
-  end
+class GtkConf < Conf
 
   def initialize(command_name = false)
+    super(command_name)
     map_default(:gtk_init_timeout) do
       Const::GTK_INIT_TIMEOUT_DEFAULT
     end
@@ -89,7 +86,7 @@ class PebblApp::GtkConf < PebblApp::Conf
   ## the #configure method for this instance
   ##
   ## @return [Array] the arguments for Gtk.init
-  def gtk_args()
+  def gtk_args(args = ARGV)
     args = self.parsed_args.dup
     if ! self.display?
       raise PebblApp::ConfigurationError.new("No display configured")
@@ -99,6 +96,8 @@ class PebblApp::GtkConf < PebblApp::Conf
     end
     return args
   end
+
+end ## GtkConf class
 
 end
 

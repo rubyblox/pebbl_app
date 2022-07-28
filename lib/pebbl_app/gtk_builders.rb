@@ -7,9 +7,6 @@ BEGIN {
   require(__dir__ + ".rb")
 }
 
-## require the exact gtk version elsewhere
-# require 'gtk3'
-
 ## Gtk::Builder proxy
 module PebblApp::UIBuilder
   def self.extended(extclass)

@@ -2,16 +2,26 @@
 require 'pebbl_app/framework'
 require 'pebbl_app/project_module'
 
-require 'gtk3'
-
 require 'timeout'
 
 module PebblApp
   module Const
-    ## default timeout for Gtk.init, measured in seconds. This value
-    ## will be used if no :gtk_init_timeout was configured in conf options
+
+    ## Default timeout for Gtk.init, measured in seconds. This value
+    ## will be used during framework initialization, if no
+    ## :gtk_init_timeout was configured in GtkConf options
     GTK_INIT_TIMEOUT_DEFAULT ||= 5
+    ## Environment variable name for an X11 display
+    DISPLAY_ENV ||= 'DISPLAY'.freeze
+
+    ## Feature name for GTK support
+    GTK_FEATURE ||= "gtk3".freeze
+
+    ## Feature name for GDK support
+    GDK_FEATURE ||= ("gdk" + GTK_FEATURE[-1]).freeze
   end
+
+  require Const::GTK_FEATURE
 
   include ProjectModule
 
@@ -58,27 +68,36 @@ module PebblApp
   ## gobject-introspection
   class GtkFramework < Framework
 
+    ## Timeout in seconds, for framework initialization
     attr_reader :timeout
 
+    ## @param timeout [Numeric] Timeout in seconds, for framework
+    ##  initialization
     def initialize(timeout: Const::GTK_INIT_TIMEOUT_DEFAULT)
       ## local storage, value may typically be set from app.conf data
       @timeout = timeout
     end
 
-    def init(argv: ARGV)
-      AppLog.debug("In #{self.class}##{__method__}")
-
-      error = false
-      if ! ENV['DISPLAY']
-        ## FIXME Gdk.init may also fail if there's no xauthority
-        ## information available in the environment while the X server
-        ## requires xauth - not checked here
-        AppLog.warn("No DISPLAY found in environment")
-      end
-      error = false
-      continue = false
-      next_args = false
-      Timeout::timeout(self.timeout, FrameworkError,
+    ## Initialize Gtk once, setting initialized_args to the argv
+    ## provided to the first call to this method.
+    ##
+    ## If a value has already been stored for initialized_args,
+    ## the value will be returned on the assumption that Gtk has already
+    ## been initialized.
+    ##
+    def init(argv = ARGV)
+      if args = @initialized_args
+        return args
+      else
+        AppLog.debug("In #{self.class}##{__method__}")
+        error = false
+        if ! ENV['DISPLAY']
+          AppLog.warn("No DISPLAY found in environment")
+        end
+        error = false
+        continue = false
+        next_args = false
+        Timeout::timeout(self.timeout, FrameworkError,
                          "Timeout in Gtk initialization") do
           begin
             ## the method will be removed after the first call
@@ -87,9 +106,8 @@ module PebblApp
             ## this will result in a call to Gdk.init, which may block
             ## if unable to connect to an X11 display, thus the timeout
             if Gtk.respond_to?(:init)
+              AppLog.debug("Initializing GDK, GTK")
               Gtk.init(*argv)
-              ## not reached (Gtk.init already called ???)
-              AppLog.debug("argv post Gtk.init: #{argv}")
             end
             ## ensure the args are parsed by Gdk
             ## - albeit not of much use here, presently, except for
@@ -99,20 +117,22 @@ module PebblApp
             ##
             ## TBD this may block separately, e.g if Gtk.init was called earlier
             ## with a different DISPLAY enviornment
-            continue, next_args = Gdk.init_check(argv) # or Gtk.init_check(argv)
+            continue, next_args = Gdk.init_check(argv)
             ## ^ if it's modifying any of the args internally, this is
             ## being lost in the API transform. Or maybe it's just not
             ## parsing out any --display option?
           rescue Gtk::InitError => err
             error = err
           end
-      end
-      if continue
-        return next_args
-      else
-        error ||= "Gdk.init_check failed"
-        raise FrameworkError.new(error)
-      end
+        end
+        if continue
+          ## returns from here
+          @initialized_args = next_args
+        else
+          error ||= "Gdk.init_check failed"
+          raise FrameworkError.new(error)
+        end
+      end ## initialized
     end ## init
   end ## GtkFrmework
 end

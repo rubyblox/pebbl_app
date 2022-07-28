@@ -5,24 +5,6 @@ require 'pebbl_app/gtk_framework'
 
 require 'timeout'
 
-## @private earlier protototype:
-## ./apploader_gtk.rb
-
-## @private Goals
-## [X] provide support for pathname handling for applications
-##     [x] via rb_app-support.gemspec
-## [x] provide support for args parsing for applications
-## [x] ensure Gtk.init is not reached if no display is configured
-## [ ] provide support for runtime configuration for applications,
-##     [ ] under some YAML syntax for application configuration
-##     [ ] integrating with pathname handling
-##         as compatible with XDG recommendations
-## [ ] provide support for creating XDG desktop files
-##     as typically during application installation
-##
-## Far-term goals
-## - provide support for application packaging
-## - provide support for issue tracking for applications
 module PebblApp
 
   ## A GMain implementation for GtkApp
@@ -30,14 +12,20 @@ module PebblApp
 
     attr_accessor :app
 
+    ## @param app [GtkApp]
     def initialize(app)
       super()
       @app = app
     end
 
     def context_dispatch(context)
-      super(context)
-      Gtk.main_iteration_do(context.blocking)
+      if app.quit_state
+        ## application is already in #quit
+        throw :main_iterate, :quit
+      else
+        super(context)
+        Gtk.main_iteration_do(!context.cancellation.cancelled?)
+      end
     end
 
     def context_acquired(context)
@@ -62,103 +50,127 @@ module PebblApp
   ##
   ## This class provides GtkMain integration for Gtk::Application classes
   ##
-  ## @see GtkApplication (How Do I...? GNOME Developer Center) https://developer-old.gnome.org/GtkApplication/
+  ## @see GtkApplication (How Do I...? GNOME Developer Center)
+  ##  https://developer-old.gnome.org/GtkApplication/
   class GtkApp < Gtk::Application
+
+    class << self
+      ## initialize a GtkFramework for this class, using the provided
+      ## args for that framework
+      ##
+      ## @opt options [Numeric] :timeout timeout for Gtk.init
+      def framework(**options)
+        if self.singleton_class.instance_variable_defined?(:@framework)
+          self.singleton_class.instance_variable_get(:@framework)
+        else
+          self.framework = GtkFramework.new(**options)
+        end
+      end
+
+      def framework=(framework)
+        if self.singleton_class.instance_variable_defined?(:@framework)
+          msg = "A framework is already initailized for %s : %p" % [
+            self, self.framework
+          ]
+          raise FrameworkError,new(msg)
+        else
+          self.singleton_class.instance_variable_set(:@framework, framework)
+        end
+      end
+    end
+
     include GAppMixin
     extend GUserObject
     self.register_type
 
-    attr_accessor :framework, :open_args
+    ## @private This accesor is used for determining whether the
+    ## application is presently in an exiting state. This value should
+    ## normally not be set directly, but may be set by side effect from
+    ## a call to GtkApp#quit
+    attr_accessor :quit_state
 
-
-    def initialize(name, flags = Gio::ApplicationFlags::FLAGS_NONE, **opts)
-      ## subsq. of type_register, the opts will not be passed to any
-      ## #initialize methods defined in mixins
-      ##
-      ## The following is anemulation of the options parsing for the
-      ## #initialize method defined when inculding AppMixin
-      ##
-      @app_name = AppMixin.pop_opt(:app_name, opts) do
-        PebblApp::ProjectModule.s_to_filename(self.class, Const::DOT).freeze
-      end
-      @app_dirname = AppMixin.pop_opt(:app_dirname, opts) do
-        (@app_name && @app_name.downcase)
-      end
-      @app_env_name = AppMixin.pop_opt(:app_env_name, opts) do
-        (@app_dirname && @app_dirname.split(Const::DOT).last.upcase)
-      end
-      if !opts.empty?
-        AppLog.warn("Unused args in #{self.class}##{__method__}: #{opts}")
-      end
-
-      ## subsequent of type_register here, then at least when this
-      ## method is reached from some subclass, super() here will
-      ## dispatch to GLib::Object
-      super("application-id" => name.freeze,
+    def initialize(id, flags = Gio::ApplicationFlags::FLAGS_NONE)
+      ## subsequent of type_register here, when this method is
+      ## reached from some implementing class, super() here will
+      ## dispatch to a constructor method onto GLib::Object
+      super("application-id" => id.dup.freeze,
             "flags" => flags)
-
       ##
       ## additional configuration
       ##
       self.signal_connect("handle-local-options") do
-        ## 0 : success, no further option processing needed for this application
+        ## 0 : success, no further processing needed for command line
+        ## options received by the Gio::Application for this instance
         0
       end
     end
 
-    def config
-      @config ||= PebblApp::GtkConf.new() do
-        ## FIXME update the binding for default app_command_name in config
-        self.app_command_name
-      end
+    def conf_new
+      PebblApp::GtkConf.new()
     end
 
     def main_new()
       GtkMain.new(self)
     end
 
+    ## Return a DefaultContext initialized for the default GLib::MainContext
+    ## at the time when this method was invoked
+    ##
+    ## @return [DefaultContext]
     def context_default()
-      ## while there is no API onto g_main_context_push_thread_default
-      ## here, a workaround: always using the default context, across
-      ## all threads in the process environment (needs further testing)
-      ##
-      if GtkApp.class_variable_defined?(:@@default_context)
-        ctx = GtkApp.class_variable_get(:@@default_context)
-        return ctx
-      else
-        default = DefaultContext.new(blocking: true)
-        GtkApp.class_variable_set(:@@default_context, default)
-      end
+      DefaultContext.new()
     end
 
     alias_method :context_new, :context_default
 
-
+    ## close all application windows, call quit on any active GMain
+    ## instance, then dispatch to the superclass quit method.
+    ##
+    ## The GMain quit method will set the cancellation for the
+    ## active main context to a cancelled state. This should serve to
+    ## ensure that the main context loop will exit from iteration and
+    ## return from the context_main thread.
     def quit
-      ## This may generally emulate Gio::Application#quit
-      ## without trying to call to the Gtk main loop,
-      ## such that will be unused in this application
-      main_quit
-      self.windows.each do |wdw|
-        PebblApp::AppLog.debug("Closing #{wdw}")
-        wdw.close
+      if ! self.quit_state
+        self.quit_state = true
+        PebblApp::AppLog.debug("Quit #{self}")
+        self.windows.each do |wdw|
+          PebblApp::AppLog.debug("Closing #{wdw}")
+          wdw.close
+        end
+        if (main = @gmain) && (main.running)
+          main.quit
+          main.running = false
+        end
+        super()
       end
-      self.signal_emit("shutdown")
     end
 
     def main(argv: ARGV, &block)
+
       AppLog.app_log ||= AppLog.new
       configure(argv: argv)
 
-      timeout = self.config.gtk_init_timeout
-      ## TBD instance storage for the framework obj
-      @framework ||= PebblApp::GtkFramework.new(timeout: timeout)
-
+      ## TBD gmain here will not be completely operable as a Glib::MainLoop.
+      ##
+      ## This framework does not ever run GLib::MainLoop#run.
+      ## As such, it's unclear as to whether or how gmain#quit may
+      ## operate here
       gmain = (@gmain ||= main_new)
-      AppLog.debug("framework.init in #{self.class}#{__method__}")
 
-      app_args = self.config.gtk_args
-      self.open_args ||= @framework.init(argv: app_args) ## FIXME args mess
+      AppLog.debug("framework.init in #{self.class}##{__method__}")
+      app_args = self.config.gtk_args(argv)
+
+      ## ensure that the class' framework is initialized
+      ##
+      ## For GtkApp and generally for GNOME frameworks, the framework
+      ## should be initialized via some exe script. This would be as to
+      ## initialize the framework before any class names have been
+      ## resolved over GIR.
+      ##
+      ## This call would provide a fallback behavior, such that would at
+      ## least dispatch to call Gtk.init_check
+      self.class.framework.init(app_args)
 
       context = context_default
 
@@ -173,6 +185,41 @@ module PebblApp
       end
 
       gmain.main(context, &cb)
+      ## cleanup after gmain.main return
+      ##
+      ## - ensure the shutdown signal is emitted.
+      ##
+      ## This is referenced onto g_application_run
+      ## in glib-2.70.4 gio/gapplication.c
+      ##
+      ## Known Limitations & g_application_run behaviors not handled here
+      ##
+      ## - This method will not call g_settings_sync.
+      ##
+      ##   Any subclass' main method can call Gio::Settings.sync after
+      ##   the superclass' main method returns
+      ##
+      ## - This will not un-register the application
+      ##
+      ##   When not using Gio::Application#main, and without any further
+      ##   C language extensions to the GTK API, the application cannot
+      ##   be un-registered in Ruby. GLib/GIO does not provide any public
+      ##   API for as much.
+      ##
+      ##   Presently, the only time that the "is-registered" signal will
+      ##   be received by an application will be emitted when the
+      ##   application is initially registered.
+      ##
+      ##   By side effect, this will also not clear the private
+      ##   implementation data of the Gio::Application. In effect, any
+      ##   application object created with this API may provide at most
+      ##   "one use" under #main
+      ##
+      ## - After return from the gmain.main call, this will not
+      ##   provide any additional calls to Gtk.main_iteration_do
+      ##   or g_main_context_iteration. (FIXME this can be adjuted)
+      ##
+      self.signal_emit("shutdown")
     end
 
     ## Register and activate this application
@@ -182,10 +229,6 @@ module PebblApp
     def start()
       self.register
       self.activate
-      ## This should dispatch to Gio::Application#run, which may provide
-      ## some additional handling for registration and deregistration
-      ## onto dbus :
-      self.run
     end
 
   end

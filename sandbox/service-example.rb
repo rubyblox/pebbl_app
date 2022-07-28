@@ -103,11 +103,11 @@ class TestContext < PebblApp::GMainContext
   attr_reader :data
 
   def initialize(data)
-    super(blocking: true)
+    super()
     @data = data
   end
 
-  ## add an event to the data work log, for purposes of test
+  ## add an event tag to the work log data, for purposes of test
   def log_event(tag)
     self.data.log_event(tag)
   end

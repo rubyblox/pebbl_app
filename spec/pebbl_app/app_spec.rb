@@ -74,6 +74,7 @@ describe PebblApp::App do
       expect(subject.file_manager).to be_a PebblApp::FileManager
     end
 
+    it "delegates the #config_home method" do
       expect(subject.file_manager.class.respond_to?(:config_home)).to be true
       expect(subject.class.respond_to?(:config_home)).to be true
       expect(subject.class.config_home).to be == subject.file_manager.class.config_home
@@ -221,7 +222,6 @@ describe PebblApp::App do
       end
     end
 
-
     context "app filesystem" do
       it_behaves_like "an app filesystem manager",
         ns_mtd: :config_home, mtd: :app_config_home
@@ -229,6 +229,18 @@ describe PebblApp::App do
         ns_mtd: :state_home, mtd: :app_state_home
       it_behaves_like "an app filesystem manager",
         ns_mtd: :cache_home, mtd: :app_cache_home
+    end
+
+    context "app config" do
+      it "provides an app config object" do
+        expect(subject.config).to_not be nil
+      end
+
+      it "Initializes the app config with the app command name" do
+        expect(
+          subject.config.command_name
+        ).to be == subject.class.app_command_name
+      end
     end
 
   end ## instance methods

@@ -10,20 +10,44 @@ PebblApp::AppLog.app_log ||=
   PebblApp::AppLog.new(domain: "vty")
 PebblApp::AppLog.app_log.level = "DEBUG"
 
-## FIXME add to Framework defs for rg interop
+## FIXME add to Framework defs
 ##
 ## apparently the syntax GDK expects for the X11 backend here
 ENV['GDK_BACKEND'] = "x11"
 
-require 'vty'
+## early framework initialization, before any class names
+## are resolved over GIR
+##
+## Notes:
+## - The Gtk framework init must be applied independent to the
+##   definition of the app class
+##
+## - Here, this will ensure that GTK is initialized via this method
+##   rather than initialized when resolving class names for the app
+##   class and any related classes
+##
+## - The args provided to Gtk.init may ever have any side effect towards
+##   the initialization of Gtk and/or Gdk frameworks. This would be
+##   indpendent to the the actual args parsing applied for the
+##   application's config
+
+require 'pebbl_app/gtk_framework'
 
 $DEBUG = true
 
-## early framework initialization, before any class names
-## are resolved over GIR
 timeout = (ENV['GTK_INIT_TIMEOUT'] ||
            PebblApp::Const::GTK_INIT_TIMEOUT_DEFAULT)
-VtyApp.framework(timeout: timeout).init
+
+framework = PebblApp::GtkFramework.new(timeout: timeout)
+framework.init(ARGV)
+
+require 'vty'
+
+## after storing the framework to the app, any later framework.init
+## calls should return with the set of args originally returned by
+## Gtk.init_check, after provided to framework.init
+VtyApp.framework = framework
+
 
 $APP = VtyApp.new
 
@@ -36,6 +60,7 @@ if ! ( ARGV.include?('--command') || ARGV.include?('-c') )
   ## - see also, the project Gemfile @ irb, pry as to how to enable
   ##   pry and/or IRB for bundler in this project
   ## - IRB will be used if both IRB and Pry are selected under Bundler
+  ## - This shell will be run in an environment configured by Bundler
   if Bundler.settings
     with = Bundler.settings['with']
     if with.include?(:irb)

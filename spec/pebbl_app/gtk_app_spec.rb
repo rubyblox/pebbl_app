@@ -14,6 +14,10 @@ describe PebblApp::GtkApp do
     return inst
   }
 
+  it "uses a GtkConf" do
+    expect(subject.config.class).to be == PebblApp::GtkConf
+  end
+
 
   it "uses a default init timeout" do
     expect(subject.config.gtk_init_timeout).to_not be nil

@@ -4,23 +4,37 @@
 
 require 'pebbl_app'
 module PebblApp
+  module TextableExe
 
-  AppLog.app_log ||= AppLog.new(domain: "textable")
-  AppLog.app_log.level = "DEBUG"
+    AppLog.app_log ||= AppLog.new(domain: "textable")
+    AppLog.app_log.level = "DEBUG"
 
-  ## FIXME add to Framework defs
-  ##
-  ## apparently the syntax GDK expects for the X11 backend here
-  ENV['GDK_BACKEND'] = "x11"
+    ## FIXME add to Framework defs
+    ##
+    ## apparently the syntax GDK expects for the X11 backend here
+    ENV['GDK_BACKEND'] = "x11"
 
-  require_relative(%<../sandbox/textable.rb>)
+    ## early framework initialization, with timeout
+    ##
+    ## - FIXME also initialize GTK sourceview
+    ## - see api db tests for signatures of various initialization
+    ##   invokers - transfer into GtkFramework, stored on keyword args
+    require 'pebbl_app/gtk_framework'
+    $DEBUG = true
+    timeout = (ENV['GTK_INIT_TIMEOUT'] ||
+               Const::GTK_INIT_TIMEOUT_DEFAULT)
 
-  $DEBUG = true
+    framework = GtkFramework.new(timeout: timeout)
+    framework.init(ARGV)
 
-  $APP = PebblApp::TextableTest.new
+    ## load the main application sources
+    require_relative %<../sandbox/textable.rb>
+    TextableTest.framework = framework
 
-  $APP.main
+    $APP = TextableTest.new
+    $APP.main
 
+  end
 end
 
 # Local Variables:

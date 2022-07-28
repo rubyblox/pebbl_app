@@ -20,17 +20,6 @@ module PebblApp
       GMain.new()
     end
 
-    def main_quit
-      if (main = @gmain) && (main.running)
-        main.quit
-      end
-    end
-
-    def quit
-      ## may not be reached across some `super` calls in later mixins
-      main_quit
-    end
-
     ## TBD (needs debug with/outside of GtkApp - see gmain)
     def main(argv: ARGV, &block)
       PebblApp::AppLog.app_log ||= PebblApp::AppLog.new
