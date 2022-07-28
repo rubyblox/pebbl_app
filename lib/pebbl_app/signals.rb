@@ -131,15 +131,18 @@ module PebblApp
       ## handlers may be invoked in a scope other than the scope in
       ## which the signal trap calls were produced
       handlers.each do |kind, hdlr|
-        begin
-          ## this is where the Signal.trap callback is bound
-          exists = Signal.trap(kind) do
-            hdlr.yield(kind, exists)
+        if (Signal.list.keys.include?(kind) ||
+            Signal.list.values.include?(kind))
+          begin
+            ## this is where the Signal.trap callback is bound
+            exists = Signal.trap(kind) do
+              hdlr.yield(kind, exists)
+            end
+            block.yield(kind, exists) if block_given?
           end
-          block.yield(kind, exists) if block_given?
-        rescue ArgumentError => e
-          Kernel.warn("Unable to bind signal trap for #{kind.inspect}", e,
-                      uplevel: 0)
+        else
+          Kernel.warn("Unable to bind signal trap (not available): #{kind.inspect}",
+                      uplevel: 0) if $DEBUG
         end
       end ## handlers.each
     end ## bind_handlers
