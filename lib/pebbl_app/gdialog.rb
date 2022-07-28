@@ -78,7 +78,7 @@ module PebblApp
       ##
       ## @param obj [Gio::Action]
       def prefs_cancel(obj)
-        PebblApp::AppLog.debug("cancel @ #{obj} => #{self}")
+        PebblApp::AppLog.debug("cancel @ #{obj} => #{self}") if $DEBUG
         self.close
       end
 
@@ -88,7 +88,7 @@ module PebblApp
       ##
       ## @param obj [Gio::Action]
       def prefs_apply(obj)
-        PebblApp::AppLog.debug("apply @ #{obj} => #{self}")
+        PebblApp::AppLog.debug("apply @ #{obj} => #{self}") if $DEBUG
       end
 
       ## apply configuration configuration changes and close the window
@@ -97,7 +97,7 @@ module PebblApp
       ##
       ## @param obj [Gio::Action]
       def prefs_ok(obj)
-        PebblApp::AppLog.debug("ok @ #{obj} => #{self}")
+        PebblApp::AppLog.debug("ok @ #{obj} => #{self}") if $DEBUG
         self.close
       end
 
