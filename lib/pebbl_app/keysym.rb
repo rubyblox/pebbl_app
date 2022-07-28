@@ -2,8 +2,9 @@
 
 require 'pebbl_app/gtk_framework'
 
-
 module PebblApp
+
+  require Const::GDK_FEATURE
 
   ## Utility methods for key codes used in Gdk
   ##
@@ -46,9 +47,9 @@ module PebblApp
       def key_code(key)
         case key
         when String, Symbol
-          name = ("Key_" + key.to_s).to_sym
-          if Keysym.const_defined?(name)
-            return Keysym.const_get(name)
+          name = ("KEY_" + key.to_s).to_sym
+          if Gdk::Keyval.const_defined?(name)
+            return Gdk::Keyval.const_get(name)
           else
             raise ArgumentError.new("Key not found: #{key}")
           end
@@ -130,6 +131,52 @@ module PebblApp
           return value
         else
           raise ArgumentError.new("Unable to parse modifier name: #{mask}")
+        end
+      end
+
+      ## Return a string label for a key accelerator, using the
+      ## provided key and modifier values.
+      ##
+      ## The return value will be in a syntax similar to the value
+      ## returned by **Gtk.accelerator_get_label**.
+      ##
+      ## With PebblApp::Keysym::key_label the label for the provided
+      ## key will be returned in a case appropriate for the actual
+      ## key, e.g "n" rather than "N"  for Gdk::Keyval::KEY_n, as
+      ## distinct to "N" for Gdk::Keyval::KEY_N. This may be distinct to
+      ## the common menu representation of accelerators in GTK.
+      ##
+      ## The key code and any modifier names provided to this method may
+      ## each be provided in a syntax as accepted respectively by the
+      ## PebblApp::Keysym::key_code and PebblApp::Keysym::modifier_mask
+      ## methods. These methods will each accept an integer, string, or
+      ## symbolic representation of a key code or a modifier name,
+      ## respectively.
+      ##
+      ## @param key [Object] Key name in a syntax accepted by key_code
+      ##
+      ## @param modifiers [Array] Modifier names, each in a syntax
+      ##  accepted by modifier_mask
+      ##
+      ## @return [String] a key accelerator label
+      def key_label(key, *modifiers)
+        code = key_code(key)
+        key_name = Gtk.accelerator_name(code, 0)
+        ## ^ FIXME opposite to Gtk.accelerator_get_label, accelerator_name
+        ##   simply returns the downcase representation of the key code
+        if modifiers.empty?
+          return key_name
+        else
+          name_uc = key_name.upcase
+          mask = modifier_mask(modifiers)
+          g_label = Gtk.accelerator_get_label(code, mask)
+          g_label.split("+".freeze).map { |label|
+            if label == name_uc
+              key_name
+            else
+              label
+            end
+          }.join ("+".freeze)
         end
       end
 
