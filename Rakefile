@@ -4,6 +4,14 @@ require 'fileutils'
 
 $THIS = File.basename($0)
 
+# ensure that this file is evaluted under e.g -I 'lib'
+#
+# when rake is run under bundler, this will be applied
+# via the Gemfile
+if ! $LOAD_PATH.member?(File.join(__dir__, "lib"))
+  $LOAD_PATH.unshift(File.join(__dir__, "lib"))
+end
+
 if ENV['BUNDLE_GEMFILE'] &&
     ( File.dirname(ENV['BUNDLE_GEMFILE']) == __dir__ )
 
