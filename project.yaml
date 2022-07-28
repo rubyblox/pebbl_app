@@ -114,13 +114,17 @@ gems:
       #- lib/pebbl_app/gtk_framework/basedir.rb
       - sandbox/service-example.rb
 
-  pebbl_app-proto-vty_test:
-    summary: pseudoterminal (prototype)
+  vty:
+    summary: Vty is a desktop terminal emulator using Ruby-GNOME
     description:
-      Prototype for a vte3 appliation using Ruby-GNOME
+      Vty is a desktop terminal emulator using GNOME Vte3 and Ruby-GNOME.
     deps:
       - [vte3, ">= 3.5.2"]
       - pebbl_app-gtk_support
+    source_files:
+      - lib/vty.rb
+      - ui/appwindow.vty.ui
+      - ui/prefs.vty.ui
 
   riview:
     modules:

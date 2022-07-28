@@ -1,4 +1,4 @@
-## vtytest.rb - prototyping for a Vte::Terminal app after Emacs comint
+## vty.rb - prototyping for a Vte::Terminal app after Emacs comint
 ##
 ## installation: from the project root directory
 ## $ rake bundle:install
@@ -12,8 +12,8 @@
 ## xauth support, if required for the X11 display server.
 ##
 ## UI files for Glade: from the project root directory
-## ./ui/appwindow.vtytest.ui
-## ./ui/prefs.vtytest.ui
+## ./ui/appwindow.vty.ui
+## ./ui/prefs.vty.ui
 ##
 
 require 'pebbl_app/gtk_app'
@@ -89,7 +89,7 @@ class VtyPrefsWindow < Gtk::Dialog
   ## - app data directory, if this is "running under a gem installation:"
   ## - in the first case, the app data directory could be set within the
   ##   project Gemfile (FIXME Gemfile helpers for YSpec)
-  use_template(File.expand_path("../ui/prefs.vtytest.ui", __dir__),
+  use_template(File.expand_path("../ui/prefs.vty.ui", __dir__),
                %w(sh_command_entry prefs_stack prefs_sb
                  ))
 
@@ -122,7 +122,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
   ## or use a resource-path-based template path && glib-compile-resources
   ## && something to load the resource bundle at a pathnmame relative to
   ## some external base directory
-  use_template(File.expand_path("../ui/appwindow.vtytest.ui", __dir__),
+  use_template(File.expand_path("../ui/appwindow.vty.ui", __dir__),
                %w(vty vty_send sourcewin_send
                   vty_context_pop vty_context_menu
                   vty_entry vty_entry_buffer vty_entry_completion
