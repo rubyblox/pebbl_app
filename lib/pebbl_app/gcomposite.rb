@@ -7,58 +7,145 @@ module PebblApp
   class UIError < RuntimeError
   end
 
-  ## Base module for template support with Gtk Widget clases
+  ## This module provides a baseline mixin type for template support
+  ## with Gtk Widget classes. This is in providing a general emulation of
+  ## composite template support developed in the Ruby-GNOME framework.
+  ##
+  ## This mixin module, in effect, extends the mixin module
+  ## PebblApp::GUserObject (see register_type) and is extended in the
+  ## mixin module FileCompositeWidget (see use_template)
+  ##
+  ## The following methods will be defined at the class scope of each
+  ## extending class:
+  ##
+  ## - `set_composite_connect_func` providing a limited form of runtime
+  ##    code coverage analysis for signals bound within the template UI
+  ##    file of the extending class.
+  ##
+  ##    If any signal receiver is defined in the template UI file, such
+  ##    that the signal receiver denotes a method not accessible in the
+  ##    application environment, a UIError will be emitted from within
+  ##    the signal connection function defined in this method. The
+  ##    UIError will provide some information about the origin widget
+  ##    class, expected signal receiver method, and receiving widget
+  ##    class of the signal receiver method.
+  ##
+  ##    Each entity denoted in the UIError will be presented as
+  ##    dereferenced in the Ruby application environment.
+  ##
+  ##    This class method is presently called by `initialize_template_children`
+  ##
+  ## - `initialize_template_children`. This method may be generally
+  ##    analogous to the Gtk::Widget.bind_template_child class provided in
+  ##    Ruby-GNOME. However, this method receives an array of template
+  ##    children, then providing some limited runtime code analysis
+  ##    for the array of template children.
+  ##
+  ##    For each template child ID provided in the array of template
+  ##    children to this method, a reader method will be defined as an
+  ##    instance method of the same name as that ID. Each reader method
+  ##    will be defined within an instance scope in the extending class.
+  ##
+  ##    After initialing the reader methods for template children, this
+  ##    method will then dispatch to call `set_composite_connect_func`
+  ##    for the extending class.
+  ##
+  ##    For each template-child reader method and each
+  ##    Gtk::Builder.connect_signal call initialized from this class
+  ##    method, some additional instance checking will be provided.
+  ##    This should serve to ensure that each template child ID provided
+  ##    to this method matches some available template child, secondly
+  ##    that each signal receiver method defined in the UI file matches
+  ##    a corresponding method in the Ruby application environment.
+  ##
+  ##    For each template child reader method, the reader methods
+  ##    defined with this class method will never return nil.
+  ##
+  ##    In each reader method: If no GTK object can be found for the
+  ##    template child ID corresponding to the reader method's
+  ##    definition, the method will raise a PebblApp::UIError.
+  ##
+  ##    As a known limitation: Generally this UIError may not in
+  ##    itself identify the first missing template child in some array
+  ##    of template children. When this error has been raised, generally
+  ##    the GTK framework will have emitted a critical log message
+  ##    indicating the ID of the initial, missing template child.
+  ##
+  ##    This method will use the `set_composite_connect_func` method
+  ##    to bind signal handlers defined in the composite class' UI
+  ##    template file. For any signal handler defined in the UI file
+  ##    but inaccessible in the application environment, a UIError will
+  ##    be emitted.
+  ##
+  ##    Similar to `bind_template_child` in Ruby-GNOME, this method will
+  ##    ensure that each template child is added to the
+  ##    `template_children` array for the extending class.
+  ##
+  ##    For any template child named to this method, if that template
+  ##    child is already listed in the `template_children` array for the
+  ##    extending class, then this method  will not define any reader
+  ##    method for the same template child. If the global variable
+  ##    $DEBUG has a truthy value at the time, a warning will be emitted
+  ##    via PebblApp::AppLog, indicating the skipped template child ID.
+  ##
+  ## - `template_children` returning an array of strings for template
+  ##    child ID values, for all template children initailized with
+  ##    initialize_template_chidren. This array will be stored within
+  ##    the instance variable, `@template_children` for the singleton
+  ##    class of the the extending class
+  ##
+  ## - `template_child?` receiving a template child ID (string or
+  ##    symbol) then returning true if the ID denotes a template child
+  ##    listed in the `template_children` array for the extending class
+  ##
+  ## - `composite_builder` returning a Gtk::Builder object. This object
+  ##   will be used within the initialize_template_children method
+  ##   defined with this mixin and may be applied for other operations
+  ##   on a Gtk::Builder at the class scope
+  ##
   module CompositeWidget
     def self.extended(whence)
       whence.extend PebblApp::GUserObject
 
+      if ! whence.singleton_class.instance_variable_defined?(:@template_children)
+        whence.singleton_class.instance_variable_set(:@template_children, Array.new)
+      end
+
+      ## Return the set of template child ID strings for template
+      ## children provided to initialize_template_children
+      ##
+      ## This will override the Ruby-GNOME template_children method in
+      ## the extending class
+      whence.singleton_class.define_method(
+        :template_children,
+        lambda {
+          whence.singleton_class.instance_variable_get(:@template_children)
+        })
+
+
+      ## return a Gtk::Builder for UI definitions in this class
+      ##
+      ## If no composite_builder has been initialized to the class, this
+      ## method will initialize a new composite_builder as
+      ## `Gtk::Builder.new`, then storing the object as `@builder` in
+      ## the class' singleton class and returning the new object.
+      ##
+      ## @return [Gtk::Builder] the composite builder
+      ## @see initialize_template_children where this builder will be
+      ##      applied for binding each template child to an instance
+      ##      variable
+      whence.singleton_class.define_method(
+        :composite_builder,
+        lambda {
+          ## deferring initialization of the builder, mainly to ensure
+          ## that it can be initialized after type_register in the class
+          if ! whence.singleton_class.instance_variable_defined?(:@builder)
+            whence.singleton_class.instance_variable_set(:@builder, Gtk::Builder.new)
+          end
+          whence.singleton_class.instance_variable_get(:@builder)
+        })
+
       class << whence
-        ## return true if a composite_builder has been initialized for
-        ## this class, else return false
-        ##
-        ## @return [boolean]
-        def composite_builder?
-          class_variable_defined?(:@@builder)
-        end
-
-        ## return a Gtk::Builder for UI definition in a class scope.
-        ##
-        ## It may not be recommended to reuse this Gtk::Builder
-        ## for UI definitions local to an instance scope.
-        ##
-        ## If no composite_builder has been bound, this method will
-        ## initialize a new composite_builder as `Gtk::Builder.new`,
-        ## then storing the new instance before return.
-        ##
-        ## @return [Gtk::Builder] the composite_builder
-        ## @see composite_builder=
-        ## @see composite_builder?
-        def composite_builder
-          if composite_builder?
-            @@builder
-          else
-            @@builder = Gtk::Builder.new
-          end
-        end ## composite_builder
-
-        ## set a composite_builder for this class, if not already bound
-        ##
-        ## If already bound, a warning will be emitted with Kernel.warn.
-        ## The original builder will be returned, unmodified.
-        ##
-        ## @param builder [Gtk::Builder] the builder to bind for this
-        ##  composite widget class, if not already bound
-        ##
-        ## @return [Gtk::Builder] the bound builder
-        def composite_builder=(builder)
-          if composite_builder? && (@@builder != builder)
-            Kernel.warn("Ignoring duplicate builder for #{self}: #{builder}",
-                        uplevel: 1)
-            @@builder
-          else
-            @@builder = Gtk::Builder.new
-          end
-        end ## composite_builder
 
         ## bind signal handlers to instance methods in this class
         ##
@@ -143,20 +230,6 @@ module PebblApp
           return self
         end
 
-        ## method defined for compatibility with Ruby-GNOME
-        ## Gtk::Widget.template_children
-        ##
-        ## The return value for this method represents the set of
-        ## template child id values passed to any call to
-        ## initialize_template_children
-        def template_children
-          if class_variable_defined?(:@@template_children)
-            @@template_children
-          else
-            @@template_children = Array.new
-          end
-        end
-
         ## return true if the id represents a bound template child for
         ## this class, else return false
         ##
@@ -167,7 +240,7 @@ module PebblApp
         ## @see template_children
         ## @see initailize_template_children
         def template_child?(id)
-          template_children.include?(id.to_sym)
+          template_children.include?(id.to_s)
         end
 
         ## a common method for template initialization in composite widget
@@ -193,10 +266,10 @@ module PebblApp
         ##  for any template child id provided to this method, a UIError
         ##  will be raised when that accesor method is called
         def initialize_template_children(children, path: Const::UNKNOWN,
-                                         builder: self.composite_builder)
+                                           builder: self.composite_builder)
           children.each do |id|
-            name = id.to_sym
-            if template_child?(name)
+            id.freeze
+            if template_child?(id)
               PebblApp::AppLog.warn(
                 "Template child already bound for #{id} in #{self}"
               ) if $DEBUG
@@ -232,7 +305,7 @@ module PebblApp
               ## XML stream. err if no matching id is found in the XML
               bind_template_child_full(id, true, 0)
 
-              var = (Const::INSTANCE_PREFIX + id.to_s).to_sym
+              var = (Const::INSTANCE_PREFIX + id).to_sym
 
               ## define the accessor method here, with added checks
               lmb = lambda {
@@ -246,14 +319,18 @@ in template for #{self.class} at #{path}")
                 end
               }
               define_method(id, &lmb)
-              template_children.push(name)
+              template_children.push(id)
             end ## template_child?
           end ## each
           ## bind signal handlers for this class, conditionally
           ##
           ## This will err within the class' connect func e.g if a signal
           ## handler is defined in the UI file without a corresponding
-          ## method in this class.
+          ## method in this class. Albeit, the error message will
+          ## generally not represent the actual missing template child -
+          ## it would typically follow a critical message from the GTK
+          ## framework, with the actual missing template child
+          ## identified there.
           ##
           ## The block defined in set_composite_connect_func may be
           ## evaluated during UI initialization
@@ -264,13 +341,25 @@ in template for #{self.class} at #{path}")
     end ## self.extended
   end
 
-  ## prototype module for classes using a template definition for
-  ## GTK Widget classes , when the template is initialized directly from a
+  ## mixin module for classes using a template definition for
+  ## GTK Widget classes, when the template is initialized directly from a
   ## UI file source
   ##
-  ## FIXME should be accompanied with a module for classes deriving a Gtk
-  ## Builder template definition from a UI resource path onto an
-  ## initiailzed GResource bundle
+  ##
+  ## This module, in effect, extends the CompositeWidget mixin module
+  ##
+  ## In addition to class methods defined with CompositeWidget, the
+  ## following methods will be defined within a class scope in the
+  ## extending class:
+  ##
+  ## - use_template(filename, children)
+  ##
+  ##   Provided with a template filename and an optional array of string
+  ##   ID values for template children, this method will ensure that the
+  ##   UI file is bound as the UI template for the extending class, with
+  ##   an instance reader method defined as corresponding to each
+  ##   template child ID.
+  ##
   ##
   module FileCompositeWidget
     def self.extended(whence)
@@ -304,7 +393,7 @@ in template for #{self.class} at #{path}")
           raise "Template file does not exist: #{filename}"
         end
         if children
-          bld = (self.composite_builder ||= Gtk::Builder.new)
+          bld = composite_builder
           self.initialize_template_children(children, path: path, builder: bld)
         end
         return path
