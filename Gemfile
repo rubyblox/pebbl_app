@@ -149,15 +149,20 @@ else
   ## using the latest Ruby-GNOME src / local patches
 
   gem "yard-gobject-introspection",
-    ## local patches => pushed in contrib
-  github: "rubyblox/yard-gobject-introspection"
+    #github: "rubyblox/yard-gobject-introspection"
+  ##  ^ local patches => pushed in contrib
   ## orignal src:
-  # github: "ruby-gnome/yard-gobject-introspection"
+  github: "ruby-gnome/yard-gobject-introspection"
 
-  rg_packages = %w(atk cairo-gobject clutter clutter-gdk clutter-gstreamer
-                   clutter-gtk gdk3 gtk3 gtksourceview3 gdk_pixbuf2 gegl
-                   gio2 glib2 gobject-introspection gsf gstreamer libsecret
-                   pango poppler vte3 webkit2-gtk wnck3)
+  if (rg_env_p = ENV["RG_PACKAGES"])
+    rg_packages = rg_env_p.split(File::SEPARATOR)
+    STDERR.puts "[DEBUG] using packages #{rg_packages.join(" ")}"
+  else
+    rg_packages = %w(atk cairo-gobject clutter clutter-gdk clutter-gstreamer
+                     clutter-gtk gdk3 gtk3 gtksourceview3 gdk_pixbuf2 gegl
+                     gio2 glib2 gobject-introspection gsf gstreamer libsecret
+                     pango poppler vte3 webkit2-gtk wnck3)
+  end
 end
 
 ## additional gems available via Ruby-GNOME:
