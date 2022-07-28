@@ -312,7 +312,7 @@ class VtyAppWindow < Gtk::ApplicationWindow
     send_path_str = "<Vty>/Secondary Input/Send".freeze
     send_keys =%i(Return mod1)
     hide_path_str = "<Vty>/Secondary Input/Hide".freeze
-    close_keys = PebblApp::Keysym::Key_Escape
+    close_keys = Gdk::Keyval::KEY_Escape
 
     ## initialize and add each AccelGroup to the corresponding Window
     @vty_map_group = Gtk::AccelGroup.new
@@ -656,6 +656,7 @@ end
 ## VtyApp
 ##
 class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
+  self.app_name = "vty".freeze
 
   include PebblApp::ActionableMixin
 
@@ -713,18 +714,12 @@ class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
     super()
   end
 
-  ## TBD accessor for the 'active-window' property on Gtk::Application
-  ## : does it return a Gdk X11 Window?
-
   def initialize()
     ## the first arg for the Gtk::Application constructor is required,
     ## and requires a specific syntax e.g
     super("space.thinkum.vtytest",
           Gio::ApplicationFlags::SEND_ENVIRONMENT |
-            Gio::ApplicationFlags::NON_UNIQUE,
-          ## additional args passed to the local superclass
-          app_name: "vty".freeze,
-          app_env_name: "VTY".freeze)
+            Gio::ApplicationFlags::NON_UNIQUE)
 
     ## TBD managing multiple app instances in or outside of a single
     ## process, and side effects w/ dbus - alternately, connecting
@@ -733,6 +728,7 @@ class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
     if ! self.class.class_variable_defined?(:@@app)
       self.class.class_variable_set(:@@app, self)
     end
+
 
     ## map a handler for the app 'startup' signal,
     ## reached e.g via self.register
@@ -751,9 +747,9 @@ class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
     #   app.handle_open
     # end
 
-    self.signal_connect_after("window-removed") do |obj|
-      if self.windows.empty?
-        self.quit
+    self.signal_connect_after("window-removed") do |app|
+      if app.windows.empty? && (! self.quit_state)
+        app.quit
       end
     end
   end
@@ -804,26 +800,25 @@ class VtyApp < PebblApp::GtkApp # is-a Gtk::Application
 
   ## create a new application window
   def create_app_window()
+
     ## initialize and configure a main window for this application
     wdw = VtyAppWindow.new(self)
     wdw.shell = self.shell ## TBD @ profiles, config, modular design ...
 
+
+
+    ## while the GtkSourceBuffer type extends the GtkTextBuffer type, but any
+    ## instance of each may not be interchangable with the other's view class.
+    ##
+    ## Overall, the Glade UI support may be fairly limited for GtkSourceView
+    ## - no GtkSourceBuffer type defined in the Glade catalog for GtkSourceView 3
+    ## - no source styling types defined in the same
+    ## - TBD defining a Glade catalog from Ruby
+
+    #PebblApp::AppLog.warn "sourcewin"
+    #wdw.editpop_sourcewin.show
+
     return wdw
-  end
-
-
-  def quit()
-    super()
-    self.windows.each do |wdw|
-      PebblApp::AppLog.debug("Closing #{wdw}")
-      wdw.close
-    end
-    if @gmain.running
-      @gmain.running = false
-    end
-    ## super() would not necessarily be needed here.
-    ## this is not using a Gtk Main loop
-    # super()
   end
 
   ## return the VtyConf instance for this application
