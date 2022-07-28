@@ -213,9 +213,16 @@ class PebblApp::Conf
   ## the value after return will include only unparsed, non-option
   ## arguments e.g filenames.
   ##
+  ## @see parse_opts
   def parse_opts!(argv = ARGV)
     parser = self.make_option_parser()
     parser.parse!(argv)
+  end
+
+  ## @see parse_opts!
+  def parse_opts(argv = ARGV)
+    parser = self.make_option_parser()
+    parser.parse(argv)
   end
 
   ## return the set of parsed args for this instance, or a new
@@ -238,9 +245,12 @@ class PebblApp::Conf
   ##
   ## @param argv [Array<String>] options for this instance, using a
   ##        shell command string syntax for the set of options
-  def configure(argv: ARGV)
-    self.parse_opts!(argv)
-    self.parsed_args = argv
+  def configure(args = ARGV)
+    if @parsed_args
+      return parsed_args
+    else
+      self.parsed_args = self.parse_opts(args)
+    end
   end
 
 end
