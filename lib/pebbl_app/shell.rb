@@ -35,7 +35,7 @@ module PebblApp
       ##        name will be applied relative to each directory element
       ##        of the provided path.
       ##
-      ## @param path [String, Enumerable<String>] the search path. If
+      ## @param path [String or Enumerable<String>] the search path. If
       ##        provdied as a string, the string will be split with the
       ##        provided delim string. Otherwise, the value should be an
       ##        enumerable object providing a string to each block on
@@ -52,7 +52,7 @@ module PebblApp
       ##        truthy value will be returned. If no test is provided,
       ##        this method will use a block calling File.executable?
       ##
-      ## @return [String, false] the first matching file, or false
+      ## @return [String or false] the first matching file, or false
       ##         if no matching file is found
       ##
       def which(name, path = ENV['PATH'], delim =  File::PATH_SEPARATOR, &test)
@@ -62,15 +62,14 @@ module PebblApp
         catch(:found) do |tag|
           seq = (String === path) ? path.split(delim) : path
           seq.each do |dir|
-              f = File.join(dir, name)
-              if File.exist?(f) && File.file?(f) && test.yield(f)
-                throw tag, f
-              end
+            f = File.expand_path(name, dir)
+            if File.exist?(f) && File.file?(f) && test.yield(f)
+              throw tag, f
+            end
           end
           return false
-        end
+        end ## catch block
       end ## Shell.which
-
     end ## class << self
 
   end ## Shell class
