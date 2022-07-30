@@ -6,14 +6,6 @@ require 'pango'
 
 module PebblApp
 
-  module Util
-    class << self
-      def freeze_array(ary)
-        ary.tap { |elt| elt.freeze }.freeze
-      end
-    end ## class << Util
-  end
-
   module GtkUtil
     class << self
       ## @param widget [Gtk::Widget]
@@ -85,13 +77,13 @@ module PebblApp
     ## - editable
     ## - scale
     TAG_SET_PROPS ||=
-      Util.freeze_array %w(background-full-height
-                           family indent justification left-margin
-                           letter-spacing pixels-above-lines
-                           pixels-below-lines pixels-inside-wrap
-                           right-margin rise size stretch
-                           strikethrough style underline variant
-                           weight wrap-mode)
+      FreezeUtil.freeze_array %w(background-full-height
+                                 family indent justification left-margin
+                                 letter-spacing pixels-above-lines
+                                 pixels-below-lines pixels-inside-wrap
+                                 right-margin rise size stretch
+                                 strikethrough style underline variant
+                                 weight wrap-mode)
 
     ## Color properties for text tags
     ##
@@ -102,9 +94,9 @@ module PebblApp
     ##  - `strikethrough-rgba
     ##
     TAG_RGBA_PROPS ||=
-      Util.freeze_array %w(background foreground strikethrough
-                           underline paragraph-background
-                          ).map { |name| name + "-rgba" }
+      FreezeUtil.freeze_array %w(background foreground strikethrough
+                                 underline paragraph-background
+                                ).map { |name| name + "-rgba" } ## convenience here
 
     ## Properties for text tags that do not have a <name>-set property
     ##
@@ -118,7 +110,7 @@ module PebblApp
     ## - `label-string` as for a user-visible label of a FontDef
     ##
     TAG_OTHER_PROPS ||=
-      Util.freeze_array %w(accumulative-margin)
+      FreezeUtil.freeze_array %w(accumulative-margin)
 
 
     ## Cumulative mapping (TAG_SET_PROPS, TAG_OTHER_PROPS, TAG_RGBA_PROPS)

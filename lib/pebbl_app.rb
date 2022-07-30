@@ -43,13 +43,13 @@ module PebblApp
   autoload(:FileManager, 'pebbl_app/file_manager.rb')
   autoload(:Framework, 'pebbl_app/framework.rb')
   autoload(:EnvironmentError, 'pebbl_app/exceptions.rb')
+  autoload(:FreezeUtil, 'pebbl_app/freeze_util.rb')
   autoload(:LoggerMixin, "pebbl_app/logger_mixin.rb")
   autoload(:AppLoggerMixin, "pebbl_app/logger_mixin.rb")
   autoload(:Project, 'pebbl_app/project.rb')
   autoload(:ProjectModule, 'pebbl_app/project_module.rb')
   autoload(:Shell, 'pebbl_app/shell.rb')
   autoload(:SignalMap, 'pebbl_app/signals.rb')
-  autoload(:Util, 'pebbl_app/util.rb')
   autoload(:YSpec, 'pebbl_app/y_spec.rb')
 
   %i(ConfigurationError Conf).each do |cls|
