@@ -1080,19 +1080,25 @@ module PebblApp
       end
     end
 
-  end
 
 
-  class TextableTest < PebblApp::GtkApp # is-a Gtk::Application
+  end ## TextabkleFontPrefs
+
+
+  class TextableTest < PebblApp::GtkApp
+    # is-a Gtk::Application
+    register_type
+
+    self.app_name = "textable.test"
+
     include PebblApp::ActionableMixin
-
 
     def initialize(id = "space.thinkum.test.textable")
       super(id)
 
       signal_connect "startup" do |gapp|
-        self.map_simple_action("app.quit") do |obj|
-          self.quit
+        gapp.map_simple_action("app.quit") do |obj|
+          gapp.quit
           true
         end
       end
@@ -1101,7 +1107,7 @@ module PebblApp
         wdw = self.create_app_window
         self.add_window(wdw)
         wdw.signal_connect_after "destroy" do
-          self.quit
+          gapp.quit
           true
         end
         wdw.show
@@ -1110,17 +1116,6 @@ module PebblApp
 
     def create_app_window()
       TextableFontPrefs.new()
-    end
-
-    def quit()
-      super()
-      self.windows.each do |wdw|
-        AppLog.debug("Closing #{wdw}")
-        wdw.close
-      end
-      if @gmain.running
-        @gmain.running = false
-      end
     end
 
   end ## TextableTest
