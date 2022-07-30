@@ -117,7 +117,9 @@ module PebblApp
       ##
       AppMixin.def_class_name_field(whence.singleton_class, :app_name) do
         ## Fixme move this to the Gio::Application thing and rename => app_id
-        PebblApp::ProjectModule.s_to_filename(whence.name, Const::DOT).freeze
+        ProjectModule.s_to_filename(whence.name,
+                                    ns_delim: Const::DOT,
+                                    case_delim: "-".freeze).freeze
       end
 
 
