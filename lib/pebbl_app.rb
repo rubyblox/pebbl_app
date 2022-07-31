@@ -45,6 +45,7 @@ module PebblApp
   autoload(:EnvironmentError, 'pebbl_app/exceptions.rb')
   autoload(:FreezeUtil, 'pebbl_app/freeze_util.rb')
   autoload(:LoggerMixin, "pebbl_app/logger_mixin.rb")
+  autoload(:NameUtil, "pebbl_app/name_util.rb")
   autoload(:AppLoggerMixin, "pebbl_app/logger_mixin.rb")
   autoload(:Project, 'pebbl_app/project.rb')
   autoload(:ProjectModule, 'pebbl_app/project_module.rb')

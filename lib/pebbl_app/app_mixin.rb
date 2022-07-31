@@ -106,7 +106,7 @@ module PebblApp
       ## methods
       ##
       ## If not set, the default value will be interpolated from the
-      ## implementing class' name, using PebblApp::ProjectModule.s_to_filename
+      ## implementing class' name, using PebblApp::ProjectModule.flatten_name
       ##
       ## @param name [String] the application name to use
       ##
@@ -117,9 +117,9 @@ module PebblApp
       ##
       AppMixin.def_class_name_field(whence.singleton_class, :app_name) do
         ## Fixme move this to the Gio::Application thing and rename => app_id
-        ProjectModule.s_to_filename(whence.name,
-                                    ns_delim: Const::DOT,
-                                    case_delim: "-".freeze).freeze
+        NameUtil.flatten_name(whence.name,
+                                ns_delim: Const::DOT,
+                                case_delim: "-".freeze).freeze
       end
 
 

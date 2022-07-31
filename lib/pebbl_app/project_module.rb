@@ -1,16 +1,9 @@
 ## project_module.rb - extended source autoloads support for Ruby
 
-BEGIN {
-  ## When loaded from a gem, this file may be autoloaded
-
-  ## Ensure that the containing module is defined when loaded from a
-  ## project directory. The module may define autoloads that would be
-  ## used in this file.
-  require(__dir__ + ".rb")
-}
+require 'pebbl_app'
+require 'pebbl_app/name_util'
 
 require 'rubygems'
-
 require 'pathname'
 
 ## a support module for inclusion within other project source modules
@@ -167,138 +160,8 @@ module PebblApp::ProjectModule
 
   ## Constants for PebblApp::ProjectModule
   module Const
-    UPCASE_RE ||= /[[:upper:]]/.freeze
-    ALNUM_RE ||= /[[:alnum:]]/.freeze
-    UNDERSCORE ||= "_".freeze
-    COLON ||= ":".freeze
-    DASH ||= "-".freeze
     SOURCE_SUFFIX ||= ".rb".freeze
   end
-
-  class << self
-
-    ## return a string interpolation for a symbol or string using a
-    ## simple naming syntax
-    ##
-    ## For any sequence of consecutive uppercase characters after the
-    ## first index in the string representation of the input value, the
-    ## the last uppercase character in the sequence will be prefixed
-    ## with a provided `case_delim` string, by default `"_"` in the
-    ## output value.
-    ##
-    ## For any one or more characters matching a namespace mark
-    ## character, by default `":"`, a namespace delimiter string will be
-    ## interpolated into the output value. By default, the string "-" is
-    ## used as the output namespace delimiter string.
-    ##
-    ## Other characters in the string representation of S will be added
-    ## to the return value using each character's lower-case form.
-    ##
-    ## The default syntax used here for translation of a symbol name
-    ## to an output string should be generally congruous to the syntax
-    ## for gemspec name to module name translation applied under the
-    ## bundle-gem(1) shell command. e.g the shell command `bundle gem
-    ## a_b_name` may produce a module named `ABName`, or in the case of
-    ## the shell command `bundle gem a_b-name`, a module `AB::Name`.
-    ##
-    ## @example Examples
-    ##
-    ##   using = PebblApp::ProjectModule
-    ##
-    ##   using.s_to_filename(:CC)
-    ##   => "cc"
-    ##
-    ##   using.s_to_filename("simpleName")
-    ##   => "simple_name"
-    ##
-    ##   using.s_to_filename(String)
-    ##   => "string"
-    ##
-    ##   using.s_to_filename(:ABCName)
-    ##   => "abc_name"
-    ##
-    ##   using.s_to_filename(:ABCName, case_delim: " ")
-    ##   => "abc name"
-    ##
-    ##   using.s_to_filename("ABC::Name")
-    ##   => "abc-name"
-    ##
-    ##   using.s_to_filename("ABC::Name", ns_delim: "/")
-    ##   => "abc/name"
-    ##
-    ##   using.s_to_filename("App::Features::AClass", ns_delim: ".", case_delim: "-")
-    ##   => "app.features.a-class"
-    ##
-    ##   using.s_to_filename("Test01Feature")
-    ##   => "test01_feature"
-    ##
-    ## @param s [Object] the value to translate. The string form of this
-    ##  value will be interpolated to the output value.
-    ##
-    ## @param ns_delim [String] delimiter string to interpolate for any
-    ##  sequence of one or more _ns_mark_ characters on input.
-    ##
-    ## @param ns_mark [String] string to interpret as a namespace
-    ##  delimiter character on input. Any one or more consecutive
-    ##  characters equal to this character will be interpolated as the
-    ##  _ns_delim_ string for output. If this string contains more than
-    ##  one character, only the first character will be
-    ##  applied. Alphanumeric characters are not supported in this
-    ##  string.
-    ##
-    ## @param case_delim [String] delimiter string to interpolate within
-    ##  a change of consecutive character case for characters in `s`
-    ##
-    ## @return [String] the interpolated string
-    def s_to_filename(s, ns_delim: Const::DASH,
-                      ns_mark: Const::COLON,
-                      case_delim: Const::UNDERSCORE)
-      require 'stringio'
-      ## convert the input string to an array of unicode codepoints
-      codepoints = s.to_s.unpack("U*")
-      ## a single codepoint representing a namespace delimiter mark
-      mark_cp = ns_mark.to_s.unpack("U*").first
-      ## buffer for the return value
-      io = StringIO.new
-      ## booleans for parser state
-      inter = false ## flag: intermediate parsing / alphanumeric character
-      in_delim = false ## flag: parsed a namespace delimiter character
-      in_upcase = false ## flag/storage: deferred output for upcase characters
-      ## the parser
-      codepoints.each do |cp|
-        c  = cp.chr
-        if inter && c.match?(Const::UPCASE_RE)
-          in_delim = false
-          io.putc(in_upcase) if in_upcase
-          in_upcase = c.downcase
-        elsif (cp == mark_cp)
-          if in_upcase
-            io.putc in_upcase
-            in_upcase = false
-          end
-          if inter && ! in_delim
-            io.write(ns_delim)
-          end
-          in_delim = true
-        else
-          if in_upcase
-            ## input has transitioned to downcase text
-            io.putc(case_delim)
-            io.putc in_upcase
-            in_upcase = false
-          end
-          in_delim = false
-        end
-        io.putc(c.downcase) if ! (in_delim || in_upcase)
-        inter = c.match?(Const::ALNUM_RE)
-      end
-      ## add any deferred upcase character at end of string
-      io.putc(in_upcase) if in_upcase
-      io.close
-      return io.string
-    end
-
-  end ## class << self
 
   ##
   ## methods for use in modules or classes including this module
@@ -415,21 +278,6 @@ module PebblApp::ProjectModule
       return usepath
     end
 
-    ## a default s_to_filename method. This method's initial definition
-    ## may be overridden by any including module, such as when a
-    ## localized syntax should be applied for interpolating a file name
-    ## from a symbol name.
-    ##
-    ## This method will calls PebblApp::ProjectModule.s_to_filename(s, delim)
-    ## with the provided argument values.
-    ##
-    ## This method will be used for filename interpolation in calls to
-    ## `defautoloads` that have not provided a direct filename.
-    def s_to_filename(s, delim = PebblApp::ProjectModule::Const::DASH)
-      PebblApp::ProjectModule.s_to_filename(s, delim)
-    end
-
-
     ## return the autoloads table for this module
     ##
     ## see also
@@ -468,7 +316,7 @@ module PebblApp::ProjectModule
     end
 
     ## define autoloads for each name in names, to be autoloaded from
-    ## a file whose name determined by the s_to_filename method,
+    ## a file whose name determined by the flatten_name method,
     ## relative to any `source_path` for this module a time of call
     ##
     ## Each element provided in `names` may represent a symbol name as a
@@ -479,7 +327,7 @@ module PebblApp::ProjectModule
     ##
     ## If NAMES is provided in a syntax absent of a filename, then the
     ## filename for autoloading each symbol will be interpolated from
-    ## each symbol's name using the s_to_filename method. This file name
+    ## each symbol's name using the flatten_name method. This file name
     ## will be interpreted as relative to the source_path for this
     ## module.
     ##
@@ -533,7 +381,8 @@ module PebblApp::ProjectModule
         ## whose interpolated filename should each match a file in the
         ## source directory for this module
         args.each do |name|
-          fname = s_to_filename(name, delim: File::SEPARATOR)
+          fname =
+            PebblApp::NameUtil.flatten_name(name, ns_delim: File::SEPARATOR)
           path = self.autoload_source_path(fname)
           self.defautoload(path, name)
         end

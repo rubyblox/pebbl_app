@@ -65,6 +65,7 @@ gems:
       - lib/pebbl_app/framework.rb
       - lib/pebbl_app/freeze_util.rb
       - lib/pebbl_app/logger_mixin.rb
+      - lib/pebbl_app/name_util.rb
       - lib/pebbl_app/project_module.rb
       - lib/pebbl_app/shell.rb
       - lib/pebbl_app/project/spec_finder.rb ## ?? see conf. patch & remove refs
