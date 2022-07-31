@@ -76,6 +76,9 @@ gems:
     #   - sandbox/lib/pebbl_app/project/ext_spec.rb
     depends:
       - psych
+      - mixlib-config
+      - dry-schema
+      - dry-validation
 
   pebbl_app-gtk_support:
     modules:
