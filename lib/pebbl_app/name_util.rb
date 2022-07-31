@@ -19,14 +19,15 @@ module PebblApp
 
   ## utilities for name parsing
   ##
-  ## This module will define the following methods at a singleton scope,
-  ## in any extending namespace:
+  ## This module will define the following methods at an instance scope,
+  ## in the extending namespace,
   ## - flatten_name
   ##
-  ## These methods are provided directly from this module, as by extension.
+  ## These methods are provided directly from this module, as singleton
+  ## methods.
   module NameUtil
 
-    def self.extended(whence)
+    def self.included(whence)
       ## return a string interpolation for a symbol or string using a
       ## simple naming syntax
       ##
@@ -106,6 +107,7 @@ module PebblApp
         require 'stringio'
         ## convert the input string to an array of unicode codepoints
         codepoints = s.to_s.unpack("U*")
+        last = codepoints.length
         ## a single codepoint representing a namespace delimiter mark
         mark_cp = ns_mark.to_s.unpack("U*").first
         ## buffer for the return value
@@ -115,40 +117,45 @@ module PebblApp
         in_delim = false ## flag: parsed a namespace delimiter character
         in_upcase = false ## flag/storage: deferred output for upcase characters
         ## the parser
+        n = 1
         codepoints.each do |cp|
           c  = cp.chr
-          if inter && c.match?(Const::UPCASE_RE)
+          if c.match?(Const::UPCASE_RE)
             in_delim = false
-            io.putc(in_upcase) if in_upcase
-            in_upcase = c.downcase
-          elsif (cp == mark_cp)
-            if in_upcase
-              io.putc in_upcase
-              in_upcase = false
+            if inter && ((! in_upcase) ||
+                         ((nxtcp = codepoints[n+1]) &&
+                          (! nxtcp.chr.match?(Const::UPCASE_RE))))
+              io.putc(case_delim)
             end
-            if inter && ! in_delim
+            in_upcase = c
+          elsif (cp == mark_cp)
+            if inter && ! n.eql?(last)
               io.write(ns_delim)
             end
             in_delim = true
+            in_upcase = false
           else
-            if in_upcase
-              ## input has transitioned to downcase text
-              io.putc(case_delim)
-              io.putc in_upcase
-              in_upcase = false
-            end
             in_delim = false
+            in_upcase = false
           end
-          io.putc(c.downcase) if ! (in_delim || in_upcase)
-          inter = c.match?(Const::ALNUM_RE)
+          if n.eql?(last)
+            if in_upcase
+              io.putc(c.downcase)
+            elsif ! in_delim
+              io.putc(c.downcase)
+            end
+          else
+            io.putc(c.downcase) if ! in_delim
+            inter = c.match?(Const::ALNUM_RE)
+            n = n + 1
+          end
         end
-        ## add any deferred upcase character at end of string
-        io.putc(in_upcase) if in_upcase
         io.close
         return io.string
       end
     end
 
-    self.extend self
+    self.singleton_class.include NameUtil
+
   end ##NameUtil module
 end
