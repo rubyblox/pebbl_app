@@ -67,6 +67,7 @@ gems:
       - lib/pebbl_app/logger_mixin.rb
       - lib/pebbl_app/name_util.rb
       - lib/pebbl_app/project_module.rb
+      - lib/pebbl_app/scope_util.rb
       - lib/pebbl_app/shell.rb
       - lib/pebbl_app/project/spec_finder.rb ## ?? see conf. patch & remove refs
       - lib/pebbl_app/y_spec.rb

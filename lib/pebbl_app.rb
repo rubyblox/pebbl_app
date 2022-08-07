@@ -49,6 +49,7 @@ module PebblApp
   autoload(:AppLoggerMixin, "pebbl_app/logger_mixin.rb")
   autoload(:Project, 'pebbl_app/project.rb')
   autoload(:ProjectModule, 'pebbl_app/project_module.rb')
+  autoload(:ScopeUtil, 'pebbl_app/scope_util.rb')
   autoload(:Shell, 'pebbl_app/shell.rb')
   autoload(:SignalMap, 'pebbl_app/signals.rb')
   autoload(:YSpec, 'pebbl_app/y_spec.rb')

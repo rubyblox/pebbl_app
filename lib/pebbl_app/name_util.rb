@@ -123,7 +123,7 @@ module PebblApp
           if c.match?(Const::UPCASE_RE)
             in_delim = false
             if inter && ((! in_upcase) ||
-                         ((nxtcp = codepoints[n+1]) &&
+                         ((nxtcp = codepoints[n]) &&
                           (! nxtcp.chr.match?(Const::UPCASE_RE))))
               io.putc(case_delim)
             end

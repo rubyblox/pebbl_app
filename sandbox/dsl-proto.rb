@@ -1,13 +1,19 @@
-## DSL classes, Profile DSL, Tests (sandbox)
+ # DSL classes, Options DSL, Tests (sandbox)
 
 require 'dry/core/class_builder'
 require 'dry/validation'
 
 
-## Generic base class for custom language bindings in Ruby
-class DSLBase
+
+## Generic base class for definition of domain-specific languages
+## extending the Ruby programing language
+##
+## - generally inspired by Dry::Schema, Dry::Validation, and Mixlib::Config
+class DslBase
 
   class << self
+
+    include PebblApp::ScopeUtil
 
     ## @!group DSL API methods
 
@@ -33,15 +39,12 @@ class DSLBase
     ##
     ## @see [] for accessing an individual DSL component class
     def contained
-      if self.singleton_class.instance_variable_defined?(:@contained)
-        self.singleton_class.instance_variable_get(:@contained)
-      else
-        h = Hash.new do |_, name|
+      svar_bind(:@contained) do
+        Hash.new do |_, name|
           raise ArgumentError.new(
             "DSL name not found in #{self}: #{name.inspect}"
           )
         end
-        self.singleton_class.instance_variable_set(:@contained, h)
       end
     end
 
@@ -56,40 +59,68 @@ class DSLBase
       contained[name.to_sym]
     end
 
-    ## Define or return a DSL class.
+    ## Define or return a DSL class or a DSL component, registering the
+    ## definition to its containing context.
     ##
-    ## For any block provided to this method, the block will be
-    ## evaluated with the new DSL class as the scoped `self`.
+    ## When evaluated at the source top level, this method may be
+    ## applied for defininig a top-level DSL class as to be registered
+    ## under the class of the call to the topmost class' `dsl` method.
     ##
-    ## In effect, the class returned by this method will represent an
-    ## anonymous class. The class' name will be available via a singleton
-    ## `name` method and will be visible as the class' effective name
-    ## under printed representations of the class. However, the class'
-    ## name will not be initialized as a constant under the Object
-    ## namespace.
+    ## When evaluated within a DSL class expression, this method will
+    ## define and register a DSL component definition to the containing
+    ## DSL class expression.
     ##
-    ## The component class may be accessed via the `components` method
-    ## or the `[]` method on the containing DSL implementation class, or
-    ## via the `subclasses` method on the provided base_class.
+    ## @note As an alternative to `dsl` at the top level, the `apply`
+    ##  method may be used to begin a DSL class expression. Subsequently,
+    ##  within the block of the expression, the `dsl` method may be
+    ##  used to define any named DSL components to the containing
+    ##  DSL definition.
+    ##
+    ## @note **Method Scope:** For any block provided to this method,
+    ##  the block will be evaluated with the new DSL class as the scoped
+    ##  `self`.
+    ##
+    ## @note **Class Names and the Object Namespace:** In effect, the
+    ##  class returned by this method will represent an anonymous
+    ##  class. The class' name will be available via a singleton `name`
+    ##  method and will be visible as the class' effective name under
+    ##  a printed representation of the class. However, the class' name
+    ##  will not be initialized as a constant under the Object
+    ##  namespace.
+    ##
+    ##  The set of component classes to a DSL definition may be accessed
+    ##  with the `components` method or individually with the `[]` method
+    ##  on the containing DSL class.
+    ##
+    ##  The class may also be accessed via the `subclasses` method on the
+    ##  provided base_class. However, it cannot be guaranteed that any
+    ##  two subclasses will have distinct names within the subclasses
+    ##  list, for any two anonymous classes defined with this method.
     ##
     ## @example
-    ##   eg_dsl = DSLBase.define(:example) do
+    ##   eg_dsl = DslBase.define() do
     ##     include Named
     ##
+    ##     # Each DSL instance must respond to an instance method, `applied`
     ##     define_method(:applied) do |component|
     ##       puts "Applied: #{__scope__} => #{component}"
     ##     end
     ##
     ##     dsl(:component_a) do
+    ##       # In this example, the Component_a class will be defined
+    ##       # as a subclass of the containing DSL class. Thus,
+    ##       # the class will inherit the `applied` method defined
+    ##       # in its effective base class.
+    ##
     ##       def class_method(arg)
     ##         puts "A => #{arg.inspect}"
     ##       end
     ##     end
     ##
     ##     dsl(:component_b) do
-    ##       define_method(:inst_method) do |arg|
+    ##       dsl_method(:inst_method) do |arg|
     ##         puts "b => #{arg.inspect}"
-    ##         return __self__
+    ##         return self
     ##       end
     ##     end
     ##   end
@@ -119,8 +150,13 @@ class DSLBase
     ##
     ## @see define for defining a DSL class without registration to the
     ##  containing class' _contained_ list
+    ##
+    ## @see dsl_methods for defining a DSL method within a DSL class
+    ##  expression, such that the method will be evaluated at instance
+    ##  scope when called under apply
     def dsl(name, class_name: to_class_name(name),
-            base_class: self, &cb)
+            base_class: nil, &cb)
+      base_class ||= self
       syname = name.to_sym
 
       if (contained.keys.include?(syname))
@@ -135,8 +171,7 @@ class DSLBase
           cls.instance_eval(&cb) if cb
         end
       else
-        cls = define(name, class_name: class_name,
-                     base_class: base_class,  &cb)
+        cls = self.define(class_name, base_class: base_class,  &cb)
         self.add_dsl(syname, cls)
       end
       return cls
@@ -145,25 +180,42 @@ class DSLBase
     ## Initialize and return a new DSL, without registering the DSL to
     ## the implementing class
     ##
-    ## @see dsl
-    def define(name, class_name: to_class_name(name),
-               base_class: self, &cb)
+    ## @see dsl for registered evaluation of a DSL class expression
+    ##
+    ## @see dsl_methods for defining a DSL method within a DSL class
+    ##  expression, such that the method will be evaluated at instance
+    ##  scope when called under apply
+    def define(name = nil, base_class: nil, &cb)
+      base_class ||= self
+      name ||= (to_class_name(base_class.name) + "Model")
       if base_class.singleton_class?
-        ## assumption: the first ancestor not the singleton class
-        ## would provide a non-singleton class, such that this
-        ## non-singleton class has base_class as its singleton class
+        ## The first ancestor not the singleton class would provide a
+        ## non-singleton class, such that this non-singleton class has
+        ## base_class as its singleton class.
         ##
-        ## this may be applicable whether the base_class is
-        ## a singleton class of a class or a singleton class
-        ## of some non-class object
+        ## This may be applicable whether the base_class is a singleton
+        ## class of a class or is a singleton class of some non-class
+        ## object.
+        ##
+        ## If a singleton class of a non-class object, the new class
+        ## will be defined as a subclass of that object's class.
+        ##
+        ## As the new class will not be available under the Object
+        ## constants namespacem, this will not ovewrtie any existing
+        ## class of the same name.
+        ##
         impl_class = base_class.ancestors[1]
       else
         ## base_class is not a singleton class
         impl_class = base_class
       end
       builder =
-        Dry::Core::ClassBuilder.new(name: class_name, parent: impl_class)
-      blk = proc { |subclass| subclass.instance_eval(&cb) } if cb
+        Dry::Core::ClassBuilder.new(name: name, parent: impl_class)
+      if cb
+        blk = proc { |subclass| subclass.instance_eval(&cb) }
+      else
+        blk = (proc {}).freeze
+      end
       builder.call(&blk)
     end
 
@@ -171,31 +223,46 @@ class DSLBase
     ## Create and return a new instance of this DSL class
     ##
     ## @note Initailization for the instance will be deferred until
-    ##  after the __scope__ for the instance has been set as via
+    ##  after the __scope__ for the instance has been set via
     ##  initialize_scope.
     ##
-    ## @note For any instance initialized with this method, the
-    ##__scope__ of the instance will be set as the instance itself. This
-    ## may be construed as indicating that the instance is a top-level
-    ## DSL component, contrasted to the __scope__ value set with any
-    ## component method on the instance.
+    ## @note For a DSL instance initialized with this method, the
+    ##  __scope__ of the instance will be set as the instance itself. This
+    ##  may be construed as indicating that the instance is a top-level
+    ##  DSL instance. This would be contrasted to the __scope__ value
+    ##  set from any a component method, such that the value would
+    ##  represent the containing scope for the component instance.
     ##
-    ## Before return, any DSL component methods will be defined on the
-    ## instance as with `initialize_methods`
+    ## @note Before return, each DSL component method and each DSL
+    ##  instance method for this DSL class will be defined as a
+    ##  singleton method on the instance, via `initialize_methods`
     ##
-    ## @see initialize_scope
-    ## @see initialize_methods
+    ## @see dsl for definiing a DSL class to be registered within a
+    ##  containing base class.
     ##
-    ## @param args [Array] arguments to apply in the instance's
-    ##  constructor
+    ## @see define for defining a DSL class without registration in a
+    ## containing base class
+    ##
+    ## @see dsl_methods for declaring a method to be defined for a
+    ##  DSL instance, such that the method will be available within a
+    ##  singleton scope to the instance, subsequent of a call to `apply`
+    ##
+    ## @param args [Array] arguments for the constructor method
     ##
     ## @param block [Proc] optional block. If provided, this block will
-    ##  be evaluated with the initialized instance as the scoped `self`
-    ##  in the call
+    ##  be evaluated in a scope with the initialized instance as the
+    ##  scoped `self` in the call
     ##
-    ## @return [DSLBase] a new DSL instance
+    ## @return [DslBase] a new DSL instance
     ##
     def apply(*args, &block)
+      ## deferring initialization until after initialize_scope
+      ##
+      ## also calling the constructor after initialize_methods.
+      ##
+      ## the constructor can thus be called with a bound __scope__
+      ## and can override any instance methods defined under
+      ## initialize_methods
       inst = allocate
       initialize_scope(inst, inst)  ## root object
       initialize_methods(inst)
@@ -204,6 +271,73 @@ class DSLBase
         inst.instance_eval(&block)
       end
       return inst
+    end
+
+
+    ## Return the hash table of DSL methods defined for this class
+    ##
+    ## @note The hash table will be used for purposes of API
+    ##  definition during the apply method. When a DSL instance of this
+    ##  class is initialized with apply, then for each DSL method
+    ##  represented in this table, a singleton method will be defined on
+    ##  the initialized instance. For each method defined with
+    ##  dsl_method within the scope of a DSL class expression, the
+    ##  method's block will be evaluated at an instance scope.
+    ##
+    ## @return [Hash] a hash table pairing each method name with the
+    ##  block form provided in the method's initial definition
+    def dsl_methods
+      svar_bind(:@dsl_methods) do
+        Hash.new do |_, name|
+          raise ArgumentError.new(
+            "DSL method not found in #{self}: #{name.inspect}"
+          )
+        end
+      end
+    end
+
+    ## Return true if the provided name represents a method derfined as
+    ## a dsl_method in this class
+    ##
+    ## @param name (see dsl_method)
+    ## @return [boolean] a boolean value
+    def dsl_method?(name)
+      dsl_methods.keys.include?(name.to_sym)
+    end
+
+    ## Define a DSL isntance method such as for application under
+    ## apply. The method's block will be evaluated within the scope of
+    ## an initialized DSL object.
+    ##
+    ## This method is defined as a utility for instance method
+    ## definition within dsl expressions
+    ##
+    ## @note The actual method defined for each dsl_method will be
+    ##  defined as a singleton method on each instance created under
+    ##  `apply`. As such, each dsl_method will not be inherited by
+    ##  subclasses. This behavior may be subject to adaptation in some
+    ##  later revision of this API - such as to support an additional
+    ##  'inherit' arg, to be handled under orchestration with an
+    ##  `inherited` method on this class. (FIXME)
+    ##
+    ## @note Any method defined with dsl_method in effect will shadow
+    ##  any existing instance method of the same name, when defined under
+    ## `apply`. This behavior may be subject to adaptation in a later
+    ##  revision of this API, such as to add an additional `shadow`
+    ##  keyword arg to indicate (when false) that no DSL method should
+    ##  be defined if it would override an instance method on the
+    ##  initialized instance. (FIXME)
+    ##
+    ## @param name (see smethod_define)
+    ## @param block (see smethod_define)
+    ## @return [Proc] the block that will be applied for the method's
+    ##  definition
+    ## @see dsl
+    ## @see define
+    ## @see apply
+    def dsl_method(name, &block)
+      name = name.to_sym
+      dsl_methods[name.to_sym] = block
     end
 
     ## @!endgroup
@@ -222,7 +356,10 @@ class DSLBase
     ## @see to_component_name
     def to_class_name(name)
       sname = name.to_s
-      return (sname[0].upcase + sname[1...])
+      ## NB
+      ## https://www.regular-expressions.info/posixbrackets.html
+      c = sname.split(/\p{Punct}+/.freeze)
+      return c.map { |elt| elt[0].upcase + elt[1...] }.join
     end
 
     ## Compute the component name of some DSL component class' name
@@ -232,7 +369,7 @@ class DSLBase
     ##
     ## @see to_class_name
     def to_component_name(name)
-      name.downcase.to_sym
+      PebblApp::NameUtil.flatten_name(name).to_sym
     end
 
     ## @private
@@ -251,14 +388,9 @@ class DSLBase
     end
 
     ## @private
-    ## Initialize instance varibles for __self__ and __scope__ on the
+    ## Initialize an instance varible for the __scope__ on the
     ## provided instance
     def initialize_scope(inst, scope)
-      ## FIXME rather than @__self__/__self__
-      ## provide an dsl_method / dsl_method? / dsl_methods API,
-      ## initializing each as a singleton method under initialize_methods
-      ## def dsl_method(name, &block) ...
-      inst.instance_variable_set(:@__self__, inst) ## remove after dsl_method
       inst.instance_variable_set(:@__scope__, scope)
     end
 
@@ -319,23 +451,24 @@ class DSLBase
         ## that will initialize a scoped instance of the corresponding
         ## class
         ##
-        inst.singleton_class.define_method(dslname) do |*args, &block|
+        smethod_define(dslname, inst) do |*args, &block|
           sub = cls.allocate
           cls.initialize_scope(sub, inst)
           cls.initialize_methods(sub)
           ## deferring initialization
           cls.send_wrapped(sub, :initialize, *args)
-          if block
-            sub.instance_eval(&block)
-          end
+          sub.accept_block(&block) if block
           inst.applied(sub)
           return sub
         end
       end
+      self.dsl_methods.each do |mtdname, cb|
+        smethod_define(mtdname, inst, &cb)
+      end
     end
 
     ## @!endgroup
-  end ## class << DSLBase
+  end ## class << DslBase
 
   ## return the scope of this DSL object
   ##
@@ -344,12 +477,10 @@ class DSLBase
   ##
   attr_reader :__scope__
 
-  ## return this DSL object
-  ##
-  ## This method is defined as a utility method for instance methods
-  ## defined within the scope of a class `dsl` expression
-  ##
-  attr_reader :__self__
+  ## bind a `dsl` expression  callback method, if set
+  def accept_block(&cb)
+    self.instance_eval(&cb)
+  end
 
   ## @!method applied(component)
   ## handle some component object initialized for a scoped instance
@@ -357,9 +488,9 @@ class DSLBase
   ##
   ## @abstract This method should be defined in any implementing class
   ##
-  ## @param instance [DSLBase] a DSL component object
+  ## @param instance [DslBase] a DSL component object
   ##
-  ## @see DSLBase.apply
+  ## @see DslBase.apply
 
 end
 
@@ -399,16 +530,18 @@ module Anonymous
   end
 end
 
-class ParamWarning
-  attr_reader :param, :feature, :message
+class OptionWarning
+  attr_reader :option, :feature, :message
 
-  def initialize(param, feature, message)
-    @param = param
+  def initialize(option, feature, message)
+    @param = option
     @feature = feature
     @message = message
   end
 end
 
+## Utility class for Option#compile
+##
 class CompilerResult
   attr_reader :contract, :profile
 
@@ -426,11 +559,11 @@ class CompilerResult
     @warnings ||= Array.new
   end
 
-  def push_warning(profile, param, feature, message)
-    w = ParamWarning.new(param, feature, message)
+  def push_warning(profile, option, feature, message)
+    w = OptionWarning.new(option, feature, message)
     self.warnings.push(w)
    if ! self.defer_warnings?
-     Kernel.warn("%s param %s (%s) : %s" % [profile, param, feature, message],
+     Kernel.warn("%s option %s (%s) : %s" % [profile, option, feature, message],
                  uplevel: 1)
    end
    return w
@@ -438,57 +571,335 @@ class CompilerResult
 end
 
 
-## a general example, short of the Profile API
+## a general example, short of the OptionGroup API
 
-$EG = DSLBase.define(:example) do
+$EG = DslBase.define(:Example) do
   include Named
+
+  ## define an 'applied' instance method for this class.
+  ##
+  ## This method will be inherited by subclases, thus will be available
+  ## to the component classes for :component_a and :component_b
+  ##
   define_method(:applied) do |component|
+    ## This simple example does not provide component storage
     puts "Applied: #{__scope__} => #{component}"
   end
+
   dsl(:component_a) do
     def class_method_a(arg)
       puts "A => #{arg.inspect}"
     end
   end
+
   dsl(:component_b) do
-    define_method(:inst_method_b) do |arg|
+    dsl_method(:inst_method_b) do |arg|
       puts "b => #{arg.inspect}"
-      return __self__
+      return self
     end
   end
 end
 
+
 ## $EG.apply(:a).component_b("b").inst_method_b("...")
-## >> b => "..."
-
+# >> Applied: #<Example 0x004b00 a> => #<Component_b 0x004b14 b>
+# >> b => "..."
+# => #<Component_b 0x004b14 b>
 
 ##
-## Profile API
+## OptionGroup API
 ##
 
-## TBD define under a PebblApp::ProfileDSL module extending self
-## & e.g Vty.extend(PebblApp::ProfileDSL)
+ ## TBD define under a PebblApp::OptionsDSL module extending self
+## & e.g Vty.extend(PebblApp::OptionsDSL)
 
 require 'mixlib/config'
 
-## Base class for a Configuration Profile DSL for Desktop Applications
-class Profile < DSLBase
-  include Named
+class OptionsElement < DslBase
+  attr_reader :profile
 
+  def components
+    ## an analogy to the DSL class field 'contained'
+    ## but implemented at an instance scope
+    @components ||= Hash.new do |_, name|
+      raise ArgumentError.new("Component not found for #{self}: #{name}")
+    end
+  end
+
+  def component?(name)
+    components.keys.include?(name.to_sym)
+  end
+
+  def applied(feature)
+    name = DslBase.to_component_name(feature.class.name)
+    ## in a general case, this will quietly overwrite the component
+    ## storage for any component instance of the same component name
+    ##
+    self.components[name] = feature
+
+    ## overwrite any instance method for this feature, to return the
+    ## initialized instance of this feature
+    ##
+    ## typically this would ovwerite any feature constructor method
+    ## defined under DslBase.apply
+    whence = self
+    mtd = DslBase.to_component_name(feature.class.name)
+    whence.define_singleton_method(mtd) do
+      feature
+    end
+
+  end
+end
+
+
+class Structure < OptionsElement
+  include Named
+end
+
+class Sequence < OptionsElement
+  include Named
+end
+
+
+class Option < Structure
+
+  class << self
+    def initialize_methods(inst)
+      super(inst)
+    end
+  end
+
+  def initialize(name, optional: true)
+    super(name)
+    @optional = optional ? true : false
+  end
+
+  def optional?
+    @optional
+  end
+end
+
+## Option Feature base class
+##
+## @abstract
+##
+## @see DslBase.dsl for producing a named top-level DSL class expression
+##  or a component DSL class expression within some top-level DSL
+##
+## @see DslBase.define for defining an anonymous DSL class expression
+##
+## @see DslBase.apply for applying a DSL class expression to produce an
+##  instance of a provided DSL class
+##
+## @see Schema (required) for defining a Dry::Schema expression to a
+## Option
+##
+## @see Rule (optional) for defining a Dry::Validation rule to Option
+## (will be applied under `validate` for an object initialized from a
+## DSL class - FIXME move this to the docs for Rule)
+##
+## @see OptionDefault (optional) for defininig a default value to a
+##  Option
+##
+## @see ShellOption (optional) for defining a command line argument
+##  parser for a Option [FIXME add method]
+class Feature < OptionsElement
+
+  ## the effective name of each profile feature is derived from the
+  ## feature's class itself - this, contrasted to the effecitve name
+  ## of a parameter object, e.g as with the :shell instance
+  include Anonymous
+
+  alias_method :option, :__scope__
+
+  attr_reader :callback
+
+  def callback?
+    @callback ? true : false
+  end
+
+  def accept_block(&cb)
+    STDERR.puts"accept_block in #{self}"
+    ## protocol method, via DslBase.dsl
+    ## see alternate implementation: DslBase#accept_block
+    callback(&cb)
+  end
+
+  def callback_proc
+    @callback
+  end
+
+  def callback_eval(scope)
+    scope.instance_eval(&@callback) if @callback
+  end
+
+  def callback(&block)
+    if callback?
+      raise ArgumentError.new("Callback already bound for #{self}")
+    else
+      @callback = block
+    end
+  end
+
+end
+
+## Option Feature class for default value callbacks and literal default
+## values
+##
+## **Initialization and Setting a Default Value**
+##
+## An **OptionDefault** can be initialized to a **Option** within a DSL
+## **option** expression, using the method `option_default`. If a literal
+## default value will be used for the containing **Option** definition,
+## the value may be provided with the `default_value` keyword argument
+## to the `option_default` method.
+## The `option_default` method will be avaialble within a singleton
+## scope, within a DSL `option` expression.
+##
+## Any default value or default callback will be used under the `apply`
+## method for the containing Option.
+##
+## If no `option_default` is provided to the `option` expression, it will
+## be assumed that the `option` has no default value.
+##
+## @see Option
+class OptionDefault < Feature
+
+  def initialize(**options)
+    if options.keys.include?(:default_value)
+      @default_value=options[:default_value]
+    end
+  end
+
+  ## return the default value for this profile feature
+  ##
+  ## @see #def_default
+  def default_value()
+    if self.instance_variable_defined?(:@default_value)
+      @default_value
+    elsif (cb = self.callback_proc)
+      @default_value = cb.yield
+    else
+      false
+    end
+  end
+
+  ## bind a callback or a default value for the profile feature
+  ##
+  ## If a callback block is provided, any _value_ provided in the call
+  ## to this method will be discarded. The block will be called with no
+  ## arguments, on the first call to #default_value. The value returned
+  ## by the callback at that time will then be stored as a literal
+  ## default value for this profile feature.
+  ##
+  ## If no callback block is provided, the _value_ will be used as the
+  ## default value for this profile feature.
+  ##
+  ## @param value [Object] a default value, if no block is provided
+  ##
+  ## @see #default_value
+  ## @fixme this is an obsolete method. See callback_bind, initialize, default_value
+  def def_default(value = false, &block) ## FIXME obsolete
+    if block
+      self.callback(&block)
+    else
+      @default_value = value
+    end
+  end
+end ## OptionDefault class
+
+## Encapsulation for applications of Mixlib::Config in an OptionGroup
+## instance scope
+module OptionConfig
+  ## This method extends Mixlib::Config, for customization in
+  ## OptionGroup instance configuration
+  def self.extended(whence)
+    whence.extend Mixlib::Config
+    whence.config_strict_mode true
+  end
+end
+## Base class of a Configuration Options Model for Desktop Applications
+class OptionGroup < DslBase
+  class << self
+
+    ## Return a new DSL subclass for this OptionGroup
+    def model()
+      ## using an instance variable at class scope, for storage of the
+      ## self-referential @model value.
+      ##
+      ## In effect, the @model value indicates that this DSL class has
+      ## been defined.
+      if instance_variable_defined?(:@model)
+        @model
+      else
+        ## this defines an implicit subclass, albeit not such that could
+        ## be reached by way of Object constants
+
+        self.instance_eval do
+          dsl(:option, base_class: Option) do
+            ## This option DSL class is later accessible in a profile definition
+            ## as e.g OptionGroup[:base_conf][:option]
+            ##
+            ## In a profile instance <i>.options[<name>] => option
+            ## with option methods: 'schema', 'rule', 'option_default'
+
+            dsl(:schema, base_class: Feature) do
+              ## in application: Required field.
+              ##
+              ## define the option's schema
+              ##
+              ## any callback defined in the :schema profile field
+              ## will be evaluated in the scope of a Dry::Schema
+              ## schema DSL
+            end
+
+            dsl(:rule, base_class: Feature) do
+              ## define a validation rule for the option.
+              ##
+              ## in application: This is an optional field,
+              ##
+              ##
+              ## any callback defined in the :rule profile field
+              ## will be evaluated in the scope of a Dry::Validation
+              ## schema rule DSL
+            end
+
+            dsl(:option_default, base_class: OptionDefault) do
+              ## ^ avoiding override of the 'default' method from Mixlib::Config
+              ##
+              ## define a default value initializer for the option
+              ## for application with Mixlib::Config
+              ##
+              ## In application: This API supports options without an explicit
+              ## default binding. The value 'false' will be used if no literal
+              ## value or callback is provided under a field's option_default
+              ##
+              ## any callback defined in the :optional_default profile field
+              ## will be evaluated in a normal instance scope for a profile
+              ## instance
+            end
+
+          end ## dsl(:option) ...
+        end ## self.instance_eval
+        ## using 'self' as the model, towards retaining a model/instance alignment
+      @model = self
+      end ## if ...
+    end  ## def model
+  end ## class << OptionGroup
+
+  include Named ## TBD not neccessarily needed here & in DSLBase
   attr_reader :validation_results
 
   def initialize(name)
     ## TBD options via constructor args here
     super(name)
-    self.extend ::Mixlib::Config
-    self.config_strict_mode true
+    self.extend OptionConfig
   end
 
   ## @private
   def applied(dsl)
-    if Param === dsl
-      STDERR.puts("[DEBUG] adding #{self} param #{name} => #{dsl}") ## if $DEBUG
-      self.__scope__.params[dsl.name] = dsl
+    if Option === dsl
+      self.__scope__.options[dsl.name] = dsl
     else
       raise ArgumentError("Uknown instance type: #{dsl}")
     end
@@ -518,7 +929,7 @@ class Profile < DSLBase
     previous_instance = @contract_validate
     @contract = nil
     @contract_validate = nil
-    @validation_results = nil ## not restored
+    @validation_results = nil
     begin
       compile
     rescue
@@ -567,8 +978,15 @@ class Profile < DSLBase
   end
 
   ## @return [nil or CompilerResult]
+  ##
+  ## @see dsl
+  ## @see define
+  ##
+  ## @see apply
+  ##
+  ## @see compile
   def compile(defer_warnings = ! $DEBUG)
-    ## should not be called until after all params have been defined...
+    ## should not be called until after all options have been defined...
     ##
     ## NB returns a contract class, stored in @contract
     ##
@@ -585,65 +1003,73 @@ class Profile < DSLBase
       cls = builder.call
 
       results = CompilerResult.new(cls, self, defer_warnings: defer_warnings)
-      p = self.params
-      ## evaluate all defined schema param definitions within the
+
+      opts = self.options
+      ## evaluate all defined schema option definitions within the
       ## scope of a Dry::Schema initialized to to this profile instance
       cls.schema do
-        p.each do |_, cparam|
-          pname = cparam.name
-          if cparam.optional?
+        opts.each do |_, opt|
+          optname = opt.name
+          if opt.optional?
             ## each of these should return a Dry::Schema param object,
             ## which will present a scope for any callback evaluation
-            sparam = optional(pname)
+            ##
+            ## NB The representation of 'param' patterns in Dry::Schema
+            ## may be mainly oriented towards development of HTTP
+            ## applications, e.g vis a vis GET/POST parameters.
+            ##
+            ## The concept may be generally congruous to the 'options'
+            ## pattern presented here
+            sopt = optional(optname)
           else
-            sparam = required(pname)
+            sopt = required(optname)
           end
-          ## this assumes the cparam.schema method call will return a
-          ## non-falsey value generally of a Param 'Feature' type
-          sch = cparam.schema
+          ## this assumes the opt.schema method call will return a
+          ## non-falsey value generally of a Option 'Feature' type
+          sch = opt.schema
           if sch.callback?
-            sch.callback_eval(sparam)
+            sch.callback_eval(sopt)
           else
-            results.push_warning(profile, pname, :schema,
+            results.push_warning(profile, optname, :schema,
                                  "No schema callback defined")
           end
         end
       end
-       p.each do |_, cparam|
+       opts.each do |_, opt|
          ## handle features other than the schema syntax for each
-         ## parameter definition
+         ## option definition
 
-         pname = cparam.name
-         if cparam.component?(:rule)
+         optname = opt.name
+         if opt.component?(:rule)
            ## define a schema rule for the option, evaluating any 'rule'
            ## block fromthe profile definition within the scope of a
            ## 'rule' declaration for the Dry::Validation::Contract of this
            ## profile instance
            ##
-           ## This should generally be evaluated after all parameter syntax
+           ## This should generally be evaluated after all option syntax
            ## declarations have been defined under the profile's Dry::Schema
-           r = cparam.rule ## the DSL component
+           r = opt.rule ## the DSL component
            if r.callback?
-             if cparam.optional?
-               cls.rule(pname) do
+             if opt.optional?
+               cls.rule(optname) do
                  ## providing some additional implementation support,
                  ## such that the Dry::Validation rule's callback form
                  ## will be effectively wrapped in 'if value' for any
-                 ## optional param
+                 ## optional option
                  r.callback_eval(self) if value
                end
              else
-               cls.rule(pname, &r.callback_proc)
+               cls.rule(optname, &r.callback_proc)
              end
            else
-             results.push_warning(profile, pname, :rule,
+             results.push_warning(profile, optname, :rule,
                                   "Rule defined with no callback")
            end
          end
 
          ## Mixlib::Config integration - default option value
-         if cparam.component?(:option_default)
-           dflt = cparam.option_default ## the DSL instance
+         if opt.component?(:option_default)
+           dflt = opt.option_default ## the DSL instance
            if value = dflt.default_value
              ## Given the implementation of OptionDefault#default_value :
              ##
@@ -660,13 +1086,13 @@ class Profile < DSLBase
              ## setter method defined for configurable fields under
              ## Mixlib::Config
              ##
-             profile.default(pname, value)
+             profile.default(optname, value)
            end
          else
-           results.push_warning(profile, pname, :option_default,
+           results.push_warning(profile, optname, :option_default,
                                 "No option_default defined")
            ## defining it as only a configurable field
-           profile.configurable(pname)
+           profile.configurable(optname)
          end
        end
        @contract = cls
@@ -674,251 +1100,36 @@ class Profile < DSLBase
     end
   end
 
-  def params()
-    @params ||= Hash.new do |_, k|
+  def options()
+    @options ||= Hash.new do |_, k|
       raise ArgumentError.new("Configuration parameter not found: #{k}")
      end
   end
-end ## Profile class
 
-
-class ProfileElement < DSLBase
-  attr_reader :profile
-
-  def components
-    ## an analogy to the DSL class field 'contained'
-    ## but implemented at an instance scope
-    @components ||= Hash.new do |_, name|
-      raise ArgumentError.new("Component not found for #{self}: #{name}")
-    end
-  end
-
-  def component?(name)
-    components.keys.include?(name.to_sym)
-  end
-
-  def applied(feature)
-    name = DSLBase.to_component_name(feature.class.name)
-    self.components[name] = feature
-
-    ## overwrite any instance method for this feature, to return the
-    ## initialized instance of this feature
-    ##
-    ## typically this would ovwerite any feature constructor method
-    ## defined under DSLBase.apply
-    whence = self
-    mtd = DSLBase.to_component_name(feature.class.name)
-    whence.define_singleton_method(mtd) do
-      feature
-    end
-
-  end
-end
-
-
-class Structure < ProfileElement
-  include Named
-end
-
-class Sequence < ProfileElement
-  include Named
-  ## TBD in application for shell environment bindings
-  ## where each sequence element will itself have a structure
-  ## in this instance, generally a tuple (<name>, <value>)
-  ##
-  ## also for a list of environment variables to unset,
-  ## generally of a format (<name>)
-end
-
-## TBD adapting this application profile DSL for project.yaml validation
-
-class Param < Structure
-
-  class << self
-    def initialize_methods(inst)
-      ## FIXME rewrite how this is handled at the class scope
-      ## - dispatch to a separate define_initializer method for each |dslname, cls|
-      ## - here, when the new sub instance is a Feature, set the feature
-      ##   initializer method's block as the feature's callback, rather
-      ##   than passing to instance_eval
-      ## - in most instanaces here, the new instance will be a Feature
-      ## - this would serve to simplify the dsl API, not requiring so
-      ##   many 'callback' calls -  a callback should really be
-      ##   provided in each feature definition (but must often be
-      ##   used for other than instance eval on the feature)
-      ## - retain the general instance_eval behavior for the Profile
-      ##   class
-      ## - TBD for the Feature class, which should not ever receive this method
-      STDERR.puts "%%%% #{self} => #{inst}"
-      super(inst)
-    end
-  end
-
-  def initialize(name, optional: true)
-    super(name)
-    @optional = optional ? true : false
-  end
-
-  def optional?
-    @optional
-  end
-end
-
-class Feature < ProfileElement
-
-  ## the effective name of each profile feature is derived from the
-  ## feature's class itself - this, contrasted to the effecitve name
-  ## of a parameter object, e.g as with the :shell instance
-  include Anonymous
-
-  alias_method :param, :__scope__
-
-  attr_reader :callback
-
-  def callback?
-    @callback ? true : false
-  end
-
-  def callback_proc
-    @callback
-  end
-
-  def callback_eval(scope)
-    scope.instance_eval(&@callback) if @callback
-  end
-
-  def callback(&block)
-    if callback?
-      raise ArgumentError.new("Callback already bound for #{self}")
-    else
-      @callback = block
-    end
-  end
-end
-
-class OptionDefault < Feature
-
-  ## return the default value for this profile feature
-  ##
-  ## @see #def_default
-  def default_value()
-    if self.instance_variable_defined?(:@default_value)
-      @default_value
-    elsif (cb = self.callback)
-      @default_value = cb.yield
-    else
-      false
-    end
-  end
-
-  ## bind a callback or a default value for the profile feature
-  ##
-  ## If a callback block is provided, any _value_ provided in the call
-  ## to this method will be discarded. The block will be called with no
-  ## arguments, on the first call to #default_value. The value returned
-  ## by the callback at that time will then be stored as a literal
-  ## default value for this profile feature.
-  ##
-  ## If no callback block is provided, the _value_ will be used as the
-  ## default value for this profile feature.
-  ##
-  ## @param value [Object] a default value, if no block is provided
-  ##
-  ## @see #default_value
-  def def_default(value = false, &block)
-    if block
-      self.callback(&block)
-    else
-      @default_value = value
-    end
-  end
-end
+end ## OptionGroup
 
 ##
 ## Tests / Initial Implementation
 ##
-##
 
-## - Defining a profile DSL named :base_conf ...
-
-Profile.dsl(:base_conf) do
-
-  dsl(:param, base_class: Param) do
-    ## This param DSL class is later accessible in a profile definition
-    ## as e.g Profile[:base_conf][:param]
-    ##
-    ## In a profile instance <i>.params[<name>] => param
-    ## with param methods: 'schema', 'rule', 'option_default'
-
-
-    ## each DSL class is in effect an anonymous class,
-    ## and defined with a singleton name via Dry::Core::ClassBuilder
-    ##
-    ## for any DSL class, the class.name method itself would return
-    ## the name as defined with Dry::Core::ClassBuilder
-    ##
-    ## TBD accessing the structural name of the class, within Ruby,
-    ## it being an anonymous class in implementation with as surface name
-
-
-    dsl(:schema, base_class: Feature) do
-      ## in application: Required field.
-      ##
-      ## define the param's schema
-      ##
-      ## any callback defined in the :schema profile field
-      ## will be evaluated in the scope of a Dry::Schema
-      ## schema DSL
-    end
-
-    dsl(:rule, base_class: Feature) do
-      ## define a validation rule for the param.
-      ##
-      ## in application: This is an optional field,
-      ##
-      ##
-      ## any callback defined in the :rule profile field
-      ## will be evaluated in the scope of a Dry::Validation
-      ## schema rule DSL
-    end
-
-    dsl(:option_default, base_class: OptionDefault) do
-      ## ^ avoiding override of the 'default' method from Mixlib::Config
-      ##
-      ## define a default value initializer for the param
-      ## for application with Mixlib::Config
-      ##
-      ## In application: This API supports options without an explicit
-      ## default binding. The value 'false' will be used if no literal
-      ## value or callback is provided under a field's option_default
-      ##
-      ## any callback defined in the :optional_default profile field
-      ## will be evaluated in a normal instance scope for a profile
-      ## instance
-    end
-
-  end
-end
 
 ## add'l test
-# $PROFILE.params[:shell].components[:schema].callback_proc
+# $PROFILE.options[:shell].components[:schema].callback_proc
 
 ## - Testing implementation of the profile DSL
 
-$PROFILE = Profile[:base_conf].apply(:test_profile) do
-  param(:shell, optional: true) do
+$MODEL = OptionGroup.model
+
+$PROFILE = $MODEL.apply(:test_profile) do
+  STDERR.puts("[DEBUG] in apply => #{self}")
+  option(:shell, optional: true) do
+
     schema do
-      STDERR.puts(":shell schema self: #{self}") ## #<Schema ...> ok
-      callback do
-        ## FIXME lost for purposes of storage now,
-        ## but still evaluated during schema definition?
-        maybe(:string)
-      end
+      STDERR.puts(":shell schema self: #{self}")
+      maybe(:string)
     end
 
     rule do
-      callback do
-        ## FIXME wrong scope is being used here
         catch(:failed) do |tag|
           ## 'value' is a method defined in the Dry::Validation rule DSL
           begin
@@ -935,20 +1146,20 @@ $PROFILE = Profile[:base_conf].apply(:test_profile) do
             throw tag, key.failure("Shell not available: #{cmd}")
           end
         end
-      end
     end
 
     option_default do
-      def_default('/usr/bin/nonexistent') ## FIXME use vte
+      ## NB Vte.user_shell
+      '/usr/bin/nonexistent'
     end
+
   end
 
-  param(:no_rule) do
-    # schema do
-    #   # callback do
-    #   # end
-    # end
+  option(:no_rule) do
+    option_default(default_value: -1)
   end
+
+  STDERR.puts("[DEBUG] end of apply => #{self}")
 end
 
 STDERR.puts "[DEBUG] Compiling profile #{$PROFILE}"
@@ -959,11 +1170,14 @@ $PROFILE.compile
 
 ## (FIXME broken over some trivial API change)
 
-# $PROFILE.params
-## => {:shell=>#<Param 0x01d060 shell>}
+# $PROFILE.options
+## => {:shell=>#<Option 0x01d060 shell>}
 
-# $PROFILE.params[:shell].optional?
+# $PROFILE.options[:shell].optional?
 ## => true
+
+## $PROFILE.options[:shell].components
+## => => {:schema=>#<Schema 0x003d18>, :rule=>#<Rule 0x003d2c>, :option_default=>#<OptionDefault 0x003d40>}
 
 ## $PROFILE.contract
 ##
@@ -974,8 +1188,3 @@ $PROFILE.compile
 ## $PROFILE.update_valid(rslt)
 ##
 ## $PROFILE.to_h
-
-##
-## FIXME configuration & validation for environment variable bindings
-## will be even less trivial than this
-##
