@@ -140,8 +140,10 @@ class DslBase
     ## will be applied via Dry::Core::ClassBuilder but will not be
     ## initialized as a constants under the Object constants namespace.
     ##
-    ## @param base_class [Class] the superclass for the definition of
-    ##  the component class
+    ## @param base_class [Class] the base class for the definition of
+    ##  the component class. If a singleton class is provided, the first
+    ##  non-singleton class in the class' `ancestors` will be used as
+    ##  the effective superclass.
     ##
     ## @param cb [Proc] optional callback. If provided, the callback
     ##  will be evaluted with the DSL class as the scoped `self`
@@ -356,9 +358,8 @@ class DslBase
     ## @see to_component_name
     def to_class_name(name)
       sname = name.to_s
-      ## NB
-      ## https://www.regular-expressions.info/posixbrackets.html
-      c = sname.split(/\p{Punct}+/.freeze)
+      c = sname.split(/[[:punct:]]+/.freeze)
+      c.shift if c.first.empty?
       return c.map { |elt| elt[0].upcase + elt[1...] }.join
     end
 
@@ -368,8 +369,10 @@ class DslBase
     ## @return [Symbol] a component name, as a symbol
     ##
     ## @see to_class_name
+    ##
     def to_component_name(name)
-      PebblApp::NameUtil.flatten_name(name).to_sym
+      last = name.split(/::/).last
+      PebblApp::NameUtil.flatten_name(last).to_sym
     end
 
     ## @private
@@ -622,7 +625,7 @@ class OptionsElement < DslBase
     ## an analogy to the DSL class field 'contained'
     ## but implemented at an instance scope
     @components ||= Hash.new do |_, name|
-      raise ArgumentError.new("Component not found for #{self}: #{name}")
+      raise ArgumentError.new("Component not found for #{self}: #{name.inspect}")
     end
   end
 
@@ -643,8 +646,7 @@ class OptionsElement < DslBase
     ## typically this would ovwerite any feature constructor method
     ## defined under DslBase.apply
     whence = self
-    mtd = DslBase.to_component_name(feature.class.name)
-    whence.define_singleton_method(mtd) do
+    whence.define_singleton_method(name) do
       feature
     end
 
@@ -772,8 +774,6 @@ class OptionDefault < Feature
   end
 
   ## return the default value for this profile feature
-  ##
-  ## @see #def_default
   def default_value()
     if self.instance_variable_defined?(:@default_value)
       @default_value
@@ -784,28 +784,6 @@ class OptionDefault < Feature
     end
   end
 
-  ## bind a callback or a default value for the profile feature
-  ##
-  ## If a callback block is provided, any _value_ provided in the call
-  ## to this method will be discarded. The block will be called with no
-  ## arguments, on the first call to #default_value. The value returned
-  ## by the callback at that time will then be stored as a literal
-  ## default value for this profile feature.
-  ##
-  ## If no callback block is provided, the _value_ will be used as the
-  ## default value for this profile feature.
-  ##
-  ## @param value [Object] a default value, if no block is provided
-  ##
-  ## @see #default_value
-  ## @fixme this is an obsolete method. See callback_bind, initialize, default_value
-  def def_default(value = false, &block) ## FIXME obsolete
-    if block
-      self.callback(&block)
-    else
-      @default_value = value
-    end
-  end
 end ## OptionDefault class
 
 ## Encapsulation for applications of Mixlib::Config in an OptionGroup
@@ -818,6 +796,15 @@ module OptionConfig
     whence.config_strict_mode true
   end
 end
+
+class ConfigShim
+  def initialize()
+    ## ensure that all singleton methods form Mixlib::Config
+    ## will be available at an instance scope
+    self.extend OptionConfig
+  end
+end
+
 ## Base class of a Configuration Options Model for Desktop Applications
 class OptionGroup < DslBase
   class << self
@@ -893,7 +880,17 @@ class OptionGroup < DslBase
   def initialize(name)
     ## TBD options via constructor args here
     super(name)
-    self.extend OptionConfig
+    ## Interation for Mixlib::Config
+    ##
+    ## @config_shim should not be changed on the instance, once set
+    shim = ConfigShim.new
+    @config_shim = shim
+    self.extend Forwardable
+    ## define forwarding for some singleton methods from Mixlib::Config
+    ## - this API does not provide interop. for Mixlib::Config contexts
+    %w(configuration configuration= configurables).each do |mtd|
+      self.def_delegator(:@config_shim, mtd)
+    end
   end
 
   ## @private
@@ -941,7 +938,7 @@ class OptionGroup < DslBase
 
   def to_h
     ## using a feature of Mixlib::Config here
-    self.save(true)
+    @config_shim.save(true)
   end
 
   ## @see #contract
@@ -962,7 +959,7 @@ class OptionGroup < DslBase
       result.errors.each do |msg|
         path = msg.path
         if path.length.eql?(1)
-          self.configuration.delete(path[0])
+          @config_shim.configuration.delete(path[0])
         else
           Kernel.warn("Unknown schema failure message syntax; #{msg}",
                       uplevel: 1)
@@ -1086,14 +1083,35 @@ class OptionGroup < DslBase
              ## setter method defined for configurable fields under
              ## Mixlib::Config
              ##
-             profile.default(optname, value)
+             shim.default(optname, value)
            end
          else
            results.push_warning(profile, optname, :option_default,
                                 "No option_default defined")
            ## defining it as only a configurable field
-           profile.configurable(optname)
+           shim.configurable(optname)
          end
+         ## define forwarding for the reader and writer methods
+         ##
+         ## - using lambdas for the early check on args
+         ##
+         ## - forwarding to methods on @config_shim via direct call
+         ##   to each method object. These methods will have been
+         ##   defined on the @config_shim as a result of the
+         ##   option_default handling, above.
+         ##
+         ## - each forwarding method will call self.compile before
+         ##   dispatching to the next receiving method
+         ##
+         opt_s = optname.to_s
+         rd_mtd = shim.singleton_method(optname)
+         rd_lmb = lambda { self.compile; rd_mtd.call(); }
+         self.class.smethod_define(optname, self, &rd_lmb)
+
+         wr_name = (opt_s + "=").to_sym
+         wr_mtd = shim.singleton_method(wr_name)
+         wr_lmb = lambda { |value| self.compile; wr_mtd.call(value)}
+         self.class.smethod_define(wr_name, self, &wr_lmb)
        end
        @contract = cls
        @validation_results = results
@@ -1102,7 +1120,7 @@ class OptionGroup < DslBase
 
   def options()
     @options ||= Hash.new do |_, k|
-      raise ArgumentError.new("Configuration parameter not found: #{k}")
+      raise ArgumentError.new("Option not found in #{self}: #{k.inspect}")
      end
   end
 
