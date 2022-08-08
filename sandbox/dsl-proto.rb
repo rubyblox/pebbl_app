@@ -17,6 +17,34 @@ class DslBase
 
     ## @!group DSL API methods
 
+    ## @!group Naming for DSL Components
+
+    def component_name?()
+      instance_variable_defined?(:@component_name)
+    end
+
+    def component_name()
+      if component_name?
+        @component_name
+      else
+        msg = "No component_name registered for #{self}"
+        raise RuntimeError.new(msg)
+      end
+    end
+
+    def register_component_name(name)
+      if component_name?
+        msg = "component_name %p already registered for %s" % [
+          component_name, self
+        ]
+        ArgumentError.new(msg)
+      else
+        @component_name = name
+      end
+    end
+
+    ## @!endgroup
+
     ## Return a hash table representing the set of DSL component classes
     ## defined for this class.
     ##
@@ -38,6 +66,7 @@ class DslBase
     ##  list
     ##
     ## @see [] for accessing an individual DSL component class
+    ##
     def contained
       svar_bind(:@contained) do
         Hash.new do |_, name|
@@ -54,9 +83,40 @@ class DslBase
     ## @return [Class] a DSL component class
     ## @raise [ArgumentError] if no component class is found for the
     ##  provided name
-    ## @see contained
+    ## @see contained for retrieving the set of named component classes
+    ##  for a DSL class
     def [](name)
       contained[name.to_sym]
+    end
+
+    ## Return the base class for this DSL class
+    ##
+    ## If this class represents a top-level DSL class, the base class
+    ## will be the class itself
+    ##
+    ## @see contained for retrieving the set of named component classes
+    ##  for a DSL base class
+    def __scope__()
+      if instance_variable_defined?(:@__scope__)
+        instance_variable_get(:@__scope__)
+      else
+        self
+      end
+    end
+
+    ## @param base [Class] the base class for this DSL class
+    def register_scope(scope)
+      if instance_variable_defined?(:@__scope__)
+        raise RuntimeError.new("__scope__ is already defined for #{self}: #{__scope__.inspect}")
+      else
+        STDERR.puts("[DEBUG] register_scope for #{self.inspect} : #{scope.inspect}")
+        if instance_variable_defined?(:@component_name)
+          scope.contained[self.component_name] = self
+        else
+          scope.contained[self] = self
+        end
+        instance_variable_set(:@__scope__, scope)
+      end
     end
 
     ## Define or return a DSL class or a DSL component, registering the
@@ -99,7 +159,6 @@ class DslBase
     ##
     ## @example
     ##   eg_dsl = DslBase.define() do
-    ##     include Named
     ##
     ##     # Each DSL instance must respond to an instance method, `applied`
     ##     define_method(:applied) do |component|
@@ -134,11 +193,13 @@ class DslBase
     ##   => #<Component_b 0x008e08 b>
     ##
     ## @param name [Symbol] The DSL component name for the class, or
-    ## top-level DSL name if this is called to define a top-level DSL
+    ## top-level DSL name if the class will be defined as a top-level DSL
     ##
     ## @param class_name [String] The DSL class name for the class. This
-    ## will be applied via Dry::Core::ClassBuilder but will not be
-    ## initialized as a constants under the Object constants namespace.
+    ## class name will be applied via Dry::Core::ClassBuilder and will
+    ## be generally visible in the singleton scope. The class_name will
+    ## not be initialized as a constant under the Object constants
+    ## namespace.
     ##
     ## @param base_class [Class] the base class for the definition of
     ##  the component class. If a singleton class is provided, the first
@@ -161,33 +222,56 @@ class DslBase
       base_class ||= self
       syname = name.to_sym
 
-      if (contained.keys.include?(syname))
+      if (contained.include?(syname))
+        ## TBD rename [] => component
+        ## & rename contained => components
+        ## & remove the similar from OptionsElement
         cls = contained[syname]
+        msg = false
         if ! base_class.eql?(cls.superclass)
-          msg = "Incompatible base class provided for existing class #{cls}: #{base_class}"
-          raise ArgumentError.new(msg)
+          msg = "Incompatible base_class provided for existing %p class %s: %p" % [
+            syname, cls, base_class
+          ]
         elsif ! (class_name == cls.name)
-          msg = "Incompatible class name provided for existing class #{cls}: #{class_name}"
-          raise ArgumentError.new(msg)
-        else
-          cls.instance_eval(&cb) if cb
+          msg = "Incompatible class_name provided for existing %p class %s: %p" % [
+            syname, cls, class_name
+          ]
+        elsif ! (name == cls.component_name)
+          msg = "Incompatible component name provided for existing %p class %s: %p" % [
+            syname, cls, name
+          ]
+        elsif (self != (cscope = cls.__scope__))
+          msg = "Existing component class %p => %s has incompatible scope %p" % [
+            syname, cls, cscope
+          ]
         end
+        raise ArgumentError.new(msg) if msg
       else
-        cls = self.define(class_name, base_class: base_class,  &cb)
-        self.add_dsl(syname, cls)
+        ## deferring evaluation of the callback until after the class'
+        ## scope is set
+        cls = self.define(class_name, base_class: base_class)
+        cls.register_component_name(name)
+        cls.register_scope(self)
       end
+      cls.instance_eval(&cb) if cb
       return cls
     end
 
     ## Initialize and return a new DSL, without registering the DSL to
     ## the implementing class
     ##
-    ## @see dsl for registered evaluation of a DSL class expression
+    ## @param name (see dsl)
+    ##
+    ## @param base_class (see dsl)
+    ##
+    ## @see dsl for evaluation of a named DSL class expression
     ##
     ## @see dsl_methods for defining a DSL method within a DSL class
-    ##  expression, such that the method will be evaluated at instance
-    ##  scope when called under apply
+    ##  expression, such that the method will be evaluated within an
+    ##  instance scope when called under apply
+    ##
     def define(name = nil, base_class: nil, &cb)
+      ## NB this does not register the new class to the base_class
       base_class ||= self
       name ||= (to_class_name(base_class.name) + "Model")
       if base_class.singleton_class?
@@ -213,12 +297,23 @@ class DslBase
       end
       builder =
         Dry::Core::ClassBuilder.new(name: name, parent: impl_class)
+      ## NB this differs significantly to the behaviors and side effects
+      ## if providing the callback directly to the Dry class builder.
+      ##
+      ## In the following approach, then in order for the callback to
+      ## access the class it's being called for - rather than using an
+      ## arg to hold the class - the class can be accessed as 'self' in
+      ## the scope of the callback.
+      ##
+      ## Methods defined under this approach will have a coresponding
+      ## scope, contrasted to if the callback was provided directly to
+      ## the Dry class builder
       if cb
         blk = proc { |subclass| subclass.instance_eval(&cb) }
+        builder.call(&blk)
       else
-        blk = (proc {}).freeze
+        builder.call
       end
-      builder.call(&blk)
     end
 
 
@@ -258,20 +353,10 @@ class DslBase
     ## @return [DslBase] a new DSL instance
     ##
     def apply(*args, &block)
-      ## deferring initialization until after initialize_scope
-      ##
-      ## also calling the constructor after initialize_methods.
-      ##
-      ## the constructor can thus be called with a bound __scope__
-      ## and can override any instance methods defined under
-      ## initialize_methods
-      inst = allocate
-      initialize_scope(inst, inst)  ## root object
+      inst = self.send_wrapped(self, :new, *args)
+      initialize_scope(inst, inst) ## root object
       initialize_methods(inst)
-      self.send_wrapped(inst, :initialize, *args)
-      if block
-        inst.instance_eval(&block)
-      end
+      inst.accept_block(&block) if block
       return inst
     end
 
@@ -304,7 +389,7 @@ class DslBase
     ## @param name (see dsl_method)
     ## @return [boolean] a boolean value
     def dsl_method?(name)
-      dsl_methods.keys.include?(name.to_sym)
+      dsl_methods.include?(name.to_sym)
     end
 
     ## Define a DSL isntance method such as for application under
@@ -376,21 +461,6 @@ class DslBase
     end
 
     ## @private
-    ## Register a DSL component class for a provided component name
-    ##
-    ## @param name [Symbol] the component name
-    ## @see dsl [Class] the DSL component class
-    ## @return [Class] the DSL component class
-    def add_dsl(name, dsl)
-      syname = name.to_sym
-      self.contained[syname] = dsl
-      ## TBD
-      # self.define_singleton_method(syname) do |*args|
-      #   dsl.new(*args)
-      # end
-    end
-
-    ## @private
     ## Initialize an instance varible for the __scope__ on the
     ## provided instance
     def initialize_scope(inst, scope)
@@ -410,11 +480,12 @@ class DslBase
     ## @param args [Array] args for the receiving method
     ## @return [Object] return value from the receiving method
     def send_wrapped(inst, mtd, *args)
+      mobj = inst.method(mtd)
       if Hash === (last = args.last)
         args = args[...-1]
-        inst.send(mtd, *args, **last)
+        mobj.call(*args, **last)
       else
-        inst.send(mtd, *args)
+        mobj.call(*args)
       end
     end
 
@@ -455,11 +526,9 @@ class DslBase
         ## class
         ##
         smethod_define(dslname, inst) do |*args, &block|
-          sub = cls.allocate
+          sub = cls.send_wrapped(cls, :new, *args)
           cls.initialize_scope(sub, inst)
           cls.initialize_methods(sub)
-          ## deferring initialization
-          cls.send_wrapped(sub, :initialize, *args)
           sub.accept_block(&block) if block
           inst.applied(sub)
           return sub
@@ -482,7 +551,7 @@ class DslBase
 
   ## bind a `dsl` expression  callback method, if set
   def accept_block(&cb)
-    self.instance_eval(&cb)
+    self.instance_eval(&cb) if cb
   end
 
   ## @!method applied(component)
@@ -503,35 +572,6 @@ end
 ##
 
 require 'dry/schema'
-
-module Named
-
-  attr_reader :name ## profile/structure/field name
-
-  def initialize(name, *args)
-    super(*args)
-    @name = name
-  end
-
-  def to_s
-    sname = (@name || "(anonymous)")
-    "#<%s 0x%06x %s>" % [ self.class, __id__, sname ]
-  end
-
-  def inspect
-    self.to_s
-  end
-end
-
-module Anonymous
-  def to_s
-    "#<%s 0x%06x>" % [ self.class, __id__ ]
-  end
-
-  def inspect
-    self.to_s
-  end
-end
 
 class OptionWarning
   attr_reader :option, :feature, :message
@@ -573,20 +613,43 @@ class CompilerResult
   end
 end
 
-
+##
 ## a general example, short of the OptionGroup API
+##
 
-$EG = DslBase.define(:Example) do
-  include Named
+class NamedTestModel < DslBase
+  attr_reader :name, :nodes
 
-  ## define an 'applied' instance method for this class.
-  ##
-  ## This method will be inherited by subclases, thus will be available
-  ## to the component classes for :component_a and :component_b
-  ##
-  define_method(:applied) do |component|
-    ## This simple example does not provide component storage
-    puts "Applied: #{__scope__} => #{component}"
+  def initialize(name)
+    super()
+    @name = name
+    @nodes = Array.new
+  end
+
+  def to_s
+    sname = (@name || "(anonymous)")
+    "#<%s 0x%06x %s>" % [ self.class, __id__, sname ]
+  end
+
+  def inspect
+    self.to_s
+  end
+
+  def applied(node)
+    puts "Applied: #{__scope__.name} => #{node}"
+    ## trivial storage
+    self.nodes << node
+  end
+
+end
+
+$EG_MODEL = NamedTestModel.define("Example") do
+  # include Named
+
+  ## define an instance method for this DSL class,
+  ## within the scope of a DSL class expression
+  define_method(:tbd) do |arg|
+    puts "tbd: #{__scope__} / #{self} : #{arg}"
   end
 
   dsl(:component_a) do
@@ -604,10 +667,33 @@ $EG = DslBase.define(:Example) do
 end
 
 
-## $EG.apply(:a).component_b("b").inst_method_b("...")
-# >> Applied: #<Example 0x004b00 a> => #<Component_b 0x004b14 b>
+## $EG_MODEL[:component_a].__scope__.eql?($EG_MODEL)
+# => true
+
+## $EG_MODEL.apply(:a).singleton_methods(false)
+# => [:component_a, :component_bb]
+
+## $EG_MODEL.apply(:a).singleton_methods(false)
+
+## $EG_MODEL[:component_b].dsl_methods
+# => {:inst_method_b=>#<Proc:0x0000000806ae63a8 sandbox/dsl-proto.rb:...>
+## ^ should not be empty
+
+## $EG_MODEL.apply(:a).component_b("b").singleton_methods(false)
+# => [:inst_method_b]
+## ^ shold not be empty
+
+## $EG_MODEL.apply(:a).component_b("b").inst_method_b("...")
 # >> b => "..."
 # => #<Component_b 0x004b14 b>
+
+$EG = $EG_MODEL.apply("e.g") do component_a("a"); component_b("b"); end
+
+# $EG.nodes
+## => [#<ComponentA 0x002e7c a>, #<ComponentB 0x002e90 b>]
+
+# $EG.nodes.first.nodes
+## => []
 
 ##
 ## OptionGroup API
@@ -618,7 +704,63 @@ end
 
 require 'mixlib/config'
 
-class OptionsElement < DslBase
+class OptionsBase < DslBase
+
+  def initialize(name = false, **options)
+    super(**options)
+    @name = name if name
+  end
+
+  class << self
+    def to_component_name(name)
+      if (String === name)
+        name.to_sym
+      else
+        ## symbol, other
+        name
+      end
+    end
+  end ## class << OptionsElement
+
+  ## @see name
+  def named?()
+    self.instance_variable_defined?(:@name) ||
+      self.class.component_name?
+  end
+
+  ## @see named?
+  ## @:raise ...
+  def name
+    if self.instance_variable_defined?(:@name)
+      @name
+    elsif self.class.component_name?
+      self.class.component_name
+    end
+  end
+
+  def to_s
+    sname = named? ? name : "(anonymous)"
+    "#<%s 0x%06x %s>" % [ self.class, __id__, sname ]
+  end
+
+  def inspect
+    self.to_s
+  end
+
+end
+
+class OptionsElement < OptionsBase
+
+  def to_s
+    begin
+      scopename = self.__scope__.name
+    rescue
+      scopename = "(unscoped)"
+    end
+    sname = named? ? name : "(anonymous)"
+    "#<%s 0x%06x %s %s>" % [ self.class, __id__, scopename, sname ]
+  end
+
   attr_reader :profile
 
   def components
@@ -630,36 +772,43 @@ class OptionsElement < DslBase
   end
 
   def component?(name)
-    components.keys.include?(name.to_sym)
+    components.include?(self.class.to_component_name(name))
   end
 
+  ## @param feature [...]
   def applied(feature)
-    name = DslBase.to_component_name(feature.class.name)
-    ## in a general case, this will quietly overwrite the component
-    ## storage for any component instance of the same component name
-    ##
-    self.components[name] = feature
 
-    ## overwrite any instance method for this feature, to return the
-    ## initialized instance of this feature
-    ##
-    ## typically this would ovwerite any feature constructor method
-    ## defined under DslBase.apply
-    whence = self
-    whence.define_singleton_method(name) do
-      feature
-    end
+    if (name = feature.name)
+      if self.components.include?(name)
+        msg = "Component already exists for name %p in %s" % [
+          name, self
+        ]
+        raise RuntimeError.new(msg)
+      else
+        ## define a singleton  method for this feature, to return the
+        ## initialized instance of this feature
+        ##
+        ## typically this would ovwerite any feature constructor method
+        ## defined under DslBase.apply
 
+        self.define_singleton_method(name) do
+          feature
+        end
+
+        self.components[name] = feature
+      end
+    else
+      STDERR.puts ("[DEBUG] applied anonymous feature #{feature} @ #{self}")
+    end ## name
+    return feature
   end
 end
 
 
 class Structure < OptionsElement
-  include Named
 end
 
 class Sequence < OptionsElement
-  include Named
 end
 
 
@@ -706,11 +855,6 @@ end
 ## @see ShellOption (optional) for defining a command line argument
 ##  parser for a Option [FIXME add method]
 class Feature < OptionsElement
-
-  ## the effective name of each profile feature is derived from the
-  ## feature's class itself - this, contrasted to the effecitve name
-  ## of a parameter object, e.g as with the :shell instance
-  include Anonymous
 
   alias_method :option, :__scope__
 
@@ -768,7 +912,7 @@ end
 class OptionDefault < Feature
 
   def initialize(**options)
-    if options.keys.include?(:default_value)
+    if options.include?(:default_value)
       @default_value=options[:default_value]
     end
   end
@@ -806,7 +950,7 @@ class ConfigShim
 end
 
 ## Base class of a Configuration Options Model for Desktop Applications
-class OptionGroup < DslBase
+class OptionGroup < OptionsBase
   class << self
 
     ## Return a new DSL subclass for this OptionGroup
@@ -874,7 +1018,6 @@ class OptionGroup < DslBase
     end  ## def model
   end ## class << OptionGroup
 
-  include Named ## TBD not neccessarily needed here & in DSLBase
   attr_reader :validation_results
 
   def initialize(name)
@@ -893,9 +1036,9 @@ class OptionGroup < DslBase
     end
   end
 
-  ## @private
   def applied(dsl)
     if Option === dsl
+      STDERR.puts("[DEBUG] adding #{self} option #{name} => #{dsl}") ## if $DEBUG
       self.__scope__.options[dsl.name] = dsl
     else
       raise ArgumentError("Uknown instance type: #{dsl}")
@@ -941,37 +1084,40 @@ class OptionGroup < DslBase
     @config_shim.save(true)
   end
 
+
+  def option_invalid(opt)
+    STDERR.puts("Unsetting invalid option #{opt.inspect} in #{self}") ## DEBUG
+    ## NB if the default value is an invalid value, it will be missed here...
+    @config_shim.configuration.delete(opt)
+  end
+
   ## @see #contract
-  ## @see #update_valid
+  ## @see #option_invalid
   def validate(data = self.to_h)
     if ! (Hash === data)
       raise ArgumentError.new("Unsupported data format: #{data.inspect}")
     end
-    inst = (@contract_validate ||= self.contract.new)
-    inst.call(data)
-  end
-
-
-  ## @param result [Dry::Validation::Result]
-  ## @see #validate
-  def update_valid(result = self.validate)
+    inst = (@contract_validate ||= self.contract.new) ## ?
+    result = inst.call(data)
     if result.failure?
       result.errors.each do |msg|
         path = msg.path
         if path.length.eql?(1)
-          @config_shim.configuration.delete(path[0])
+          opt = path[0]
+          self.option_invalid(opt)
         else
           Kernel.warn("Unknown schema failure message syntax; #{msg}",
                       uplevel: 1)
         end
       end
     end
-    ## else leave the instance unmodified
+    return result
   end
+
 
   def option_set?(name)
     ## very simple, with Mixlib::Config
-    self.configuration.keys.include?(name.to_sym)
+    self.configuration.include?(name.to_sym)
   end
 
   ## @return [nil or CompilerResult]
@@ -1110,7 +1256,9 @@ class OptionGroup < DslBase
 
          wr_name = (opt_s + "=").to_sym
          wr_mtd = shim.singleton_method(wr_name)
-         wr_lmb = lambda { |value| self.compile; wr_mtd.call(value)}
+         wr_lmb = lambda { |value|
+           self.compile; wr_mtd.call(value)
+         }
          self.class.smethod_define(wr_name, self, &wr_lmb)
        end
        @contract = cls
@@ -1127,7 +1275,22 @@ class OptionGroup < DslBase
 end ## OptionGroup
 
 ##
-## Tests / Initial Implementation
+## Tests @ OptionGroup class definition
+##
+
+# OptionGroup.model.__scope__
+## => OptionGroup
+
+# OptionGroup.model.contained
+## => {:option=>Option} ## should only be this
+
+# OptionGroup.model[:option].__scope__.eql?(OptionGroup)
+## => true
+
+
+
+##
+## Tests @ Initial Implementation
 ##
 
 
@@ -1168,7 +1331,7 @@ $PROFILE = $MODEL.apply(:test_profile) do
 
     option_default do
       ## NB Vte.user_shell
-      '/usr/bin/nonexistent'
+      'sh'
     end
 
   end
@@ -1183,8 +1346,9 @@ end
 STDERR.puts "[DEBUG] Compiling profile #{$PROFILE}"
 $PROFILE.compile
 
-
+##
 ## Testing application of the profile DSL's implementation
+##
 
 ## (FIXME broken over some trivial API change)
 
@@ -1202,7 +1366,5 @@ $PROFILE.compile
 ## $PROFILE.shell="/bin/sh"
 ##
 ## rslt = $PROFILE.validate
-##
-## $PROFILE.update_valid(rslt)
 ##
 ## $PROFILE.to_h
