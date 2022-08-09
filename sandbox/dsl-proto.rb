@@ -223,9 +223,6 @@ class DslBase
       syname = name.to_sym
 
       if (contained.include?(syname))
-        ## TBD rename [] => component
-        ## & rename contained => components
-        ## & remove the similar from OptionsElement
         cls = contained[syname]
         msg = false
         if ! base_class.eql?(cls.superclass)
@@ -357,6 +354,7 @@ class DslBase
       initialize_scope(inst, inst) ## root object
       initialize_methods(inst)
       inst.accept_block(&block) if block
+      inst.applied(inst)
       return inst
     end
 
@@ -549,7 +547,6 @@ class DslBase
   ##
   attr_reader :__scope__
 
-  ## bind a `dsl` expression  callback method, if set
   def accept_block(&cb)
     self.instance_eval(&cb) if cb
   end
@@ -699,12 +696,10 @@ $EG = $EG_MODEL.apply("e.g") do component_a("a"); component_b("b"); end
 ## OptionGroup API
 ##
 
- ## TBD define under a PebblApp::OptionsDSL module extending self
-## & e.g Vty.extend(PebblApp::OptionsDSL)
-
 require 'mixlib/config'
 
-class OptionsBase < DslBase
+## Base class for DSL definitions in the OptionGroup API
+class OptionBase < DslBase
 
   def initialize(name = false, **options)
     super(**options)
@@ -720,7 +715,7 @@ class OptionsBase < DslBase
         name
       end
     end
-  end ## class << OptionsElement
+  end ## class << OptionBase
 
   ## @see name
   def named?()
@@ -747,72 +742,11 @@ class OptionsBase < DslBase
     self.to_s
   end
 
-end
-
-class OptionsElement < OptionsBase
-
-  def to_s
-    begin
-      scopename = self.__scope__.name
-    rescue
-      scopename = "(unscoped)"
-    end
-    sname = named? ? name : "(anonymous)"
-    "#<%s 0x%06x %s %s>" % [ self.class, __id__, scopename, sname ]
-  end
-
-  attr_reader :profile
-
-  def components
-    ## an analogy to the DSL class field 'contained'
-    ## but implemented at an instance scope
-    @components ||= Hash.new do |_, name|
-      raise ArgumentError.new("Component not found for #{self}: #{name.inspect}")
-    end
-  end
-
-  def component?(name)
-    components.include?(self.class.to_component_name(name))
-  end
-
-  ## @param feature [...]
-  def applied(feature)
-
-    if (name = feature.name)
-      if self.components.include?(name)
-        msg = "Component already exists for name %p in %s" % [
-          name, self
-        ]
-        raise RuntimeError.new(msg)
-      else
-        ## define a singleton  method for this feature, to return the
-        ## initialized instance of this feature
-        ##
-        ## typically this would ovwerite any feature constructor method
-        ## defined under DslBase.apply
-
-        self.define_singleton_method(name) do
-          feature
-        end
-
-        self.components[name] = feature
-      end
-    else
-      STDERR.puts ("[DEBUG] applied anonymous feature #{feature} @ #{self}")
-    end ## name
-    return feature
-  end
-end
+end ## OptionBase
 
 
-class Structure < OptionsElement
-end
-
-class Sequence < OptionsElement
-end
-
-
-class Option < Structure
+## DSL class for Option definitions within an OptionGroup model
+class Option < OptionBase
 
   class << self
     def initialize_methods(inst)
@@ -825,9 +759,82 @@ class Option < Structure
     @optional = optional ? true : false
   end
 
+  ## Return true if this Option has been defined as _optional_ in
+  ## the containing OptionGroup
+  ##
+  ## @return [boolean]
   def optional?
     @optional
   end
+
+  ## @return [Hash] hash table of features
+  ##
+  ## @see feature?
+  ## @see []
+  def features
+    @features ||= Hash.new do |_, kind|
+      raise ArgumentError.new("Feature not found for #{self}: #{kind.inspect}")
+    end
+  end
+
+  ## Return true if a feature has been applied for the provided kind
+  ##
+  ## @param kind [symbol]
+  ## @return [boolean]
+  ## @see features
+  ## @see []
+  def feature?(kind)
+    features.include?(kind)
+  end
+
+  ## @param kind [symbol]
+  ## @return [Feature]
+  ## @raise [ArgumentError] if no feature has been applied for the
+  ##  provided kind
+  ## @see feature?
+  ## @see features
+  def [](kind)
+    features[kind]
+  end
+
+  ## Register a feature as applied for this Option
+  ##
+  ## @param feature [Feature] the feature that has been applied
+  ##
+  ## @return [Feature] the applied feature
+  ##
+  ## @raise [RuntimeError] if a feature of the same feature kind has
+  ##  already been applied for this Option
+  ##
+  ## @see DslBase.apply
+  ##
+  def applied(feature)
+    if (name = feature.name)
+      if self.feature?(name)
+        msg = "Feature already exists for name %p in %s" % [
+          name, self
+        ]
+        raise RuntimeError.new(msg)
+      else
+        ## define a singleton method for this feature, to return the
+        ## initialized instance of this feature
+        ##
+        ## typically this would ovwerite any feature constructor method
+        ## defined under DslBase.apply
+
+        self.define_singleton_method(name) do
+          feature
+        end
+
+        self.features[name] = feature
+      end
+    else
+      STDERR.puts ("[DEBUG] applied anonymous feature #{feature} @ #{self}")
+    end ## name
+    return feature
+  end
+
+
 end
 
 ## Option Feature base class
@@ -854,7 +861,7 @@ end
 ##
 ## @see ShellOption (optional) for defining a command line argument
 ##  parser for a Option [FIXME add method]
-class Feature < OptionsElement
+class Feature < OptionBase
 
   alias_method :option, :__scope__
 
@@ -867,7 +874,9 @@ class Feature < OptionsElement
   def accept_block(&cb)
     STDERR.puts"accept_block in #{self}"
     ## protocol method, via DslBase.dsl
-    ## see alternate implementation: DslBase#accept_block
+    ##
+    ## receives a block from a DSL class expression.
+    ## see other implementation: DslBase#accept_block
     callback(&cb)
   end
 
@@ -887,6 +896,95 @@ class Feature < OptionsElement
     end
   end
 
+  def to_s
+    begin
+      scopename = self.__scope__.name
+    rescue
+      scopename = "(unscoped)"
+    end
+    sname = named? ? name : "(anonymous)"
+    "#<%s 0x%06x %s %s>" % [ self.class, __id__, scopename, sname ]
+  end
+end
+
+## Option Feature class for option schema features
+##
+## @see compile
+class SchemaFeature < Feature
+
+  ## @private
+  ##
+  ## Callback method for schema defintion with Dry::Validation
+  ##
+  ## @see OptionGroup#compile
+  def compile(option, dsl, group, results)
+    optname = option.name
+    if option.optional?
+      macro = dsl.optional(optname)
+    else
+      macro = dsl.required(optname)
+    end
+    if self.callback?
+      self.callback_eval(macro)
+    else
+      results.push_warning(group, optname, :schema,
+                           "No schema callback defined")
+    end
+  end
+end
+
+## Option Feature class for option rule features
+##
+## @see compile
+class RuleFeature < Feature
+
+  ## @private
+  ##
+  ## Callback method for defining an option validation rule
+  ## with Dry::Validation
+  ##
+  ## @see OptionGroup#compile
+  def compile(option, contract, group, results)
+    optname = option.name
+    if self.callback?
+      if option.optional?
+        ## r: storage for this rule, available when 'self' will have a
+        ## different scope than in this method block
+        r = self
+        contract.rule(optname) do
+          ## This block will be scoped to the evaluation of a Dry
+          ## Validation rule. Dry::Validation::Evaluator === self
+          ##
+          ## The 'key?' method, here, should return a non-falsey value
+          ## when the given option name is present in some input value
+          ## to be validated.
+          ##
+          ## For optional values, this provides an initial check to
+          ## ensure that the callback should not be called if the
+          ## option is not present in the input value. This may serve
+          ## to minimize some coding, when defininig a validation rule
+          ## for an optional option value.
+          ##
+          ## If the option is present but was provided with a nil or
+          ## false value, the callback should still be called here
+          ##
+          ## Callbacks should be able to call the 'value' method
+          ## in this scope, to access the option's value from within
+          ## the callback.
+          ##
+          r.callback_eval(self) if key?(optname)
+        end
+      else
+        ## a required option value. This will always dispatch to the
+        ## callback, within a Dry::Validation::Contract rule
+        contract.rule(optname, & self.callback_proc)
+      end
+    else
+      ## no callback, though a 'rule' feature was provided
+      results.push_warning(group, optname, self.name,
+                           "Rule defined with no callback")
+    end
+  end
 end
 
 ## Option Feature class for default value callbacks and literal default
@@ -894,18 +992,25 @@ end
 ##
 ## **Initialization and Setting a Default Value**
 ##
-## An **OptionDefault** can be initialized to a **Option** within a DSL
-## **option** expression, using the method `option_default`. If a literal
-## default value will be used for the containing **Option** definition,
-## the value may be provided with the `default_value` keyword argument
-## to the `option_default` method.
-## The `option_default` method will be avaialble within a singleton
+## An **OptionDefault** can be initialized to an **Option** within a DSL
+## **option** expression, using the method `default`.
+##
+## If a constant default value will be used for the containing
+## **Option** definition, the value may be provided with the
+## `default_value` keyword argument to the `default` method.
+##
+## If a block is provided to the `default` method, the block will
+## be called with no arguments, to provide a default value for the
+## containing parameter. This block will override any provided
+## `default_value`.
+##
+## The `default` method will be avaialble within a singleton
 ## scope, within a DSL `option` expression.
 ##
 ## Any default value or default callback will be used under the `apply`
 ## method for the containing Option.
 ##
-## If no `option_default` is provided to the `option` expression, it will
+## If no `default` is provided to the `option` expression, it will
 ## be assumed that the `option` has no default value.
 ##
 ## @see Option
@@ -928,6 +1033,28 @@ class OptionDefault < Feature
     end
   end
 
+  ## @private
+  ##
+  ## Callback method for defining a default option value under
+  ## OptionGroup#compile and OptionGroup#validate methods
+  ##
+  ## This method uses Mixlib::Config under the provided option
+  ## group
+  ##
+  ## @see OptionGroup#compile
+  def compile(option, contract, group, results)
+    optname = option.name
+    store = group.config_store
+    if defined?(@default_value)
+      store.default(optname, @default_value)
+    elsif defined?(@callback)
+      store.default(optname, & @callback)
+    else
+      results.push_warning(group, optname, self.name,
+                           "No default value or callback was provided")
+    end
+  end
+
 end ## OptionDefault class
 
 ## Encapsulation for applications of Mixlib::Config in an OptionGroup
@@ -941,7 +1068,7 @@ module OptionConfig
   end
 end
 
-class ConfigShim
+class ConfigStore
   def initialize()
     ## ensure that all singleton methods form Mixlib::Config
     ## will be available at an instance scope
@@ -950,10 +1077,10 @@ class ConfigShim
 end
 
 ## Base class of a Configuration Options Model for Desktop Applications
-class OptionGroup < OptionsBase
+class OptionGroup < OptionBase
   class << self
 
-    ## Return a new DSL subclass for this OptionGroup
+    ## Initialize the DSL for this OptionGroup
     def model()
       ## using an instance variable at class scope, for storage of the
       ## self-referential @model value.
@@ -963,99 +1090,135 @@ class OptionGroup < OptionsBase
       if instance_variable_defined?(:@model)
         @model
       else
-        ## this defines an implicit subclass, albeit not such that could
-        ## be reached by way of Object constants
+        dsl(:option, base_class: Option) do
+          ## This option DSL class is later accessible in a profile definition
+          ## as e.g OptionGroup[:base_conf][:option]
+          ##
+          ## In a profile instance <i>.options[<name>] => option
+          ## with option methods: 'schema', 'rule', 'default'
 
-        self.instance_eval do
-          dsl(:option, base_class: Option) do
-            ## This option DSL class is later accessible in a profile definition
-            ## as e.g OptionGroup[:base_conf][:option]
+          ## each DSL class is in effect an anonymous class,
+          ## and defined with a singleton name via Dry::Core::ClassBuilder
+          ##
+          ## for any DSL class, the class.name method itself would return
+          ## the name as defined with Dry::Core::ClassBuilder
+          ##
+          ## TBD accessing the structural name of the class, within Ruby,
+          ## it being an anonymous class with a singleton name
+
+          dsl(:schema, base_class: SchemaFeature) do
+            ## define the option's schema
             ##
-            ## In a profile instance <i>.options[<name>] => option
-            ## with option methods: 'schema', 'rule', 'option_default'
+            ## in application: Required field.
+            ##
+            ## any callback defined in the :schema profile field
+            ## will be evaluated in the scope of a Dry::Schema
+            ## schema DSL
+          end
 
-            dsl(:schema, base_class: Feature) do
-              ## in application: Required field.
-              ##
-              ## define the option's schema
-              ##
-              ## any callback defined in the :schema profile field
-              ## will be evaluated in the scope of a Dry::Schema
-              ## schema DSL
-            end
+          dsl(:rule, base_class: RuleFeature) do
+            ## define a validation rule for the option.
+            ##
+            ## in application: This is an optional field,
+            ##
+            ##
+            ## any callback defined in the :rule profile field
+            ## will be evaluated in the scope of a Dry::Validation
+            ## schema rule DSL
+          end
 
-            dsl(:rule, base_class: Feature) do
-              ## define a validation rule for the option.
-              ##
-              ## in application: This is an optional field,
-              ##
-              ##
-              ## any callback defined in the :rule profile field
-              ## will be evaluated in the scope of a Dry::Validation
-              ## schema rule DSL
-            end
+          dsl(:default, base_class: OptionDefault) do
+            ## define a default value initializer for the option
+            ## for application with Mixlib::Config
+            ##
+            ## In application: This API supports options without an explicit
+            ## default binding. The value 'false' will be used if no literal
+            ## value or callback is provided under a field's default
+            ##
+            ## any callback defined in the :optional_default profile field
+            ## will be evaluated in a normal instance scope for a profile
+            ## instance
+          end
 
-            dsl(:option_default, base_class: OptionDefault) do
-              ## ^ avoiding override of the 'default' method from Mixlib::Config
-              ##
-              ## define a default value initializer for the option
-              ## for application with Mixlib::Config
-              ##
-              ## In application: This API supports options without an explicit
-              ## default binding. The value 'false' will be used if no literal
-              ## value or callback is provided under a field's option_default
-              ##
-              ## any callback defined in the :optional_default profile field
-              ## will be evaluated in a normal instance scope for a profile
-              ## instance
-            end
-
-          end ## dsl(:option) ...
-        end ## self.instance_eval
+        end ## dsl(:option) ...
         ## using 'self' as the model, towards retaining a model/instance alignment
-      @model = self
+        @model = self
       end ## if ...
     end  ## def model
   end ## class << OptionGroup
 
-  attr_reader :validation_results
+  ## Return the ConfigStore
+  ##
+  ## This value is used for Mixlib::Config support in each OptionGroup
+  ##
+  ## @return [ConfigStore]
+  ## @private
+  attr_reader :config_store
+
+  ## Return the latest CompilerResult for validation of this OptionGroup
+  ##
+  ## Returns nil if this OptionGroup has not been successfully
+  ## validated
+  ##
+  ## @see validate
+  ## @see compile
+  ## @see recompile
+  attr_reader :compiler_result
 
   def initialize(name)
-    ## TBD options via constructor args here
     super(name)
-    ## Interation for Mixlib::Config
+    ## Integration for Mixlib::Config
     ##
-    ## @config_shim should not be changed on the instance, once set
-    shim = ConfigShim.new
-    @config_shim = shim
+    ## @config_store should not be changed on the instance, once set
+    store = ConfigStore.new
+    @config_store = store
     self.extend Forwardable
     ## define forwarding for some singleton methods from Mixlib::Config
     ## - this API does not provide interop. for Mixlib::Config contexts
     %w(configuration configuration= configurables).each do |mtd|
-      self.def_delegator(:@config_shim, mtd)
+      self.def_delegator(:@config_store, mtd)
     end
   end
 
   def applied(dsl)
     if Option === dsl
+      name = dsl.name
       STDERR.puts("[DEBUG] adding #{self} option #{name} => #{dsl}") ## if $DEBUG
-      self.__scope__.options[dsl.name] = dsl
-    else
-      raise ArgumentError("Uknown instance type: #{dsl}")
+      self.options[name] = dsl
+    elsif ! (self.eql?(dsl))
+      raise ArgumentError.new("Uknown instance type: #{dsl}")
     end
   end
 
-  ## Return the schema for this profile's validation contract
+  ## Return the schema for the validation contract to this OptionGroup
   ##
   ## @return [Dry::Schema] the schema
+  ##
+  ## @see #contract
+  ## @see #compile
+  ## @see #recompile
   def schema
     self.contract.schema
   end
 
+  ## Return the Dry::Validation rules for the validation contract to
+  ## this OpitonGroup
+  ##
+  ## @return [Array<Dry::Validation::Rule>]
+  ##
+  ## @see #contract
+  ## @see #compile
+  ## @see #recompile
   def rules
     self.contract.rules
   end
 
+  ## Compile and return the Dry Validation Contract for this OptionGroup
+  ##
+  ## @return [Dry::Validation::Contract]
+  ##
+  ## @see #compile
+  ## @see #recompile
   def contract
     ## 'compile' will process all DSL data presently supported under the
     ## 'compile' method in the implementing class - i.e schema,
@@ -1064,12 +1227,18 @@ class OptionGroup < OptionsBase
     @contract
   end
 
+  ## Recompile the Dry Validation Contract for this OptionGroup
+  ##
+  ## @return [CompilerResult]
+  ##
+  ## @see #contract
+  ## @see #compile
   def recompile
     previous_class = @contract
     previous_instance = @contract_validate
     @contract = nil
     @contract_validate = nil
-    @validation_results = nil
+    @compiler_result = nil
     begin
       compile
     rescue
@@ -1079,25 +1248,65 @@ class OptionGroup < OptionsBase
     end
   end
 
-  def to_h
+  ## Return a hash table representing all options configured for this
+  ## OptionGroup
+  ##
+  ## @param defaults_p [boolean] If a truthy value, the return value will
+  ##  include any default option values defined under the model for this
+  ##  OptionGroup. If a falsey value, the return value will include only
+  ##  the values that have been directly set for this OptionGroup
+  ##
+  ## @return [Hash] the set of option name and option value pairs
+  ##
+  ## @see #to_h
+  def values(defaults_p = true)
     ## using a feature of Mixlib::Config here
-    @config_shim.save(true)
+    @config_store.save(defaults_p)
+  end
+
+  ## Return a hash table representing all options configured for this
+  ## OptionGroup.
+  ##
+  ## The return value will include any default option values defined
+  ## under the model for this OptionGroup
+  ##
+  ## @return [Hash] the set of option name and option value pairs
+  ##
+  ## @see #values
+  ## @see #validate
+  def to_h
+    self.values(true)
   end
 
 
+  ## Callback method for invalid option values detected under #validate
+  ##
+  ## This method will be called for any options whose syntax is
+  ## determined to be invalid under the Dry Schema and Dry Validation
+  ## Rules for this OptionGroup's configuration model
+  ##
+  ## @param opt [Symbol] symbolic name of the invalid option
+  ##
+  ## @see #validate
+  ## @see #values
+  ## @see #compile
   def option_invalid(opt)
     STDERR.puts("Unsetting invalid option #{opt.inspect} in #{self}") ## DEBUG
     ## NB if the default value is an invalid value, it will be missed here...
-    @config_shim.configuration.delete(opt)
+    @config_store.configuration.delete(opt)
   end
 
+  ## Validate the set of option values for this OptionGroup instance
+  ##
   ## @see #contract
   ## @see #option_invalid
+  ## @see #values
+  ## @return [...]
   def validate(data = self.to_h)
     if ! (Hash === data)
       raise ArgumentError.new("Unsupported data format: #{data.inspect}")
     end
-    inst = (@contract_validate ||= self.contract.new) ## ?
+    inst = (@contract_validate ||= self.contract.new)
     result = inst.call(data)
     if result.failure?
       result.errors.each do |msg|
@@ -1114,155 +1323,149 @@ class OptionGroup < OptionsBase
     return result
   end
 
-
+  ## Return true if an option for the provided name has been set within
+  ## this OptionGroup
+  ##
+  ## @param name [Symbol] the option name
   def option_set?(name)
     ## very simple, with Mixlib::Config
-    self.configuration.include?(name.to_sym)
+    self.configuration.include?(name)
   end
 
-  ## @return [nil or CompilerResult]
+  ## Unset the named option for this OptionGroup
+  #
+  ## @param name (see #option_set?)
+  def option_unset(name)
+    self.configuration.delete(name)
+  end
+
+  ## Compile and the configuration model for this OptionGroup
   ##
-  ## @see dsl
-  ## @see define
+  ## If the configuration model has been previously compiled, this
+  ## method will return the CompilerResult from the earlier compilation.
   ##
-  ## @see apply
+  ## On first call, or if called under #recompile, this method will
+  ## define the options schema, option rules, option default values, and
+  ## option accessor methods for the scoped OptionGroup instance.
   ##
-  ## @see compile
-  def compile(defer_warnings = ! $DEBUG)
-    ## should not be called until after all options have been defined...
-    ##
-    ## NB returns a contract class, stored in @contract
-    ##
-    ## See also: validate, recompile methods in usage of the @contract
-    ## class and the @contract_validate instance of this class
-    if rslt = @validation_results
+  ## @note This method should not be called until after the
+  ## configuration model for this OptionGroup has been defined
+  ##
+  ## @return [CompilerResult]
+  ##
+  ## @see recompile
+  ## @see contract
+  ## @see validate
+  def compile(defer_warnings: ! $DEBUG)
+    if rslt = @compiler_result
       return rslt
     else
       profile = self
+      store = @config_store ## this only will require instance access
       STDERR.puts "[DEBUG] Building validation contract for #{self}" ## if $DEBUG
       clsname = "<%s validation @ %s>" % [profile.name, Time.now.strftime("%s".freeze)]
+
+      ## NB this creates a new class singularly for the @contract,
+      ## there receiving all schema & rule declarations for this class
+      ##
+      ## FIXME this contract is created and stored at an instance scope,
+      ## but should be maintained at a class scope, applied from there
+      ## for instance evaluation. (Not in all ways thread-safe, even here)
+      ##
+      ## - this change may require a substantial update to the API,
+      ##   to allow for instance instialization from a method called at
+      ##   class scope - at least for calls requiring an instance @config_store
+      ##
       builder = Dry::Core::ClassBuilder.new(name: clsname,
                                             parent: Dry::Validation::Contract)
       cls = builder.call
 
       results = CompilerResult.new(cls, self, defer_warnings: defer_warnings)
 
+      ## storage for this OptionGroup when 'self' refers to another object
+      group = self
+
       opts = self.options
+
       ## evaluate all defined schema option definitions within the
-      ## scope of a Dry::Schema initialized to to this profile instance
+      ## scope of a Dry::Schema initialized to this profile instance
       cls.schema do
+        ## class schema scope, via Dry::Validation
+        ##
+        ## in this block: Dry::Schema::DSL === self
         opts.each do |_, opt|
-          optname = opt.name
-          if opt.optional?
-            ## each of these should return a Dry::Schema param object,
-            ## which will present a scope for any callback evaluation
-            ##
-            ## NB The representation of 'param' patterns in Dry::Schema
-            ## may be mainly oriented towards development of HTTP
-            ## applications, e.g vis a vis GET/POST parameters.
-            ##
-            ## The concept may be generally congruous to the 'options'
-            ## pattern presented here
-            sopt = optional(optname)
+          if opt.feature?(:schema)
+            sch = opt[:schema]
+            sch.compile(opt, self, group, results)
           else
-            sopt = required(optname)
-          end
-          ## this assumes the opt.schema method call will return a
-          ## non-falsey value generally of a Option 'Feature' type
-          sch = opt.schema
-          if sch.callback?
-            sch.callback_eval(sopt)
-          else
-            results.push_warning(profile, optname, :schema,
-                                 "No schema callback defined")
+            results.push_warning(self, opt.name, :schema,
+                                 "No option schema defined")
           end
         end
       end
-       opts.each do |_, opt|
-         ## handle features other than the schema syntax for each
-         ## option definition
 
-         optname = opt.name
-         if opt.component?(:rule)
-           ## define a schema rule for the option, evaluating any 'rule'
-           ## block fromthe profile definition within the scope of a
-           ## 'rule' declaration for the Dry::Validation::Contract of this
-           ## profile instance
-           ##
-           ## This should generally be evaluated after all option syntax
-           ## declarations have been defined under the profile's Dry::Schema
-           r = opt.rule ## the DSL component
-           if r.callback?
-             if opt.optional?
-               cls.rule(optname) do
-                 ## providing some additional implementation support,
-                 ## such that the Dry::Validation rule's callback form
-                 ## will be effectively wrapped in 'if value' for any
-                 ## optional option
-                 r.callback_eval(self) if value
-               end
-             else
-               cls.rule(optname, &r.callback_proc)
-             end
-           else
-             results.push_warning(profile, optname, :rule,
-                                  "Rule defined with no callback")
-           end
-         end
+      ## handle other features, with the validation schema now defined
+      ##
+      ## FIXME the OptionDefault handling and reader/writer forwarding
+      ## definitions should be the only calls needed at an instance
+      ## scope - this, mainly due to how Mixlib::Config is used
+      ## under encapsulation at an instance scope in OptionGroup.config_store
+      ##
+      ## All of the schema validation support can be moved to a class
+      ## scope, where it will be reusable for multiple instances of
+      ## a single OptionGroup, e.g for multiple profiles including the
+      ## "Active profile" in some desktop application
+      ##
+      opts.each do |_, opt|
+        opt.features.each do |_, feature|
+          if ! feature.name.eql?(:schema)
+            feature.compile(opt, cls, group, results)
+          end
+        end
 
-         ## Mixlib::Config integration - default option value
-         if opt.component?(:option_default)
-           dflt = opt.option_default ## the DSL instance
-           if value = dflt.default_value
-             ## Given the implementation of OptionDefault#default_value :
-             ##
-             ## If a callback was defined in the profile definition,
-             ## this will set the default value to the value returned
-             ## by that callback at this time.
-             ##
-             ## Else, if a literal default value was set, this will bind
-             ## that value as the default.
-             ##
-             ## Else, this will use the value 'false' as a fallback default.
-             ##
-             ## The following 'default' method should call through to a
-             ## setter method defined for configurable fields under
-             ## Mixlib::Config
-             ##
-             shim.default(optname, value)
-           end
-         else
-           results.push_warning(profile, optname, :option_default,
-                                "No option_default defined")
-           ## defining it as only a configurable field
-           shim.configurable(optname)
-         end
-         ## define forwarding for the reader and writer methods
-         ##
-         ## - using lambdas for the early check on args
-         ##
-         ## - forwarding to methods on @config_shim via direct call
-         ##   to each method object. These methods will have been
-         ##   defined on the @config_shim as a result of the
-         ##   option_default handling, above.
-         ##
-         ## - each forwarding method will call self.compile before
-         ##   dispatching to the next receiving method
-         ##
-         opt_s = optname.to_s
-         rd_mtd = shim.singleton_method(optname)
-         rd_lmb = lambda { self.compile; rd_mtd.call(); }
-         self.class.smethod_define(optname, self, &rd_lmb)
+        ## define forwarding for reader and writer methods,
+        ## each accessing an individual option value for this
+        ## OptionGroup
+        ##
+        ## - using lambdas, which will provide an early check on the
+        ##   args syntax used by the caller
+        ##
+        ## - forwarding to methods on @config_store via direct call
+        ##   to each method object. These methods should have each
+        ##   been defined on the @config_store as a result of
+        ##   default value handling, using Mixlib::Config
+        ##
+        ## - each forwarding method will call self.compile before
+        ##   dispatching to the next receiving method
+        ##
+        optname = opt.name
+        catch(:define) do |tag|
+          if (rd_mtd = store.singleton_method(optname))
+            rd_lmb = lambda { self.compile; rd_mtd.call(); }
+            self.class.smethod_define(optname, self, &rd_lmb)
+          else
+            results.push_warning(group, optname, :reader,
+                                 "No reader method for #{opname} in backing store")
+            throw tag
+          end
 
-         wr_name = (opt_s + "=").to_sym
-         wr_mtd = shim.singleton_method(wr_name)
-         wr_lmb = lambda { |value|
-           self.compile; wr_mtd.call(value)
-         }
-         self.class.smethod_define(wr_name, self, &wr_lmb)
-       end
-       @contract = cls
-       @validation_results = results
+          wr_name = (optname.to_s + "=").to_sym
+          if (wr_mtd = store.singleton_method(wr_name))
+            wr_lmb = lambda { |value|
+              ## FIXME validate the value w/ Dry Schema, before set
+              ## - if invalid, TBD call option_invalid (before set)
+              self.compile; wr_mtd.call(value)
+            }
+            self.class.smethod_define(wr_name, self, &wr_lmb)
+          else
+            results.push_warning(group, optname, :writer,
+                                 "No writer method for #{opname} in backing store")
+            throw tag
+          end
+        end
+      end
+      @contract = cls
+      @compiler_result = results
     end
   end
 
@@ -1295,7 +1498,9 @@ end ## OptionGroup
 
 
 ## add'l test
-# $PROFILE.options[:shell].components[:schema].callback_proc
+# $PROFILE.options[:shell].features[:schema].callback_proc
+## abbreviated ...
+# $PROFILE[:shell][:schema].callback_proc
 
 ## - Testing implementation of the profile DSL
 
@@ -1306,30 +1511,29 @@ $PROFILE = $MODEL.apply(:test_profile) do
   option(:shell, optional: true) do
 
     schema do
-      STDERR.puts(":shell schema self: #{self}")
       maybe(:string)
     end
 
     rule do
-        catch(:failed) do |tag|
-          ## 'value' is a method defined in the Dry::Validation rule DSL
-          begin
-            argv = Shellwords.split(value)
-          rescue ArgumentError => error
-            throw tag, key.failure(error.message)
-          end
-          if argv.empty?
-            throw tag, key.failure("Empty value")
-          end
-          require 'pebbl_app/shell' ## FIXME move to top level
-          cmd = argv[0]
-          if ! (path = PebblApp::Shell.which(cmd))
-            throw tag, key.failure("Shell not available: #{cmd}")
-          end
+      catch(:failed) do |tag|
+        ## 'value' is a method defined in the Dry::Validation rule DSL
+        begin
+          argv = Shellwords.split(value)
+        rescue ArgumentError => error
+          throw tag, key.failure(error.message)
         end
+        if argv.empty?
+          throw tag, key.failure("Empty value")
+        end
+        require 'pebbl_app/shell' ## FIXME move to top level
+        cmd = argv[0]
+        if ! (path = PebblApp::Shell.which(cmd))
+          throw tag, key.failure("Shell not available: #{cmd}")
+        end
+      end
     end
 
-    option_default do
+    default do
       ## NB Vte.user_shell
       'sh'
     end
@@ -1337,7 +1541,7 @@ $PROFILE = $MODEL.apply(:test_profile) do
   end
 
   option(:no_rule) do
-    option_default(default_value: -1)
+    default(default_value: -1)
   end
 
   STDERR.puts("[DEBUG] end of apply => #{self}")
@@ -1358,8 +1562,8 @@ $PROFILE.compile
 # $PROFILE.options[:shell].optional?
 ## => true
 
-## $PROFILE.options[:shell].components
-## => => {:schema=>#<Schema 0x003d18>, :rule=>#<Rule 0x003d2c>, :option_default=>#<OptionDefault 0x003d40>}
+## $PROFILE.options[:shell].features
+## => => {:schema=>#<Schema 0x003d18>, :rule=>#<Rule 0x003d2c>, :default=>#<OptionDefault 0x003d40>}
 
 ## $PROFILE.contract
 ##
