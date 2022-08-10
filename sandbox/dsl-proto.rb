@@ -570,6 +570,7 @@ end
 
 require 'dry/schema'
 
+## @see CompilerResult
 class OptionWarning
   attr_reader :option, :feature, :message
 
@@ -767,6 +768,18 @@ class Option < OptionBase
     @optional
   end
 
+  def schema_feature?
+    defined?(@schema)
+  end
+
+  def schema_feature
+    if schema_feature?
+      @schema
+    else
+      raise RuntimeError.new("No schema syntax defined for #{self}")
+    end
+  end
+
   ## @return [Hash] hash table of features
   ##
   ## @see feature?
@@ -810,7 +823,13 @@ class Option < OptionBase
   ##
   def applied(feature)
     if (name = feature.name)
-      if self.feature?(name)
+      if (name == :schema)
+        if defined?(@schema)
+          raise RuntimeError.new("Schema sytntax already defined for #{self}")
+        else
+          @schema = feature
+        end
+      elsif self.feature?(name)
         msg = "Feature already exists for name %p in %s" % [
           name, self
         ]
@@ -832,6 +851,50 @@ class Option < OptionBase
       STDERR.puts ("[DEBUG] applied anonymous feature #{feature} @ #{self}")
     end ## name
     return feature
+  end
+
+  def compile_schema(group, schema_dsl, results)
+    if schema_feature?
+      sch = schema_feature
+    else
+      sch = SchemaFeature.new
+      results.push_warning(group, self.name, :schema,
+                           "No schema syntax defined")
+    end
+    sch.compile(self, group, schema_dsl, results)
+  end
+
+  def compile_features(group, contract, results)
+    optname = self.name
+    self.features.each do |_, feature|
+      feature.compile(self, group, contract, results)
+    end
+
+    store = group.config_store
+
+    catch(:define) do |tag|
+      if (rd_mtd = store.singleton_method(optname))
+        rd_lmb = lambda { group.compile; rd_mtd.call(); }
+        group.class.smethod_define(optname, group, &rd_lmb)
+      else
+        results.push_warning(group, optname, :reader,
+                             "No reader method for #{opname} in backing store")
+        throw tag
+      end
+
+      wr_name = (optname.to_s + "=").to_sym
+      if (wr_mtd = store.singleton_method(wr_name))
+        wr_lmb = lambda { |value|
+          self.compile; wr_mtd.call(value)
+        }
+        group.class.smethod_define(wr_name, group, &wr_lmb)
+      else
+        results.push_warning(group, optname, :writer,
+                             "No writer method for #{opname} in backing store")
+        throw tag
+      end
+    end
+
   end
 
 
@@ -914,10 +977,24 @@ class SchemaFeature < Feature
 
   ## @private
   ##
-  ## Callback method for schema defintion with Dry::Validation
+  ## This method serves a callback for schema defintion in a context of
+  ## Dry::Schema and Dry::Validation
+  ##
+  ## This method will be called on the SchemaFeature defined to each
+  ## Option within an OptionGroup.
+  ##
+  ## @param option [Option] the Option definition represented by this
+  ##  schema feature defintion
+  ##
+  ## @param group [OptionGroup] the OptionGroup for the provided Option
+  ##
+  ## @param dsl [Dry::Schema::DSL] Schema DSL for the active schema
+  ##  definition in the OptionGroup
+  ##
+  ## @results [CompilerResult] Storage for warnings during compile
   ##
   ## @see OptionGroup#compile
-  def compile(option, dsl, group, results)
+  def compile(option, group, dsl, results)
     optname = option.name
     if option.optional?
       macro = dsl.optional(optname)
@@ -944,7 +1021,7 @@ class RuleFeature < Feature
   ## with Dry::Validation
   ##
   ## @see OptionGroup#compile
-  def compile(option, contract, group, results)
+  def compile(option, group, contract, results)
     optname = option.name
     if self.callback?
       if option.optional?
@@ -1042,7 +1119,7 @@ class OptionDefault < Feature
   ## group
   ##
   ## @see OptionGroup#compile
-  def compile(option, contract, group, results)
+  def compile(option, group, contract, results)
     optname = option.name
     store = group.config_store
     if defined?(@default_value)
@@ -1054,7 +1131,6 @@ class OptionDefault < Feature
                            "No default value or callback was provided")
     end
   end
-
 end ## OptionDefault class
 
 ## Encapsulation for applications of Mixlib::Config in an OptionGroup
@@ -1360,10 +1436,8 @@ class OptionGroup < OptionBase
     if rslt = @compiler_result
       return rslt
     else
-      profile = self
-      store = @config_store ## this only will require instance access
+      # store = @config_store ## this only would require instance access
       STDERR.puts "[DEBUG] Building validation contract for #{self}" ## if $DEBUG
-      clsname = "<%s validation @ %s>" % [profile.name, Time.now.strftime("%s".freeze)]
 
       ## NB this creates a new class singularly for the @contract,
       ## there receiving all schema & rule declarations for this class
@@ -1376,93 +1450,30 @@ class OptionGroup < OptionBase
       ##   to allow for instance instialization from a method called at
       ##   class scope - at least for calls requiring an instance @config_store
       ##
+      clsname = "<%s validation @ %s>" % [
+        self.name, Time.now.strftime("%s".freeze)
+      ]
       builder = Dry::Core::ClassBuilder.new(name: clsname,
                                             parent: Dry::Validation::Contract)
       cls = builder.call
-
       results = CompilerResult.new(cls, self, defer_warnings: defer_warnings)
-
-      ## storage for this OptionGroup when 'self' refers to another object
+      ## storage for this option group within the following block
       group = self
 
-      opts = self.options
-
-      ## evaluate all defined schema option definitions within the
-      ## scope of a Dry::Schema initialized to this profile instance
+      ## compile all option schema definitions, before any processing
+      ## for non-schema option features
       cls.schema do
-        ## class schema scope, via Dry::Validation
+        ## class schema scope via Dry::Validation
         ##
         ## in this block: Dry::Schema::DSL === self
-        opts.each do |_, opt|
-          if opt.feature?(:schema)
-            sch = opt[:schema]
-            sch.compile(opt, self, group, results)
-          else
-            results.push_warning(self, opt.name, :schema,
-                                 "No option schema defined")
-          end
+        schema_dsl = self
+        group.options.each do |_, opt|
+          opt.compile_schema(group, schema_dsl, results)
         end
       end
-
-      ## handle other features, with the validation schema now defined
-      ##
-      ## FIXME the OptionDefault handling and reader/writer forwarding
-      ## definitions should be the only calls needed at an instance
-      ## scope - this, mainly due to how Mixlib::Config is used
-      ## under encapsulation at an instance scope in OptionGroup.config_store
-      ##
-      ## All of the schema validation support can be moved to a class
-      ## scope, where it will be reusable for multiple instances of
-      ## a single OptionGroup, e.g for multiple profiles including the
-      ## "Active profile" in some desktop application
-      ##
-      opts.each do |_, opt|
-        opt.features.each do |_, feature|
-          if ! feature.name.eql?(:schema)
-            feature.compile(opt, cls, group, results)
-          end
-        end
-
-        ## define forwarding for reader and writer methods,
-        ## each accessing an individual option value for this
-        ## OptionGroup
-        ##
-        ## - using lambdas, which will provide an early check on the
-        ##   args syntax used by the caller
-        ##
-        ## - forwarding to methods on @config_store via direct call
-        ##   to each method object. These methods should have each
-        ##   been defined on the @config_store as a result of
-        ##   default value handling, using Mixlib::Config
-        ##
-        ## - each forwarding method will call self.compile before
-        ##   dispatching to the next receiving method
-        ##
-        optname = opt.name
-        catch(:define) do |tag|
-          if (rd_mtd = store.singleton_method(optname))
-            rd_lmb = lambda { self.compile; rd_mtd.call(); }
-            self.class.smethod_define(optname, self, &rd_lmb)
-          else
-            results.push_warning(group, optname, :reader,
-                                 "No reader method for #{opname} in backing store")
-            throw tag
-          end
-
-          wr_name = (optname.to_s + "=").to_sym
-          if (wr_mtd = store.singleton_method(wr_name))
-            wr_lmb = lambda { |value|
-              ## FIXME validate the value w/ Dry Schema, before set
-              ## - if invalid, TBD call option_invalid (before set)
-              self.compile; wr_mtd.call(value)
-            }
-            self.class.smethod_define(wr_name, self, &wr_lmb)
-          else
-            results.push_warning(group, optname, :writer,
-                                 "No writer method for #{opname} in backing store")
-            throw tag
-          end
-        end
+      ## compile all non-schema option features
+      self.options.each do |_, opt|
+        opt.compile_features(group, cls, results)
       end
       @contract = cls
       @compiler_result = results
@@ -1473,6 +1484,10 @@ class OptionGroup < OptionBase
     @options ||= Hash.new do |_, k|
       raise ArgumentError.new("Option not found in #{self}: #{k.inspect}")
      end
+  end
+
+  def [](name)
+    self.options[name]
   end
 
 end ## OptionGroup
