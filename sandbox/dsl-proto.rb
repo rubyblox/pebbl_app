@@ -813,22 +813,11 @@ class NamedTestModel < NamedTestBase
 
     def model(&block)
       super() do
-
-
         STDERR.puts "[!DEBUG] named test __model__ #{__model__}"
 
         dsl(:component_a) do
 
           STDERR.puts "[!DEBUG] component_a __model__ #{__model__}"
-
-          ## TBD see also
-          ## NamedTestModel.model.macros[:component_b].model.components
-          ## why on earth => {:component_a=>ComponentA}
-          ## except for model method inheritance here? {X}
-          ##
-          ## NB at a time
-          ## NamedTestModel.model.macros[:component_b].components
-          ## => {:component_d=>ComponentD}
 
           def class_method_a(arg)
             puts "A => #{arg.inspect}"
@@ -840,8 +829,6 @@ class NamedTestModel < NamedTestBase
         end
 
         dsl(:component_b, macro: true) do
-
-
           STDERR.puts "[!DEBUG] component_b __model__ #{__model__}"
 
           dsl_method(:inst_method_b) do |arg|
@@ -883,7 +870,6 @@ $EG_TEST = NamedTestModel.apply do
 
   component_a do
     $EG_TEST_A = self
-
 
     component_c do
       $EG_TEST_C = self
@@ -1695,23 +1681,22 @@ class OptionGroup < OptionBase
     ## @see contract
     ## @see validate
     def compile(defer_warnings: ! $DEBUG)
+      ## Usage: Refer to the TestProfile example, mainly the 'profile'
+      ## method defined there
       if rslt = @compiler_result
         return rslt
       else
-        ## ensure that the model is defined (also for subclasses)
-        model
-        # store = @config_store ## this only would require instance access
         STDERR.puts "[DEBUG] Building validation contract for #{self}" ## if $DEBUG
 
         ## NB this creates a new class singularly for the @contract,
-        ## there receiving all schema & rule declarations for this class
-
+        ## there receiving all option/param schema & option/param rule
+        ## definitions for this class
 
         cls = self.prototype("validation", Dry::Validation::Contract)
 
         results = CompilerResult.new(cls, self, defer_warnings: defer_warnings)
         ## storage for this option group within the following block
-        group = self ## class
+        group = self
 
         ## compile all option schema definitions, before any processing
         ## for non-schema features
@@ -1987,6 +1972,17 @@ class TestProfile < OptionGroup
   class << self
 
     def profile(name)
+      ## Apply the OptionGroup.model DSL for defininig a single
+      ## configuration profile, for purpose of tests
+      ##
+      ## The call to 'apply' will finally compile the defined
+      ## OptionGroup class, before returning that class.
+      ##
+      ## For the class returned by this profile method, any zero or more
+      ## instances can be initialized from the class, with each serving
+      ## as a usable OptionGroup instance. i.e as defined here, the
+      ## 'shell' and 'item' fields can read/written on the instance,
+      ## with validation for values as set.
       prototype =  apply(name) do
 
         STDERR.puts("[DEBUG] in apply => #{self}")
@@ -2031,15 +2027,7 @@ class TestProfile < OptionGroup
       prototype
     end
 
-
-
   end ## class << TestProfile
-
-  # def initialize(name)
-  #   # self.class.compile ## breaks (recursion)
-  #   ## name (??)
-  #   super
-  # end
 
 end
 
@@ -2057,6 +2045,7 @@ $PROFILE_CLS.options
 $PROFILE = $PROFILE_CLS.new(nil)
 
 $PROFILE.configurables
+## => {:shell => #<Mixlib::...>, :item => #<Mixlib::...> }
 
 $PROFILE.shell = "bash"
 $PROFILE.shell
