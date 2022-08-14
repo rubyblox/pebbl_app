@@ -24,29 +24,59 @@ class DslBase
     ## the class. This value will typically be a string
     attr_reader :__role__
 
-    def component_name?()
-      defined?(@component_name)
+    def component_name?(object = self)
+      object.instance_variable_defined?(:@component_name)
     end
 
-    def component_name()
-      if component_name?
-        @component_name
+    def component_name(object = self)
+      if component_name?(object)
+        object.instance_variable_get(:@component_name)
       else
-        msg = "No component_name registered for #{self}"
+        msg = "No component_name registered for #{object.inspect}"
         raise RuntimeError.new(msg)
       end
     end
 
-    def register_component_name(name)
-      if (! component_name?)
-        @component_name = name
-      elsif(! component_name.eql?(name))
+    def register_component_name(name, object = self)
+      if (! component_name?(object))
+        object.instance_variable_set(:@component_name, name)
+      elsif(! component_name(object).eql?(name))
         msg = "component_name %p already registered for %s" % [
-          component_name, self
+          component_name(object), object
         ]
-        ArgumentError.new(msg)
+        raise ArgumentError.new(msg)
       else
-        name
+        ## return the actual string
+        component_name(object)
+      end
+    end
+
+
+    def component_label(object = self)
+      _name = nil
+      begin
+        if component_name?(object)
+          _name = component_name(object)
+        elsif object.respond_to?(:name)
+          _name = object.name
+        elsif object.class.name
+          _name = object.class.name
+        end
+      rescue
+        _name = object.class.name
+      end
+      _scope = self.__scope__(object)
+      if (! _scope.eql?(object)) &&  _scope.respond_to?(:component_label)
+        ## at some points during DSL class initialization, the
+        ## component's scope may be available while the component name
+        ## is not immedaitely available.
+        ##
+        ## This will use "." for a falsey name under some defined scope
+        _scope.component_label + "/" + (_name ? _name.to_s : ".")
+      elsif _name
+        _name.to_s
+      else
+        String.new
       end
     end
 
@@ -70,46 +100,39 @@ class DslBase
       end
     end
 
-    ## return the DSL model scope of this DSL class
+    ## return true if the indicated object has a defined __scope__
     ##
-    ## If this is a top-level DSL model class, this method should return
-    ## the class itself
+    ## @see __scope__
+    def scoped?(object = self)
+      object.instance_variable_defined?(:@__scope__)
+    end
+
+    ## return the DSL model scope for the indicated object
     ##
-    def __scope__()
-      if defined?(@__scope__)
-        @__scope__
+    ## If no __scope__ is defined for the object, this method should
+    ## return the object itself
+    ##
+    ## @param object [Object] the object to test for scope
+    ## @return object [Object] the effective scope of the object
+    ## @see scoped?
+    def __scope__(object = self)
+      if object.scoped?
+        object.instance_variable_get(:@__scope__)
       else
-        self ## TBD self.model ??
+        object
       end
     end
 
     def path
-      if defined?(@path)
-        @path
+      if defined?(@__path__)
+        @__path__
       else
         _scope = __scope__
         if _scope.eql?(self)
-          @path = [self]
+          @__path__ = [self]
         else
-          @path = [* _scope.path, self]
+          @__path__ = [* _scope.path, self]
         end
-      end
-    end
-
-    def component_label(cls = self)
-      begin
-        if cls.respond_to?(:component_name?) && cls.component_name?
-          name = cls.component_name
-        else
-          name = cls.name
-        end
-      rescue
-        name = cls.name
-      end
-      if cls.instance_variable_defined?(:@__role__)
-        format("%s[%s](%06x)", name, cls.instance_variable_get(:@__role__), cls.__id__)
-      else
-        format("%s(%06x)", name, cls.__id__)
       end
     end
 
@@ -352,13 +375,13 @@ class DslBase
           msg = "Incompatible class_name provided for existing %p class %s: %p" % [
             syname, cls, class_name
           ]
-        elsif ! (name == cls.component_name)
+        elsif ! (name == self.component_name(cls))
           msg = "Incompatible component name provided for existing %p class %s: %p" % [
             syname, cls, name
           ]
-        elsif ! self.eql?(cscope = cls.__scope__)
+        elsif self.scoped?(cls) && ! __model__.eql?(cscope = self.__scope__(cls))
           msg = "Existing component %s class %p has scope %s incompatible with scope %p" % [
-            syname, cls, cscope, self
+            syname, cls, cscope, __model__
           ]
         end
         raise ArgumentError.new(msg) if msg
@@ -375,7 +398,6 @@ class DslBase
         cls.instance_variable_set(:@model, cls)
 
         cls.register_component_name(name) ## before register_{component, macro}
-        cls.initialize_scope(__model__)
 
         if macro
           STDERR.puts "-- Registering macro #{name.inspect} for {self}"
@@ -417,8 +439,8 @@ class DslBase
     ##
     ## @see apply for applying a DSL component definition
     def define(name = nil, base_class: self, &cb)
-      ## set defaults
-      name ||= to_class_name(base_class.name)
+      ## set a default name
+      name ||= base_class.name.to_s
 
       if base_class.singleton_class?
         ## The first ancestor not the singleton class would provide a
@@ -444,14 +466,7 @@ class DslBase
         ## base_class is not a singleton class
         impl_class = base_class
       end
-      builder =
-        Dry::Core::ClassBuilder.new(name: name, parent: impl_class)
-      blk = proc { |subclass|
-        ## Ensuring that the callback will be evaluated under instance
-        ## scope for the new class
-        subclass.instance_eval(&cb) if cb
-      }
-      builder.call(&blk)
+      self.prototype("defined", impl_class, name, &cb)
     end
 
 
@@ -521,16 +536,46 @@ class DslBase
       return nxt
     end
 
+    ## Return true if a model has been initialized for this DSL class
+    ##
+    ## @see model
+    def model?()
+      defined?(@model)
+    end
+
+
+    ## Initialize a DSL model for this DSL class
+    ##
+    ## If a model is already defined for this class, the existing model
+    ## will be returned. If no model has been defined for this class,
+    ## a new prototype subclass of this class will be created. The new
+    ## class will be stored as the model for this class. The
+    ## `__model__` attribute in the new class will be initialized
+    ## as to reference the class itself.
+    ##
+    ## After retrieving or initializing the model class, any provided
+    ## block will be evaluated at instance scope. `self` in the provided
+    ## block will reference the model class.
+    ##
+    ## If a block is provided, the block will be evaluated on every call
+    ## to this method.
+    ##
+    ## @param block [Proc] Optional block for evaluation within the
+    ##  scope of the class' model
+    ##
+    ## @return [DslBase] the model if already defined, or a prototype
+    ##  subclass of this class
+    ##
+    ## @see model?
     ## @see dsl
     ## @see define
     ## @see apply
     ## @see __model__
     def model(&block)
-      ## default ... see apply, subclasses
       mdl = false
-      if instance_variable_defined?(:@model)
-        mdl = instance_variable_get(:@model)
-        STDERR.puts "[!DEBUG] using existing model #{mdl.inspect}"
+      if defined?(@model)
+        mdl = @model
+        STDERR.puts "[!DEBUG] using existing model for #{self} => #{mdl.inspect}"
       else
         STDERR.puts "[!DEBUG] initializing default model in #{self}"
         mdl = prototype("model")
@@ -538,8 +583,6 @@ class DslBase
         self.instance_variable_set(:@model, mdl) ## for later call @ self
       end
       mdl.instance_eval(&block) if block
-      ## ^ NB evaluated in every call
-      STDERR.puts "[!DEBUG] #{self} model => #{mdl.inspect}"
       mdl
     end
 
@@ -661,8 +704,9 @@ class DslBase
         _lambda = lambda { |*_args, **_opts, &_block|
           _model = _class.model
           rslt = _model.apply(*_args, **_opts) do
-            STDERR.puts "! _model.apply for #{receiver} : #{_model} => #{self} (#{self.class})"
+            self.instance_variable_set(:@component_name, _mtd)
             self.instance_variable_set(:@__scope__, receiver)
+            STDERR.puts "! _model.apply for #{receiver} : #{_model} => #{self.inspect} (#{self.class})"
             self.accept_block(&_block) if _block
           end
           rslt
@@ -684,23 +728,43 @@ class DslBase
     ## @param superclass [Class]
     ##
     ## @return [Class]
-    def prototype(role, superclass = self)
+    def prototype(role, superclass = self, name = nil, &block)
       ## using a verbose method of class naming, for purpose of
       ## reference tracking in applications of prototype classes
-      begin
-        if  superclass.respond_to?(:path)
-          _name = superclass.path.map() { |cls| component_label(cls) }.join("/")
-        else
+      if name
+        _name = name.dup
+      else
+        begin
+          if superclass.respond_to?(:path)
+            _name = superclass.path.map { |cls| component_label(cls) }.join("/")
+          else
+            _name = component_label(superclass)
+          end
+        rescue
           _name = component_label(superclass)
         end
-      rescue
-        _name = component_label(superclass)
       end
-      _builder = Dry::Core::ClassBuilder.new(name: _name, parent: superclass)
+      _block = proc { |subclass|
+        subclass.instance_eval(&block) if block
+      }
+      _builder = Dry::Core::ClassBuilder.new(name: _name,
+                                             parent: superclass,
+                                             &block)
       _class = _builder.call
+      if superclass.instance_variable_defined?(:@__scope__)
+        _scope = superclass.instance_variable_get(:@__scope__)
+        _class.instance_variable_set(:@__scope__, _scope)
+      end
+      _singleton =  _class.singleton_class
+      _lambda = lambda {
+        self.component_label(_class)
+      }
+      _singleton.remove_method(:to_s) ## from Dry
+      _singleton.define_method(:to_s, &_lambda)
+      _singleton.remove_method(:inspect) ## from Dry
+      _singleton.define_method(:inspect, &_lambda)
       _class.instance_variable_set(:@__role__, role)
-      ## add the role and object ID for the new class
-      _name.replace(name + format("[%s](%06x)", role, _class.__id__))
+      _name.replace(_name + format("[%s]", role)) if ! name
       _name.freeze
       return _class
     end
@@ -716,13 +780,12 @@ class DslBase
 
   ## @!group DSL API - instance methods
 
+  def scoped?()
+    self.class.scoped?(self)
+  end
+
   def __scope__()
-    ## scoping for DSL component instances
-    if defined?(@__scope__)
-      @__scope__
-    else
-      self
-    end
+    self.class.__scope__(self)
   end
 
   def accept_block(&cb)
@@ -735,7 +798,7 @@ class DslBase
 
   def to_s
     ## using any class.name method, such as may be set via Dry class builder
-    "#<%s 0x%06x>" % [self.class.name, __id__]
+    "#<%s %s 0x%06x>" % [self.class.name, self.class.component_label(self), __id__]
   end
 
   def inspect
@@ -1242,7 +1305,7 @@ class Feature < OptionBase
     ## overrides DslBase#accept_block
     ##
     def accept_block(&cb)
-      STDERR.puts "! Feature accept_block in #{__scope__} // #{self}"
+      STDERR.puts "! Feature accept_block @ #{self} (scope #{__scope__})"
       callback(&cb)
     end
 
@@ -1587,7 +1650,6 @@ class OptionGroup < OptionBase
       else
         super() do
           ## NB OptionGroup.model.macros => {:option => ...}
-
 
           dsl(:option, macro: true, base_class: Option) do
             STDERR.puts "[!DEBUG] option DSL scope #{__scope__}"
