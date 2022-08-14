@@ -67,14 +67,14 @@ class DslBase
       end
       _scope = self.__scope__(object)
       if (! _scope.eql?(object)) &&  _scope.respond_to?(:component_label)
-        ## at some points during DSL class initialization, the
-        ## component's scope may be available while the component name
-        ## is not immedaitely available.
+        ## Using "." for a falsey name under some effective scope.
         ##
-        ## This will use "." for a falsey name under some defined scope
+        ## This approach should serve to ensure a generally consistent
+        ## label syntax, at any point during initialization of a DSL
+        ## component.
         _scope.component_label + "/" + (_name ? _name.to_s : ".")
       elsif _name
-        _name.to_s
+        _name.to_s.dup
       else
         String.new
       end
@@ -116,10 +116,21 @@ class DslBase
     ## @return object [Object] the effective scope of the object
     ## @see scoped?
     def __scope__(object = self)
-      if object.scoped?
+      if self.scoped?(object)
         object.instance_variable_get(:@__scope__)
       else
         object
+      end
+    end
+
+    def register_scope(scope, object = self)
+      if self.scoped?(object) && ( ! self.__scope__(object).eql?(scope) )
+        msg = "Scope already defined for %p => %p (given %p)"  % [
+          object, self.__scope__(object), scope
+        ]
+        raise RuntimeError.new(msg)
+      else
+        object.instance_variable_set(:@__scope__, scope)
       end
     end
 
@@ -701,11 +712,18 @@ class DslBase
       all = __model__.components.merge(__model__.macros)
       all.each do |_mtd, _class|
         STDERR.puts "[DEBUG def #{_mtd.inspect} => #{_class} for #{receiver.inspect} in #{self}"
+        _cls = self
         _lambda = lambda { |*_args, **_opts, &_block|
           _model = _class.model
           rslt = _model.apply(*_args, **_opts) do
-            self.instance_variable_set(:@component_name, _mtd)
-            self.instance_variable_set(:@__scope__, receiver)
+            ## set component name and scope variables, if not
+            ## already initialized
+            if ! _cls.component_name?(self)
+              _cls.register_component_name(_mtd, self)
+            end
+            if ! _cls.scoped?(self)
+              _cls.register_scope(receiver, self)
+            end
             STDERR.puts "! _model.apply for #{receiver} : #{_model} => #{self.inspect} (#{self.class})"
             self.accept_block(&_block) if _block
           end
@@ -751,13 +769,10 @@ class DslBase
                                              parent: superclass,
                                              &block)
       _class = _builder.call
-      if superclass.instance_variable_defined?(:@__scope__)
-        _scope = superclass.instance_variable_get(:@__scope__)
-        _class.instance_variable_set(:@__scope__, _scope)
-      end
       _singleton =  _class.singleton_class
+      _self = self
       _lambda = lambda {
-        self.component_label(_class)
+        _self.component_label(_class)
       }
       _singleton.remove_method(:to_s) ## from Dry
       _singleton.define_method(:to_s, &_lambda)
@@ -1055,19 +1070,6 @@ class OptionBase < DslBase
   class << self
 
     ## @private
-    ##
-    ## If superclass is an OptionBase class, ensure that any component
-    ## name for the class is inherited by the prototype
-    def prototype(role, superclass = self)
-      ## more specific than definiing a method on 'inherited'
-      proto = super
-      if superclass.ancestors.include?(self) && superclass.component_name?
-        proto.instance_variable_set(:@component_name, superclass.component_name)
-      end
-      proto
-    end
-
-    ## @private
     def to_component_name(name)
       if (String === name)
         name.to_sym
@@ -1087,19 +1089,33 @@ end ## OptionBase
 class Option < OptionBase
   class << self
 
+    ## Return true if an option name has been defined for this Option
+    ##
+    ## @see option_name
+    ## @see apply
+    def option_name?
+      defined?(@option_name)
+    end
+
+    ## Return the option name for this Option, if defined
+    ##
+    ## @raise RuntimeError if not option name has been defined
+    ##
+    ## @see option_name?
+    ## @see apply
+    def option_name
+      if option_name?
+        @option_name
+      else
+        raise RuntimeError.new("No option name defined for #{self}")
+      end
+    end
+
+    ## @private
     def accept_block(&cb)
       STDERR.puts "! Option accept_block in #{self}"
       self.instance_eval(&cb) if cb
     end
-
-    ## @private
-    def inherited(subc)
-      super
-      if defined?(@optional)
-        subc.instance_variable_set(:@optional, @optional)
-      end
-    end
-
 
     ## Return true if this Option has been defined as _optional_ in
     ## the containing OptionGroup
@@ -1147,7 +1163,7 @@ class Option < OptionBase
     end
 
     def compile_features(group, contract, results)
-      optname = self.component_name
+      optname = self.option_name
       self.features.each do |_, feature|
         feature.compile(self, group, contract, results)
       end
@@ -1203,17 +1219,42 @@ class Option < OptionBase
 
 
     ## @private
+    ##
+    ## Initialize a new component prototype class for this Option
+    ## definition.
+    ##
+    ## The prototype class will use the provided name as the
+    ## option_name for the class
+    ##
+    ## @param name [Symbol] option name for the Option definition. This
+    ##  symbol should be unique for all Option definitions within an
+    ##  OptionGroup
+    ##
+    ## @param optional [boolean] true if the Option describes an
+    ##  optional configuration value in the containing OptionGroup,
+    ##  false or nil for a required configuration value.
+    ##
+    ## @see option_name
+    ## @see optional?
     def apply(name, *args, optional: true, **rest, &block)
       STDERR.puts "!DEBUG applying option #{self} :: #{name}"
       rslt = super(*args, **rest) do
-        ## component name is required for 'option' components
-        self.instance_variable_set(:@component_name, to_component_name(name))
-        self.instance_variable_set(:@optional, optional ? true : false)
+        @option_name = name
+        @optional = optional ? true : false
         self.accept_block(&block) if block
-        ## applied subsequently, in super(...)
       end
       STDERR.puts "!DEBUG option features: #{rslt.features}"
       rslt
+    end
+
+    def component_label(object = self)
+      label = super
+      if (Class === object) && object.ancestors.include?(self) &&
+          object.instance_variable_defined?(:@option_name)
+        label.replace(label + format("[%s]", object.option_name))
+      else
+        label
+      end
     end
 
     ## @private
@@ -1359,12 +1400,7 @@ class SchemaFeature < Feature
     ##
     ## @see OptionGroup#compile
     def compile(option, group, dsl, results)
-
-      if ! (optname = option.component_name)
-
-         raise RuntimeError.new("Option has invalid component name: #{option}")
-      end
-
+      optname = option.option_name
       if option.optional?
         macro = dsl.optional(optname)
       else
@@ -1421,7 +1457,7 @@ class RuleFeature < Feature
     ## Callback method for OptionGroup.compile
     ##
     def compile(option, group, contract, results)
-      optname = option.component_name
+      optname = option.option_name
       if self.callback?
         if option.optional?
           r = self
@@ -1516,15 +1552,6 @@ class OptionDefault < Feature
   class << self
 
     ## @private
-    def inherited(subc)
-      super
-      if defined?(@default_value)
-        ## ensure the value is inherited by prototype subclasses
-        subc.instance_variable_set(:@default_value, @default_value)
-      end
-    end
-
-    ## @private
     ##
     ## Callback method for defining a default option value under
     ## OptionGroup#compile and OptionGroup#validate methods
@@ -1534,7 +1561,7 @@ class OptionDefault < Feature
     ##
     ## @see OptionGroup#compile
     def compile(option, group, contract, results)
-      optname = option.component_name
+      optname = option.option_name
       init = nil
       if defined?(@default_value)
         ## not reached
@@ -1633,7 +1660,15 @@ class OptionGroup < OptionBase
       STDERR.puts "! OptionGroup #{self} applied: #{cls}"
       precedence = cls.ancestors
       if precedence.include?(Option)
-        options[cls.component_name] = cls
+        _name = cls.option_name
+        if options.include?(_name)
+          msg = "Option already defined for %p in %s: %p (given %p)" % [
+            _name, self, options[_name], cls
+          ]
+          raise RuntimeError.new(msg)
+        else
+          options[_name] = cls
+        end
       elsif precedence.include?(self)
         ## top-level DSL applied
         cls.compile
