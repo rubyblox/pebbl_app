@@ -5,6 +5,32 @@ require 'pebbl_app'
 ##  Utility Module for API Definitions
 module PebblApp::ScopeUtil
 
+  def instance_defined?(name, scope = nil)
+    scope || self
+    scope.instance_variable_defined?(name)
+  end
+
+  def instance_get(name, scope = nil)
+    scope ||= self
+    scope.instance_variable_get(name)
+  end
+
+  def instance_set(name, value, scope = nil)
+    scope ||= self
+    scope.instance_variable_set(name, value)
+  end
+
+  def instance_bind(name, scope = nil, &block)
+    name = name.to_sym
+    scope ||= self
+    if instance_defined?(name, scope)
+      instance_get(name, scope)
+    else
+      value = scope.instance_eval(&block)
+      instance_set(name, value, scope)
+    end
+  end
+
   ## Return true if an instance variable is defined under the singleton
   ## class for the indicated scope, for the provided instance variable
   ## name.
@@ -17,61 +43,50 @@ module PebblApp::ScopeUtil
   ##   `self` at the time of evaluation.
   ##
   ## @return [boolean] boolean value
-  def svar_defined?(name, scope = nil)
+  def singleton_defined?(name, scope = nil)
     scope ||= self
-    scope.singleton_class.instance_variable_defined?(name)
+    instance_defined?(name, scope.singleton_class)
   end
 
   ## Return the effective value for an instance variable under the
   ## singleton class for the indicated scope
   ##
-  ## @param name (see svar_defined)
-  ## @param scope (see svar_defined)
-  def svar_get(name, scope = nil)
+  ## @param name (see singleton_defined)
+  ## @param scope (see singleton_defined)
+  def singleton_get(name, scope = nil)
     scope ||= self
-    scope.singleton_class.instance_variable_get(name)
+    instance_get(name, scope.singleton_class)
   end
 
   ## Set a value for an instance variable under the singleton class for
   ## the indicated scope
   ##
-  ## @param name (see svar_defined)
-  ## @param scope (see svar_defined)
-  def svar_set(name, value, scope = nil)
+  ## @param name (see singleton_defined)
+  ## @param scope (see singleton_defined)
+  def singleton_set(name, value, scope = nil)
     scope ||= self
-    scope.singleton_class.instance_variable_set(name, value)
+    instance_set(name, scope.singleton_class)
   end
 
   ## Set or return the value for an instance variable under the
   ## indicated scope
   ##
-  ## @param name (see svar_defined)
-  ## @param scope (see svar_defined)
+  ## @param name (see singleton_defined)
+  ## @param scope (see singleton_defined)
   ## @param block [Proc] a block to evalute under the indicated scope. If
   ##  the instance variable has not been defined under the singleton
   ##  class for that scope, the instance variable's value will be set to
-  ##  the value effectively returned by this block. The block will be
-  ##  evaluated as with instance_eval for the indicated scope.
-  def svar_bind(name, scope = nil, &block)
+  ##  the value in effect returned by this block. The block will be
+  ##  evaluated with instance_eval for the indicated scope.
+  def singleton_bind(name, scope = nil, &block)
     name = name.to_sym
     scope ||= self
-    if svar_defined?(name, scope)
-      svar_get(name, scope)
+    if singleton_defined?(name, scope)
+      singleton_get(name, scope)
     else
-      value = scope.instance_eval(&block)
-      svar_set(name, value, scope)
+      value = scope.singleton_class.instance_eval(&block)
+      singleton_set(name, value, scope)
     end
-  end
-
-  ## Define a method under the singleton class for the provided scope
-  ##
-  ## @param name [Symbol] a method name, e.g. `:name`
-  ## @param scope (see svar_defined)
-  ## @param block [Proc] the block to provide for the method definition
-  ##  under the singleton class for the indicated scope
-  def smethod_define(name, scope = nil, &block)
-    scope ||= self
-    scope.singleton_class.define_method(name.to_sym, &block)
   end
 
   self.extend(self)
