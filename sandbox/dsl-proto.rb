@@ -4,8 +4,6 @@
 require 'dry/core/class_builder'
 require 'dry/validation'
 
-require 'securerandom'
-
 ## Generic base class for definition of domain-specific languages
 ## extending the Ruby programing language
 ##
@@ -24,34 +22,79 @@ class DslBase
     ## the class. This value will typically be a string
     attr_reader :__role__
 
+    ## Return true if the provided object has a defined component name
+    ##
+    ## @param object [Object] the object
+    ## @return [boolean]
+    ##
+    ## @see component_name
+    ## @see component_label
     def component_name?(object = self)
-      object.instance_variable_defined?(:@component_name)
+      ## Similar to the methods on @__scope__ this method uses the
+      ## singleton class of the object, for the instance variable
+      ## storage
+      ##
+      ## This is to avoid modifying the direct instance variable scope
+      ## in component instances
+      object.singleton_class.instance_variable_defined?(:@component_name)
     end
 
+    ## Return the component name for the provided object, if defined
+    ##
+    ## @param object (see component_name?)
+    ##
+    ## @return [Symbol] the component name
+    ##
+    ## @raise [RuntimeError] if no component name is defined for the
+    ## object
+    ##
+    ## @see component_name?
+    ## @see component_label
     def component_name(object = self)
       if component_name?(object)
-        object.instance_variable_get(:@component_name)
+        object.singleton_class.instance_variable_get(:@component_name)
       else
         msg = "No component_name registered for #{object.inspect}"
         raise RuntimeError.new(msg)
       end
     end
 
+    ## initialize a component name for the provided object
+    ##
+    ## This value will be stored in an instance variable on the
+    ## singleton class for the object, and may be retrieved with the
+    ##`component_name` method.
+    ##
+    ## @param name [Symbol] the component name for the object
+    ## @param object (see component_name?)
+    ##
+    ## @raise [RuntimeError] if a component name has already been defined
+    ##  to the object
+    ##
+    ## @see component_name?
+    ## @see component_name
+    ## @see component_label
     def register_component_name(name, object = self)
       if (! component_name?(object))
-        object.instance_variable_set(:@component_name, name)
+        object.singleton_class.instance_variable_set(:@component_name, name)
       elsif(! component_name(object).eql?(name))
         msg = "component_name %p already registered for %s" % [
           component_name(object), object
         ]
-        raise ArgumentError.new(msg)
+        raise RuntimeError.new(msg)
       else
-        ## return the actual string
         component_name(object)
       end
     end
 
-
+    ## Return a component label for the provided object
+    ##
+    ## The return value will represent the effective component
+    ## inheritance path for the provided object, as a string
+    ##
+    ## @return [String] the component label
+    ##
+    ## @see component_name
     def component_label(object = self)
       _name = nil
       begin
@@ -103,8 +146,9 @@ class DslBase
     ## return true if the indicated object has a defined __scope__
     ##
     ## @see __scope__
+    ## @see DslBase#scoped?
     def scoped?(object = self)
-      object.instance_variable_defined?(:@__scope__)
+      object.singleton_class.instance_variable_defined?(:@__scope__)
     end
 
     ## return the DSL model scope for the indicated object
@@ -115,14 +159,28 @@ class DslBase
     ## @param object [Object] the object to test for scope
     ## @return object [Object] the effective scope of the object
     ## @see scoped?
+    ## @see DslBase#__scope__
     def __scope__(object = self)
       if self.scoped?(object)
-        object.instance_variable_get(:@__scope__)
+        object.singleton_class.instance_variable_get(:@__scope__)
       else
         object
       end
     end
 
+    ## initialize the DSL component scope for the provided object
+    ##
+    ## @param scope [Class] the DSL component scope for the object
+    ##
+    ## @param object [Object] the receiving object for the scope
+    ##  definition
+    ##
+    ## @raise [RuntimeError] if a scope name has already been defined
+    ##  to the object
+    ##
+    ## @see scoped?
+    ## @see __scope__
+    ## @see path
     def register_scope(scope, object = self)
       if self.scoped?(object) && ( ! self.__scope__(object).eql?(scope) )
         msg = "Scope already defined for %p => %p (given %p)"  % [
@@ -130,10 +188,23 @@ class DslBase
         ]
         raise RuntimeError.new(msg)
       else
-        object.instance_variable_set(:@__scope__, scope)
+        object.singleton_class.instance_variable_set(:@__scope__, scope)
       end
     end
 
+    ## Return the component definition path for this class
+    ##
+    ## The first element in the path value will indicate the effective
+    ## top-level DSL containing this component's definition. The last
+    ## value in the path will be this component definition itself. Any
+    ## intermediate values will represent containing component
+    ## definitions, with the outermost containing definition listed
+    ## first.
+    ##
+    ## @return [Array<Class>]
+    ##
+    ## @see __scope__
+    ## @see component_label
     def path
       if defined?(@__path__)
         @__path__
@@ -153,6 +224,8 @@ class DslBase
 
     ## Return the hash table of DSL instance component definitions for
     ## this class
+    ##
+    ## @see []
     def components
       instance_bind(:@components) do
         Hash.new do |_, name|
@@ -165,6 +238,8 @@ class DslBase
 
     ## Return the hash table of DSL macro component definitions for this
     ## class
+    ##
+    ## @see []
     def macros
       instance_bind(:@macros) do
         Hash.new do |_, name|
@@ -176,6 +251,9 @@ class DslBase
     end
 
     ## return true if `name` denotes a DSL instance component for this class
+    ##
+    ## @see macro?
+    ## @see dsl_method?
     def component?(name = false)
       if name
         components.include?(name)
@@ -185,6 +263,9 @@ class DslBase
     end
 
     ## return true if `name` denotes a DSL macro component for this class
+    ##
+    ## @see component?
+    ## @see dsl_method?
     def macro?(name = false)
       if name
         macros.include?(name)
@@ -206,6 +287,8 @@ class DslBase
     ##
     ## @return [Hash] a hash table pairing each method name with the
     ##  block form provided in the method's initial definition
+    ##
+    ## @see []
     def dsl_methods
       instance_bind(:@dsl_methods) do
         Hash.new do |_, name|
@@ -219,7 +302,11 @@ class DslBase
     ## return true if `name` denotes a DSL singleton method for this class
     ##
     ## @param name (see dsl_method)
+    ##
     ## @return [boolean] a boolean value
+    ##
+    ## @see macro?
+    ## @see component?
     def dsl_method?(name)
       dsl_methods.include?(name)
     end
@@ -397,7 +484,6 @@ class DslBase
         end
         raise ArgumentError.new(msg) if msg
       else
-
         ## deferring evaluation of the callback until after the class'
         ## scope is set
         cls = self.define(class_name, base_class: base_class)
@@ -483,20 +569,34 @@ class DslBase
 
     ## Create and return a new instance of this DSL class
     ##
-    ## @note Initailization for the instance will be deferred until
-    ##  after the __scope__ for the instance has been set via
-    ##  initialize_scope.
+    ## **Component Initialization**
     ##
-    ## @note For a DSL instance initialized with this method, the
-    ##  __scope__ of the instance will be set as the instance itself. This
-    ##  may be construed as indicating that the instance is a top-level
-    ##  DSL instance. This would be contrasted to the __scope__ value
-    ##  set from any a component method, such that the value would
-    ##  represent the containing scope for the component instance.
+    ## (FIXME needs a complete overview, with examples - see tests)
     ##
-    ## @note Before return, each DSL component method and each DSL
-    ##  instance method for this DSL class' model will be defined as a
-    ##  singleton method on the instance, via `initialize_methods`
+    ## For each DSL component initialized under `apply` within some DSL
+    ## component expression, the singleton method providing the
+    ## initialization may perform additional initialization behaviors
+    ## not provided immediately in `apply`.
+    ##
+    ## Using the initialization methods defined under the API method
+    ## DslBase.initialize_methods, each component will be intialized
+    ## with a `component_name` and a `__scope__`. The `component_name`
+    ## field will be initialized to the name of the method by which the
+    ##  component was initialized. The ` __scope__` field will be
+    ## initialized as a reference to the DSL component definition
+    ## containing that method reference.
+    ##
+    ## Those fields will then be available within any block provided to
+    ## `apply` under the original DSL component API. The component name
+    ## may be accessed using the accessor method component_name, scope
+    ## available via the  __scope__ accessor method. These methods are
+    ## available at a class scope, for DSL macro components, and at an
+    ## instance scope, for each instance of a subclass of DslBase.
+    ##
+    ## For purpose of value storage, these accessor methods will each
+    ## use an instance variable on the singleton class for each DSL
+    ## component, thus avoiding modification to the set of instnace
+    ## variables directly defined to the component.
     ##
     ## @see dsl for definiing a DSL class as the model for the
     ##  containing class.
@@ -553,7 +653,6 @@ class DslBase
     def model?()
       defined?(@model)
     end
-
 
     ## Initialize a DSL model for this DSL class
     ##
@@ -620,39 +719,11 @@ class DslBase
     ##
     ## @return [String] a string that may be used as a class name
     ##
-    ## @see to_component_name
     def to_class_name(name)
       sname = name.to_s
       c = sname.split(/[[:punct:]]+/.freeze)
       c.shift if c.first.empty?
       return c.map { |elt| elt[0].upcase + elt[1...] }.join
-    end
-
-    ## Compute the component name of some DSL component class' name
-    ##
-    ##
-    ## @param name [String] a DSL class name
-    ## @return [Symbol] a component name, as a symbol
-    ##
-    ## @see to_class_name
-    ##
-    def to_component_name(name)
-      if name
-        last = name.split(/::/).last
-        PebblApp::NameUtil.flatten_name(last).to_sym
-      else
-        raise ArgumentError.new("Not a valid component name: #{name.inspect}")
-      end
-    end
-
-    ## @private
-    ## Initialize the __scope__ on the provided instance
-    def initialize_scope(scope)
-      if defined?(@__scope__)
-        raise RuntimeError.new("__scope__ is already defined for #{self}")
-      else
-        @__scope__ = scope
-      end
     end
 
     ## @private
@@ -690,10 +761,10 @@ class DslBase
     ## as the block's `self` scope.
     ##
     ## For each DSL component initialized with a component method, the
-    ## component instance will receive a call to set the @__scope__ on
+    ## component instance will receive a call to set the __scope__ on
     ## the component as the containing instance for which the component
     ## was initalized. The component's constructor will not be called
-    ## until after the @__scope__ has been set on the component instance.
+    ## until after the __scope__ has been set on the component instance.
     ##
     ## Lastly, the component method will call the `applied` method on
     ## the instance of this DSL class, with the new component instance
@@ -792,30 +863,86 @@ class DslBase
     ## @!endgroup
   end ## class << DslBase
 
-
   ## @!group DSL API - instance methods
 
+
+  ## Return true if this object has a defined component name
+  ##
+  ## @return [boolean]
+  ##
+  ## @see component_name
+  ## @see DslBase.component_name?
+  def component_name?()
+    self.class.component_name?(self)
+  end
+
+  ## Return the DSL component name for this object, if defined
+  ##
+  ## @raise [RuntimeError] if no component name is defined for the
+  ## object
+  ##
+  ## @return [Symbol] the component name
+  ##
+  ## @see component_name?
+  ## @see __scope__
+  ## @see DslBase.component_name
+  def component_name
+    self.class.component_name(self)
+  end
+
+  ## return true if this object has a defined __scope__
+  ##
+  ## @see __scope__
+  ## @see DslBase.scoped?
   def scoped?()
     self.class.scoped?(self)
   end
 
+  ## return the DSL model scope for this object
+  ##
+  ## @see scoped?
+  ## @see DslBase.__scope__
   def __scope__()
     self.class.__scope__(self)
   end
 
+
+  ## Accept a block provided within some DSL `apply` expression
+  ##
+  ## This method is defined for applications under DslBase.apply within
+  ## the scope of a DSL component instance.
+  ##
+  ## This method may be overridden in subclasses.
+  ##
+  ## @note For extension in macro definitions, the class scoped method
+  ##  DslBase.accept_block should be overridden, rather than this
+  ##  instance scoped `accept_block` method. This instance scoped
+  ##  method will be used for `apply` on components of non-macro
+  ##  component instances.
+  ##
+  ## @param cb [Proc] optional block to evaluate under `apply`. If
+  ##  provided, the block will be evaluated as with `instance_eval` for
+  ##  the scoped object. All singleton methods that have been defined to
+  ##  this component's scope under `apply` should be available to
+  ##  any provided callback
+  ##
+  ## @see DslBase.apply for evaluation of a DSL component expression
+  ##
+  ## @see DslBase.dsl for defining individual DSL components
+  ##
+  ## @see DslBase.model for defining a class' DSL model
   def accept_block(&cb)
-    ## for applications under 'apply' with DSL component instances
-    ##
-    ## may be overridden in subclasses
     STDERR.puts "! Instance accept_block in #{self}"
-    self.instance_eval(&cb)
+    self.instance_eval(&cb) if cb
   end
 
+  ## @private
   def to_s
     ## using any class.name method, such as may be set via Dry class builder
     "#<%s %s 0x%06x>" % [self.class.name, self.class.component_label(self), __id__]
   end
 
+  ## @private
   def inspect
     to_s
   end
@@ -1067,19 +1194,6 @@ require 'mixlib/config'
 
 ## Base class for DSL definitions in the OptionGroup API
 class OptionBase < DslBase
-  class << self
-
-    ## @private
-    def to_component_name(name)
-      if (String === name)
-        name.to_sym
-      else
-        ## symbol, other
-        name
-      end
-    end
-
-  end ## class << OptionBase
 end ## OptionBase
 
 
@@ -1185,8 +1299,8 @@ class Option < OptionBase
           if rd_lmb.instance_variable_defined?(:@method)
             mtd = rd_lmb.instance_variable_get(:@method)
             mtd.call
-          elsif self.instance_variable_defined?(:@config_store)
-            store = self.instance_variable_get(:@config_store)
+          elsif self.instance_variable_defined?(:@option_store)
+            store = self.instance_variable_get(:@option_store)
             mtd = store.method(optname)
             rd_lmb.instance_variable_set(:@method, mtd)
             mtd.call
@@ -1202,8 +1316,8 @@ class Option < OptionBase
           if wr_lmb.instance_variable_defined?(:@method)
             mtd = wr_lmb.instance_variable_get(:@method)
             mtd.call(value)
-          elsif self.instance_variable_defined?(:@config_store)
-            store = self.instance_variable_get(:@config_store)
+          elsif self.instance_variable_defined?(:@option_store)
+            store = self.instance_variable_get(:@option_store)
             mtd = store.method(wr_mtd)
             wr_lmb.instance_variable_set(:@method, mtd)
             mtd.call(value)
@@ -1216,7 +1330,6 @@ class Option < OptionBase
       end
 
     end ## compile_features
-
 
     ## @private
     ##
@@ -1624,20 +1737,19 @@ module OptionConfig
     ## TBD: this API does not provide interop. for Mixlib::Config contexts
     receiver.extend Forwardable
     %w(configuration configuration= configurables).each do |mtd|
-      receiver.def_delegator(:@config_store, mtd)
+      receiver.def_delegator(:@option_store, mtd)
     end
     receiver
   end
 end
 
-class ConfigStore
+class OptionStore
   def initialize()
     ## ensure that all singleton methods form Mixlib::Config
     ## will be available at an instance scope
     self.extend OptionConfig
   end
 end
-
 
 ##
 ## Implementation class for defining a group of Option for some
@@ -1679,6 +1791,12 @@ class OptionGroup < OptionBase
     end
 
     ## Initialize the DSL model for this OptionGroup
+    ##
+    ## @param block [Proc] Optional block for evaluation when the model
+    ##  is initialized. The block will provided to the `accept_block`
+    ##  method on the top-level model. Unused if the model is already
+    ##  initialized.
+    ##
     def model(&block)
       if defined?(@model)
         @model
@@ -1792,11 +1910,10 @@ class OptionGroup < OptionBase
         cls = self.prototype("validation", Dry::Validation::Contract)
 
         results = CompilerResult.new(cls, self, defer_warnings: defer_warnings)
-        ## storage for this option group within the following block
+        ## a reference for this option group, within the following block
         group = self
-
         ## compile all option schema definitions, before any processing
-        ## for non-schema features
+        ## for schema rules or non-schema features
         cls.schema do
           ## class schema scope via Dry::Validation
           ##
@@ -1806,7 +1923,7 @@ class OptionGroup < OptionBase
             opt.compile_schema(group, schema_dsl, results)
           end
         end
-        ## compile all non-schema features
+        ## compile all schema rules and non-schema features
         self.options.each do |_, opt|
           opt.compile_features(group, cls, results)
         end
@@ -1893,13 +2010,14 @@ class OptionGroup < OptionBase
 
   end ## class << OptionGroup
 
-  ## Return the ConfigStore
+  ## Return the OptionStore for the OptionGroup
   ##
-  ## This value is used for Mixlib::Config support in each OptionGroup
+  ## This value is used for Mixlib::Config support in each
+  ## OptionGroup.
   ##
-  ## @return [ConfigStore]
+  ## @return [OptionStore]
   ## @private
-  attr_reader :config_store
+  attr_reader :option_store
 
   ## Return the latest CompilerResult for validation of this OptionGroup
   ##
@@ -1931,9 +2049,9 @@ class OptionGroup < OptionBase
 
     ## Integration for Mixlib::Config
     ##
-    ## @config_store should not be changed on the instance, once set
-    store = ConfigStore.new
-    @config_store = store
+    ## @option_store should not be changed on the instance, once set
+    store = OptionStore.new
+    @option_store = store
     self.extend Forwardable
     store.define_forwarding(self)
     self.class.config_initializers.each do |proc|
@@ -1954,7 +2072,7 @@ class OptionGroup < OptionBase
   ## @see #to_h
   def values(defaults_p = true)
     ## using a feature of Mixlib::Config here
-    @config_store.save(defaults_p)
+    @option_store.save(defaults_p)
   end
 
   ## Return a hash table representing all options configured for this
@@ -1985,7 +2103,7 @@ class OptionGroup < OptionBase
   def option_invalid(opt)
     STDERR.puts("Unsetting invalid option #{opt.inspect} in #{self}") ## DEBUG
     ## NB if the default value is an invalid value, it will be missed here...
-    @config_store.configuration.delete(opt)
+    @option_store.configuration.delete(opt)
   end
 
   ## Validate the set of option values for this OptionGroup instance
@@ -2020,15 +2138,15 @@ class OptionGroup < OptionBase
   ##
   ## @param name [Symbol] the option name
   def option_set?(name)
-    ## very simple, with Mixlib::Config
-    @config_store.configuration.include?(name)
+    ## using a feature of Mixlib::Config here
+    @option_store.configuration.include?(name)
   end
 
   ## Unset the named option for this OptionGroup
   #
   ## @param name (see #option_set?)
   def option_unset(name)
-    @config_store.configuration.delete(name)
+    @option_store.configuration.delete(name)
   end
 
   def to_s
